@@ -1,0 +1,238 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>End-of-Shift Report - Sansfrontieres</title>
+    <style>
+        * { box-sizing: border-box; }
+
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+            background: #f4f7f9;
+            color: #1f2937;
+        }
+
+        .topbar {
+            background: #111827;
+            color: white;
+            padding: 18px 32px;
+            font-size: 20px;
+            font-weight: 700;
+        }
+
+        .container {
+            max-width: 850px;
+            margin: 40px auto;
+            padding: 0 20px;
+        }
+
+        .card {
+            background: white;
+            border-radius: 12px;
+            padding: 32px;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+        }
+
+        h1 {
+            margin-top: 0;
+            margin-bottom: 8px;
+            font-size: 30px;
+        }
+
+        .subtitle {
+            color: #6b7280;
+            margin-bottom: 28px;
+        }
+
+        .shift-summary {
+            background: #f0fdf4;
+            border-left: 5px solid #16a34a;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 30px;
+        }
+
+        .shift-summary p {
+            margin: 8px 0;
+        }
+
+        .shift-summary strong {
+            color: #111827;
+        }
+
+        .form-group {
+            margin-bottom: 22px;
+        }
+
+        label {
+            display: block;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+
+        input,
+        textarea {
+            width: 100%;
+            padding: 12px 14px;
+            border: 1px solid #d1d5db;
+            border-radius: 7px;
+            font-size: 15px;
+        }
+
+        input:focus,
+        textarea:focus {
+            outline: none;
+            border-color: #16a34a;
+            box-shadow: 0 0 0 2px rgba(22, 163, 74, 0.12);
+        }
+
+        .help-text {
+            margin-top: 6px;
+            color: #6b7280;
+            font-size: 13px;
+        }
+
+        .error {
+            color: #b91c1c;
+            font-size: 13px;
+            margin-top: 6px;
+        }
+
+        .actions {
+            display: flex;
+            gap: 12px;
+            margin-top: 30px;
+        }
+
+        .button {
+            display: inline-block;
+            padding: 12px 22px;
+            border-radius: 7px;
+            text-decoration: none;
+            border: none;
+            cursor: pointer;
+            font-weight: 700;
+            font-size: 15px;
+        }
+
+        .button-primary {
+            background: #16a34a;
+            color: white;
+        }
+
+        .button-secondary {
+            background: #6b7280;
+            color: white;
+        }
+
+        .button:hover {
+            opacity: 0.92;
+        }
+
+        .required-note {
+            color: #6b7280;
+            font-size: 13px;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="topbar">
+    Sansfrontieres
+</div>
+
+<div class="container">
+
+    <div class="card">
+
+        <h1>End-of-Shift Report</h1>
+
+        <div class="subtitle">
+            Submit your completed shift activity and account performance.
+        </div>
+
+        <div class="shift-summary">
+
+            <p><strong>Date:</strong> {{ shift.date|date:"d M Y" }}</p>
+
+            <p>
+                <strong>Player:</strong>
+                Player {{ shift.player.player_number }} - {{ shift.player.name }}
+            </p>
+
+            <p>
+                <strong>Primary Moderator:</strong>
+                {{ shift.primary_moderator.get_full_name|default:shift.primary_moderator.username }}
+            </p>
+
+            <p>
+                <strong>Scheduled Time:</strong>
+                {{ shift.scheduled_start|time:"H:i" }} - {{ shift.scheduled_end|time:"H:i" }}
+            </p>
+
+        </div>
+
+        <p class="required-note">
+            Complete the required shift information before submitting your report.
+        </p>
+
+        <form method="post" enctype="multipart/form-data">
+
+            {% csrf_token %}
+
+            {% for field in form %}
+
+                <div class="form-group">
+
+                    {{ field.label_tag }}
+
+                    {{ field }}
+
+                    {% if field.help_text %}
+                        <div class="help-text">
+                            {{ field.help_text }}
+                        </div>
+                    {% endif %}
+
+                    {% for error in field.errors %}
+                        <div class="error">
+                            {{ error }}
+                        </div>
+                    {% endfor %}
+
+                </div>
+
+            {% endfor %}
+
+            {% if form.non_field_errors %}
+                {% for error in form.non_field_errors %}
+                    <div class="error">
+                        {{ error }}
+                    </div>
+                {% endfor %}
+            {% endif %}
+
+            <div class="actions">
+
+                <button type="submit" class="button button-primary">
+                    Submit End-of-Shift Report
+                </button>
+
+                <a href="{% url 'shifts:shift_list' %}" class="button button-secondary">
+                    Cancel
+                </a>
+
+            </div>
+
+        </form>
+
+    </div>
+
+</div>
+
+</body>
+</html>

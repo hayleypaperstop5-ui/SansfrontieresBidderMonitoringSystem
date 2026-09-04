@@ -1,0 +1,632 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>
+        Sansfrontieres Chat Moderation Staff Management
+    </title>
+
+    <style>
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            font-family:
+                -apple-system,
+                BlinkMacSystemFont,
+                "Segoe UI",
+                Arial,
+                sans-serif;
+            background: #f4f6f9;
+            color: #172033;
+        }
+
+        .topbar {
+            background: #111827;
+            color: white;
+            padding: 22px 32px;
+        }
+
+        .topbar-inner {
+            max-width: 1400px;
+            margin: auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .brand {
+            font-size: 20px;
+            font-weight: 700;
+        }
+
+        .role-label {
+            font-size: 13px;
+            opacity: 0.75;
+            margin-top: 4px;
+        }
+
+        .page {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 32px;
+        }
+
+        .page-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 20px;
+            margin-bottom: 28px;
+        }
+
+        .page-header h1 {
+            margin: 0;
+            font-size: 30px;
+            color: #111827;
+        }
+
+        .page-header p {
+            margin: 8px 0 0;
+            color: #667085;
+        }
+
+        .btn {
+            display: inline-block;
+            border: none;
+            border-radius: 8px;
+            padding: 11px 17px;
+            font-size: 14px;
+            font-weight: 600;
+            text-decoration: none;
+            cursor: pointer;
+        }
+
+        .btn-primary {
+            background: #2563eb;
+            color: white;
+        }
+
+        .btn-secondary {
+            background: #e5e7eb;
+            color: #1f2937;
+        }
+
+        .btn-dashboard {
+            background: #16a34a;
+            color: white;
+        }
+
+        .btn-dashboard:hover {
+            background: #15803d;
+        }
+
+        .card {
+            background: white;
+            border: 1px solid #e5e7eb;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 3px 12px rgba(0, 0, 0, 0.04);
+        }
+
+        .table-wrapper {
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            min-width: 1050px;
+        }
+
+        th {
+            background: #f8fafc;
+            color: #475467;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            text-align: left;
+            padding: 15px 18px;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        td {
+            padding: 17px 18px;
+            border-bottom: 1px solid #edf0f3;
+            vertical-align: middle;
+            font-size: 14px;
+        }
+
+        tr:last-child td {
+            border-bottom: none;
+        }
+
+        .staff-name {
+            font-weight: 700;
+            color: #111827;
+        }
+
+        .username {
+            margin-top: 3px;
+            font-size: 12px;
+            color: #667085;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 5px 10px;
+            border-radius: 999px;
+            font-size: 12px;
+            font-weight: 700;
+            white-space: nowrap;
+        }
+
+        .role-admin {
+            background: #ede9fe;
+            color: #6d28d9;
+        }
+
+        .role-director {
+            background: #dbeafe;
+            color: #1d4ed8;
+        }
+
+        .role-manager {
+            background: #cffafe;
+            color: #0e7490;
+        }
+
+        .role-moderator {
+            background: #dcfce7;
+            color: #15803d;
+        }
+.role-bidder {
+            background: #e5e7eb;
+            color: #4b5563;
+        }
+
+        .status-active {
+            background: #dcfce7;
+            color: #15803d;
+        }
+
+        .status-inactive {
+            background: #e5e7eb;
+            color: #4b5563;
+        }
+
+        .status-suspended {
+            background: #fef3c7;
+            color: #b45309;
+        }
+
+        .status-terminated {
+            background: #fee2e2;
+            color: #b91c1c;
+        }
+
+        .actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 7px;
+        }
+
+        .action {
+            border: none;
+            border-radius: 6px;
+            padding: 7px 10px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-block;
+        }
+
+        .action-edit {
+            background: #dbeafe;
+            color: #1d4ed8;
+        }
+
+        .action-activate {
+            background: #dcfce7;
+            color: #15803d;
+        }
+
+        .action-suspend {
+            background: #fef3c7;
+            color: #b45309;
+        }
+
+        .action-terminate {
+            background: #fee2e2;
+            color: #b91c1c;
+        }
+
+        .empty {
+            text-align: center;
+            padding: 50px 20px;
+            color: #667085;
+        }
+
+        .footer-actions {
+            margin-top: 22px;
+        }
+
+        .message {
+            padding: 13px 16px;
+            margin-bottom: 20px;
+            border-radius: 8px;
+            background: #eff6ff;
+            color: #1e40af;
+            border: 1px solid #bfdbfe;
+        }
+
+        @media (max-width: 700px) {
+
+            .topbar {
+                padding: 18px;
+            }
+
+            .page {
+                padding: 20px;
+            }
+
+            .page-header {
+                align-items: flex-start;
+                flex-direction: column;
+            }
+
+            .page-header h1 {
+                font-size: 24px;
+            }
+
+        }
+
+    </style>
+
+</head>
+
+<body>
+
+    <header class="topbar">
+
+        <div class="topbar-inner">
+
+            <div>
+
+                <div class="brand">
+                    Sansfrontieres
+                </div>
+
+                <div class="role-label">
+                    Chat Moderation Workforce Management
+                </div>
+
+            </div>
+
+        </div>
+
+    </header>
+
+
+    <main class="page">
+
+        <div class="page-header">
+
+            <div>
+
+                <h1>
+                    Sansfrontieres Chat Moderation Staff Management
+                </h1>
+
+                <p>
+                    Manage staff accounts, roles and employment status.
+                </p>
+
+            </div>
+
+            <a
+                href="{% url 'accounts:staff_create' %}"
+                class="btn btn-primary"
+            >
+                + Add Moderator
+            </a>
+
+        </div>
+
+
+        {% if messages %}
+
+            {% for message in messages %}
+
+                <div class="message">
+                    {{ message }}
+                </div>
+
+            {% endfor %}
+
+        {% endif %}
+
+
+        <div class="card">
+
+            <div class="table-wrapper">
+
+                <table>
+
+                    <thead>
+
+                        <tr>
+
+                            <th>
+                                Staff Member
+                            </th>
+
+                            <th>
+                                Employee No.
+                            </th>
+
+                            <th>
+                                Phone
+                            </th>
+
+                            <th>
+                                Role
+                            </th>
+
+                            <th>
+                                Status
+                            </th>
+
+                            <th>
+                                Joined
+                            </th>
+
+                            <th>
+                                Actions
+                            </th>
+
+                        </tr>
+
+                    </thead>
+
+
+                    <tbody>
+
+                        {% for staff in staff_profiles %}
+
+                            <tr>
+
+                                <td>
+
+                                    <div class="staff-name">
+                                        {{ staff.user.get_full_name|default:staff.user.username }}
+                                    </div>
+
+                                    <div class="username">
+                                        @{{ staff.user.username }}
+                                    </div>
+
+                                </td>
+
+
+                                <td>
+                                    {{ staff.employee_number|default:"Not assigned" }}
+                                </td>
+
+
+                                <td>
+                                    {{ staff.phone_number|default:"Not provided" }}
+                                </td>
+
+
+                                <td>
+
+                                    {% if staff.user.role == "ADMIN" %}
+
+                                        <span class="badge role-admin">
+                                            {{ staff.user.get_role_display }}
+                                        </span>
+
+                                    {% elif staff.user.role == "DIRECTOR" %}
+
+                                        <span class="badge role-director">
+                                            {{ staff.user.get_role_display }}
+                                        </span>
+
+                                    {% elif staff.user.role == "MANAGER" %}
+
+                                        <span class="badge role-manager">
+                                            {{ staff.user.get_role_display }}
+                                        </span>
+
+                                    {% elif staff.user.role == "MODERATOR" %}
+
+                                        <span class="badge role-moderator">
+                                            {{ staff.user.get_role_display }}
+                                        </span>
+{% else %}
+
+                                        <span class="badge role-bidder">
+                                            {{ staff.user.get_role_display }}
+                                        </span>
+
+                                    {% endif %}
+
+                                </td>
+
+
+                                <td>
+
+                                    {% if staff.status == "ACTIVE" %}
+
+                                        <span class="badge status-active">
+                                            Active
+                                        </span>
+
+                                    {% elif staff.status == "INACTIVE" %}
+
+                                        <span class="badge status-inactive">
+                                            Inactive
+                                        </span>
+
+                                    {% elif staff.status == "SUSPENDED" %}
+
+                                        <span class="badge status-suspended">
+                                            Suspended
+                                        </span>
+
+                                    {% elif staff.status == "TERMINATED" %}
+
+                                        <span class="badge status-terminated">
+                                            Terminated
+                                        </span>
+
+                                    {% endif %}
+
+                                </td>
+
+
+                                <td>
+                                    {{ staff.joined_date|default:"Not recorded" }}
+                                </td>
+
+
+                                <td>
+
+                                    <div class="actions">
+
+                                        <a
+                                            href="{% url 'accounts:staff_edit' staff.id %}"
+                                            class="action action-edit"
+                                        >
+                                            Edit
+                                        </a>
+
+
+                                        {% if staff.status != "ACTIVE" %}
+
+                                            <form
+                                                method="post"
+                                                action="{% url 'accounts:staff_activate' staff.id %}"
+                                                style="display:inline;"
+                                            >
+
+                                                {% csrf_token %}
+
+                                                <button
+                                                    type="submit"
+                                                    class="action action-activate"
+                                                >
+                                                    Activate
+                                                </button>
+
+                                            </form>
+
+                                        {% endif %}
+
+
+                                        {% if staff.status == "ACTIVE" %}
+
+                                            <form
+                                                method="post"
+                                                action="{% url 'accounts:staff_suspend' staff.id %}"
+                                                style="display:inline;"
+                                            >
+
+                                                {% csrf_token %}
+
+                                                <button
+                                                    type="submit"
+                                                    class="action action-suspend"
+                                                >
+                                                    Suspend
+                                                </button>
+
+                                            </form>
+
+                                        {% endif %}
+
+
+                                        {% if staff.status != "TERMINATED" %}
+
+                                            <form
+                                                method="post"
+                                                action="{% url 'accounts:staff_terminate' staff.id %}"
+                                                style="display:inline;"
+                                                onsubmit="return confirm('Are you sure you want to terminate this staff member?');"
+                                            >
+
+                                                {% csrf_token %}
+
+                                                <button
+                                                    type="submit"
+                                                    class="action action-terminate"
+                                                >
+                                                    Terminate
+                                                </button>
+
+                                            </form>
+
+                                        {% endif %}
+
+                                    </div>
+
+                                </td>
+
+                            </tr>
+
+                        {% empty %}
+
+                            <tr>
+
+                                <td
+                                    colspan="7"
+                                    class="empty"
+                                >
+                                    No staff members have been added yet.
+                                </td>
+
+                            </tr>
+
+                        {% endfor %}
+
+                    </tbody>
+
+                </table>
+
+            </div>
+
+        </div>
+
+
+        <div class="footer-actions">
+
+            <a
+                href="{% url 'dashboard:home' %}"
+                class="btn btn-dashboard"
+            >
+                Back to Dashboard
+            </a>
+
+        </div>
+
+    </main>
+
+</body>
+
+</html>
+
+

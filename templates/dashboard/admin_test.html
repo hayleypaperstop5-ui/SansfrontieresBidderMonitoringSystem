@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Access Test</title>
+</head>
+
+<body>
+
+    <h1>Admin Access Test</h1>
+
+    <p>
+        This page is restricted to System Administrators.
+    </p>
+
+    <p>
+        If you can see this page, the role-based access control is working.
+    </p>
+
+    <a href="{% url 'dashboard:home' %}">Back to Dashboard</a>
+
+</body>
+</html>

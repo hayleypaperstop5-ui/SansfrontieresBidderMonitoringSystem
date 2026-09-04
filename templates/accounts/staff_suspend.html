@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>
+        Suspend Staff | Sansfrontieres
+    </title>
+
+    <style>
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            font-family:
+                -apple-system,
+                BlinkMacSystemFont,
+                "Segoe UI",
+                Arial,
+                sans-serif;
+            background: #f4f6f9;
+            color: #172033;
+        }
+
+        .topbar {
+            background: #111827;
+            color: white;
+            padding: 22px 32px;
+        }
+
+        .topbar-inner {
+            max-width: 900px;
+            margin: auto;
+        }
+
+        .brand {
+            font-size: 20px;
+            font-weight: 700;
+        }
+
+        .role-label {
+            font-size: 13px;
+            opacity: 0.75;
+            margin-top: 4px;
+        }
+
+        .page {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 35px 25px;
+        }
+
+        .page-header {
+            margin-bottom: 25px;
+        }
+
+        .page-header h1 {
+            margin: 0;
+            font-size: 30px;
+            color: #111827;
+        }
+
+        .page-header p {
+            margin-top: 8px;
+            color: #667085;
+        }
+
+        .card {
+            background: white;
+            border: 1px solid #e5e7eb;
+            border-radius: 12px;
+            padding: 30px;
+            box-shadow: 0 3px 12px rgba(0, 0, 0, 0.04);
+        }
+
+        .staff-summary {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            padding: 16px;
+            margin-bottom: 28px;
+            background: #f8fafc;
+            border: 1px solid #e5e7eb;
+            border-radius: 9px;
+        }
+
+        .avatar {
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            background: #2563eb;
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 18px;
+        }
+
+        .staff-name {
+            font-weight: 700;
+            color: #111827;
+        }
+
+        .staff-username {
+            color: #667085;
+            font-size: 13px;
+            margin-top: 3px;
+        }
+
+        .warning-panel {
+            padding: 16px 18px;
+            margin-bottom: 25px;
+            border: 1px solid #f0c36d;
+            border-radius: 9px;
+            background: #fffaf0;
+            color: #664d03;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+
+        .section-title {
+            margin: 0 0 18px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid #eaecf0;
+            font-size: 17px;
+            color: #111827;
+        }
+
+        .form-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .full-width {
+            grid-column: 1 / -1;
+        }
+
+        label {
+            font-size: 13px;
+            font-weight: 700;
+            color: #344054;
+            margin-bottom: 7px;
+        }
+
+        input,
+        textarea {
+            width: 100%;
+            padding: 11px 12px;
+            border: 1px solid #d0d5dd;
+            border-radius: 7px;
+            font-size: 14px;
+            font-family: inherit;
+            background: white;
+        }
+
+        input:focus,
+        textarea:focus {
+            outline: none;
+            border-color: #2563eb;
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+        }
+
+        textarea {
+            min-height: 120px;
+            resize: vertical;
+        }
+
+        .help-text {
+            margin-top: 5px;
+            font-size: 12px;
+            color: #667085;
+        }
+
+        .error {
+            margin-top: 5px;
+            font-size: 12px;
+            color: #b42318;
+        }
+
+        .non-field-errors {
+            margin-bottom: 20px;
+            padding: 12px 15px;
+            background: #fee4e2;
+            border: 1px solid #fecdca;
+            border-radius: 7px;
+            color: #b42318;
+            font-size: 14px;
+        }
+
+        .actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 28px;
+            padding-top: 22px;
+            border-top: 1px solid #eaecf0;
+        }
+
+        .btn {
+            border: none;
+            border-radius: 8px;
+            padding: 11px 18px;
+            font-size: 14px;
+            font-weight: 600;
+            text-decoration: none;
+            cursor: pointer;
+        }
+
+        .btn-warning {
+            background: #dc6803;
+            color: white;
+        }
+
+        .btn-secondary {
+            background: #e5e7eb;
+            color: #1f2937;
+        }
+
+        @media (max-width: 700px) {
+
+            .topbar {
+                padding: 18px;
+            }
+
+            .page {
+                padding: 25px 18px;
+            }
+
+            .card {
+                padding: 20px;
+            }
+
+            .form-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .full-width {
+                grid-column: auto;
+            }
+
+            .actions {
+                flex-direction: column;
+            }
+
+            .btn {
+                text-align: center;
+            }
+
+        }
+
+    </style>
+
+</head>
+
+<body>
+
+    <header class="topbar">
+
+        <div class="topbar-inner">
+
+            <div class="brand">
+                Sansfrontieres
+            </div>
+
+            <div class="role-label">
+                Chat Moderation Workforce Management
+            </div>
+
+        </div>
+
+    </header>
+
+
+    <main class="page">
+
+        <div class="page-header">
+
+            <h1>
+                Suspend Staff Member
+            </h1>
+
+            <p>
+                Set a temporary suspension period for this staff member.
+            </p>
+
+        </div>
+
+
+        <div class="card">
+
+            <div class="staff-summary">
+
+                <div class="avatar">
+                    {{ staff_user.first_name|first|upper }}{{ staff_user.last_name|first|upper }}
+                </div>
+
+                <div>
+
+                    <div class="staff-name">
+                        {{ staff_user.get_full_name|default:staff_user.username }}
+                    </div>
+
+                    <div class="staff-username">
+                        @{{ staff_user.username }}
+                    </div>
+
+                </div>
+
+            </div>
+
+
+            <div class="warning-panel">
+
+                <strong>Important:</strong>
+                The staff member will be unable to log in while suspended.
+                When the suspension period ends, the system will automatically
+                return the staff member to Active status.
+
+            </div>
+
+
+            <form method="post">
+
+                {% csrf_token %}
+
+
+                {% if form.non_field_errors %}
+
+                    <div class="non-field-errors">
+
+                        {{ form.non_field_errors }}
+
+                    </div>
+
+                {% endif %}
+
+
+                <h2 class="section-title">
+                    Suspension Details
+                </h2>
+
+
+                <div class="form-grid">
+
+                    <div class="form-group">
+
+                        <label for="{{ form.suspension_start.id_for_label }}">
+                            Suspension start
+                        </label>
+
+                        {{ form.suspension_start }}
+
+                        <div class="help-text">
+                            Select when the suspension begins.
+                        </div>
+
+                        {% for error in form.suspension_start.errors %}
+                            <div class="error">
+                                {{ error }}
+                            </div>
+                        {% endfor %}
+
+                    </div>
+
+
+                    <div class="form-group">
+
+                        <label for="{{ form.suspension_end.id_for_label }}">
+                            Suspension end
+                        </label>
+
+                        {{ form.suspension_end }}
+
+                        <div class="help-text">
+                            Select when the suspension ends.
+                        </div>
+
+                        {% for error in form.suspension_end.errors %}
+                            <div class="error">
+                                {{ error }}
+                            </div>
+                        {% endfor %}
+
+                    </div>
+
+
+                    <div class="form-group full-width">
+
+                        <label for="{{ form.suspension_reason.id_for_label }}">
+                            Suspension reason
+                        </label>
+
+                        {{ form.suspension_reason }}
+
+                        <div class="help-text">
+                            Provide the reason for the suspension.
+                        </div>
+
+                        {% for error in form.suspension_reason.errors %}
+                            <div class="error">
+                                {{ error }}
+                            </div>
+                        {% endfor %}
+
+                    </div>
+
+                </div>
+
+
+                <div class="actions">
+
+                    <button
+                        type="submit"
+                        class="btn btn-warning"
+                    >
+                        Confirm Suspension
+                    </button>
+
+                    <a
+                        href="{% url 'accounts:staff_list' %}"
+                        class="btn btn-secondary"
+                    >
+                        Cancel
+                    </a>
+
+                </div>
+
+            </form>
+
+        </div>
+
+    </main>
+
+</body>
+
+</html>

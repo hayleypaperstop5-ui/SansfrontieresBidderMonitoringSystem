@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sansfrontieres Dashboard</title>
+
+    <style>
+        body {
+            margin: 0;
+            font-family: Arial, Helvetica, sans-serif;
+            background: #f4f7f9;
+            color: #1f2937;
+        }
+
+        .topbar {
+            background: #123b2a;
+            color: white;
+            padding: 20px 40px;
+        }
+
+        .brand {
+            font-size: 22px;
+            font-weight: 700;
+        }
+
+        .container {
+            max-width: 1100px;
+            margin: 40px auto;
+            padding: 0 24px;
+        }
+
+        h1 {
+            color: #123b2a;
+            margin-bottom: 8px;
+        }
+
+        .subtitle {
+            color: #64748b;
+            margin-bottom: 30px;
+        }
+
+        .role-card {
+            background: white;
+            border: 1px solid #e2e8f0;
+            border-radius: 10px;
+            padding: 28px;
+            margin-bottom: 25px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
+        }
+
+        .role-card h2 {
+            margin-top: 0;
+            color: #123b2a;
+        }
+
+        .role-card p {
+            color: #64748b;
+        }
+
+        .actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin-top: 20px;
+        }
+
+        .button {
+            display: inline-block;
+            padding: 12px 18px;
+            border-radius: 7px;
+            text-decoration: none;
+            font-weight: 700;
+            font-size: 14px;
+        }
+
+        .button-primary {
+            background: #166534;
+            color: white;
+        }
+
+        .button-primary:hover {
+            background: #14532d;
+        }
+
+        .button-secondary {
+            background: #e2e8f0;
+            color: #334155;
+        }
+
+        .button-secondary:hover {
+            background: #cbd5e1;
+        }
+
+        .logout {
+            margin-top: 30px;
+        }
+
+        .logout a {
+            display: inline-block;
+            background: #b91c1c;
+            color: white;
+            padding: 12px 18px;
+            border-radius: 7px;
+            font-weight: 700;
+            text-decoration: none;
+            font-size: 14px;
+        }
+
+        .logout a:hover {
+            background: #991b1b;
+        }
+
+        @media (max-width: 600px) {
+            .topbar {
+                padding: 18px 20px;
+            }
+
+            .container {
+                margin: 25px auto;
+                padding: 0 15px;
+            }
+
+            .actions {
+                flex-direction: column;
+            }
+
+            .button {
+                text-align: center;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="topbar">
+        <div class="brand">Sansfrontieres</div>
+    </div>
+
+    <main class="container">
+
+        <h1>
+            Welcome,
+            {{ request.user.get_full_name|default:request.user.username }}
+        </h1>
+
+        {% if request.user.role == "ADMIN" %}
+
+            <div class="role-card">
+                <div class="actions">
+                    <a
+                        href="{% url 'accounts:staff_list' %}"
+                        class="button button-primary"
+                    >
+                        Staff Management
+                    </a>
+                    <a
+                        href="{% url 'players:player_list' %}"
+                        class="button button-primary"
+                    >
+                        Player Management
+                    </a>
+                    <a
+                        href="{% url 'shifts:shift_list' %}"
+                        class="button button-primary"
+                    >
+                        Shift Management
+                    </a>
+                    <a
+                        href="{% url 'notifications:list' %}"
+                        class="button button-secondary"
+                    >
+                        Notifications
+                    </a>
+                </div>
+            </div>
+
+        {% elif request.user.role == "DIRECTOR" %}
+
+            <div class="role-card">
+                <h2>Director</h2>
+
+                <p>
+                    You have full business management access.
+                </p>
+
+                <div class="actions">
+                    <a
+                        href="{% url 'accounts:staff_list' %}"
+                        class="button button-primary"
+                    >
+                        Staff Management
+                    </a>
+                    <a
+                        href="{% url 'players:player_list' %}"
+                        class="button button-primary"
+                    >
+                        Player Management
+                    </a>
+                    <a
+                        href="{% url 'shifts:shift_list' %}"
+                        class="button button-primary"
+                    >
+                        Shift Management
+                    </a>
+                    <a
+                        href="{% url 'notifications:list' %}"
+                        class="button button-secondary"
+                    >
+                        Notifications
+                    </a>
+                </div>
+            </div>
+
+        {% elif request.user.role == "MANAGER" %}
+
+            <div class="role-card">
+                <h2>Manager</h2>
+
+                <p>
+                    You have operational management access.
+                </p>
+
+                <div class="actions">
+                    <a
+                        href="{% url 'accounts:staff_list' %}"
+                        class="button button-primary"
+                    >
+                        Staff Management
+                    </a>
+                    <a
+                        href="{% url 'players:player_list' %}"
+                        class="button button-primary"
+                    >
+                        Player Management
+                    </a>
+                    <a
+                        href="{% url 'shifts:shift_list' %}"
+                        class="button button-primary"
+                    >
+                        Shift Management
+                    </a>
+                    <a
+                        href="{% url 'notifications:list' %}"
+                        class="button button-secondary"
+                    >
+                        Notifications
+                    </a>
+                </div>
+            </div>
+
+        {% elif request.user.role == "MODERATOR" %}
+
+            <div class="role-card">
+                <h2>Moderator</h2>
+
+                <p>
+                    Submit completed chat moderation work and maintain your
+                    moderation activity record.
+                </p>
+
+                <div class="actions">
+                    <a
+                        href="{% url 'monitoring:submit_chat' %}"
+                        class="button button-primary"
+                    >
+                        Submit Chat
+                    </a>
+                </div>
+            </div>
+
+        {% elif request.user.role == "BIDDER" %}
+
+            <div class="role-card">
+                <h2>Bidder</h2>
+
+                <p>
+                    Bidder functionality will be implemented in a later stage.
+                </p>
+            </div>
+
+        {% endif %}
+
+        <div class="logout">
+            <a href="{% url 'accounts:logout' %}">
+                Log out
+            </a>
+        </div>
+
+    </main>
+
+
+{% if request.user.role == "MODERATOR" %}
+<div style="margin-top: 24px;">
+    <a href="{% url 'dashboard:my_shifts' %}"
+       style="display: inline-block; padding: 12px 20px; background: #198754; color: white; text-decoration: none; border-radius: 7px; font-weight: 700;">
+        My Shifts
+    </a>
+</div>
+{% endif %}
+
+</body>
+</html>
+
+
+
+
+
+
+
+
+
+

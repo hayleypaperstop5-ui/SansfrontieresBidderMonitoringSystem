@@ -1,0 +1,188 @@
+{% extends "dashboard/dashboard.html" %}
+
+{% block content %}
+<style>
+    .rate-page {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 30px;
+    }
+
+    .rate-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 25px;
+        gap: 20px;
+    }
+
+    .rate-header h1 {
+        margin: 0;
+        font-size: 28px;
+    }
+
+    .rate-header p {
+        margin: 8px 0 0;
+        color: #6b7280;
+    }
+
+    .btn {
+        display: inline-block;
+        padding: 11px 18px;
+        border-radius: 8px;
+        text-decoration: none;
+        font-weight: 600;
+        background: #166534;
+        color: white;
+    }
+
+    .notice {
+        background: #eff6ff;
+        border: 1px solid #bfdbfe;
+        border-radius: 10px;
+        padding: 16px;
+        margin-bottom: 22px;
+        color: #1e3a8a;
+    }
+
+    .table-card {
+        background: white;
+        border-radius: 12px;
+        overflow: hidden;
+        box-shadow: 0 4px 16px rgba(0,0,0,.08);
+    }
+
+    table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+    th, td {
+        padding: 15px 18px;
+        text-align: left;
+        border-bottom: 1px solid #e5e7eb;
+    }
+
+    th {
+        background: #f8fafc;
+        font-size: 13px;
+        text-transform: uppercase;
+        letter-spacing: .04em;
+        color: #475569;
+    }
+
+    .badge {
+        display: inline-block;
+        padding: 5px 10px;
+        border-radius: 999px;
+        font-size: 12px;
+        font-weight: 700;
+    }
+
+    .active {
+        background: #dcfce7;
+        color: #166534;
+    }
+
+    .inactive {
+        background: #fee2e2;
+        color: #991b1b;
+    }
+
+    .empty {
+        padding: 45px;
+        text-align: center;
+        color: #6b7280;
+    }
+</style>
+
+<div class="rate-page">
+
+    <div class="rate-header">
+        <div>
+            <h1>Chat Rate Management</h1>
+            <p>Configure global payment rates based on the number of chats replied to.</p>
+        </div>
+
+        <a href="{% url 'players:chat_rate_create' %}" class="btn">
+            + Add Rate Tier
+        </a>
+    </div>
+
+    <div class="notice">
+        <strong>Director Controlled:</strong>
+        These rates apply globally to Moderators.
+        They are not assigned to individual Players.
+    </div>
+
+    {% if messages %}
+        {% for message in messages %}
+            <div class="notice">
+                {{ message }}
+            </div>
+        {% endfor %}
+    {% endif %}
+
+    <div class="table-card">
+
+        {% if rate_tiers %}
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Chat Range</th>
+                    <th>Rate Per Chat</th>
+                    <th>Status</th>
+                    <th>Effective From</th>
+                </tr>
+            </thead>
+
+            <tbody>
+                {% for tier in rate_tiers %}
+                <tr>
+                    <td>
+                        {% if tier.maximum_chats %}
+                            {{ tier.minimum_chats }}-{{ tier.maximum_chats }}
+                        {% else %}
+                            {{ tier.minimum_chats }}+
+                        {% endif %}
+                    </td>
+
+                    <td>
+                        <strong>${{ tier.rate_per_chat }}</strong>
+                    </td>
+
+                    <td>
+                        {% if tier.active %}
+                            <span class="badge active">Active</span>
+                        {% else %}
+                            <span class="badge inactive">Inactive</span>
+                        {% endif %}
+                    </td>
+
+                    <td>
+                        {% if tier.effective_from %}
+                            {{ tier.effective_from }}
+                        {% else %}
+                            Not specified
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        {% else %}
+
+        <div class="empty">
+            <h3>No chat-rate tiers configured</h3>
+            <p>The Director can add the first global payment rate.</p>
+        </div>
+
+        {% endif %}
+
+    </div>
+
+</div>
+{% endblock %}
+

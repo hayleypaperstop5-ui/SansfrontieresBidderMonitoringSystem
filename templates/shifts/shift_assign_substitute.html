@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Assign Replacement Moderator | Sansfrontieres</title>
+
+    <style>
+        body {
+            margin: 0;
+            font-family: Arial, Helvetica, sans-serif;
+            background: #f4f7f9;
+            color: #1f2937;
+        }
+
+        .topbar {
+            background: #123b2a;
+            color: white;
+            padding: 20px 40px;
+        }
+
+        .brand {
+            font-size: 22px;
+            font-weight: 700;
+        }
+
+        .container {
+            max-width: 700px;
+            margin: 40px auto;
+            padding: 0 24px;
+        }
+
+        h1 {
+            color: #123b2a;
+            margin-bottom: 8px;
+        }
+
+        .subtitle {
+            color: #64748b;
+            margin-bottom: 25px;
+        }
+
+        .card {
+            background: white;
+            border: 1px solid #e5e7eb;
+            border-radius: 12px;
+            padding: 28px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.06);
+        }
+
+        .shift-details {
+            background: #f0fdf4;
+            border: 1px solid #bbf7d0;
+            border-radius: 8px;
+            padding: 18px;
+            margin-bottom: 25px;
+        }
+
+        .shift-details p {
+            margin: 7px 0;
+        }
+
+        .shift-details strong {
+            color: #123b2a;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            font-weight: 700;
+            margin-bottom: 8px;
+            color: #374151;
+        }
+
+        select {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #d1d5db;
+            border-radius: 7px;
+            font-size: 14px;
+            background: white;
+            box-sizing: border-box;
+        }
+
+        .help-text {
+            color: #64748b;
+            font-size: 13px;
+            margin-top: 7px;
+        }
+
+        .errors {
+            background: #fee2e2;
+            color: #991b1b;
+            border: 1px solid #fecaca;
+            border-radius: 7px;
+            padding: 12px;
+            margin-bottom: 20px;
+        }
+
+        .actions {
+            display: flex;
+            gap: 12px;
+            margin-top: 25px;
+        }
+
+        .button {
+            display: inline-block;
+            padding: 12px 18px;
+            border-radius: 7px;
+            text-decoration: none;
+            font-weight: 700;
+            font-size: 14px;
+            border: none;
+            cursor: pointer;
+        }
+
+        .button-green {
+            background: #166534;
+            color: white;
+        }
+
+        .button-green:hover {
+            background: #14532d;
+        }
+
+        .button-secondary {
+            background: #e2e8f0;
+            color: #334155;
+        }
+
+        .button-secondary:hover {
+            background: #cbd5e1;
+        }
+
+        @media (max-width: 600px) {
+            .topbar {
+                padding: 18px 20px;
+            }
+
+            .container {
+                margin: 25px auto;
+                padding: 0 15px;
+            }
+
+            .actions {
+                flex-direction: column;
+            }
+
+            .button {
+                text-align: center;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="topbar">
+        <div class="brand">Sansfrontieres</div>
+    </div>
+
+    <main class="container">
+
+        <h1>
+            {% if shift.substitute %}
+                Change Replacement Moderator
+            {% else %}
+                Assign Replacement Moderator
+            {% endif %}
+        </h1>
+
+        <div class="subtitle">
+            Assign replacement coverage for this scheduled moderator shift.
+        </div>
+
+        <div class="card">
+
+            <div class="shift-details">
+
+                <p>
+                    <strong>Date:</strong>
+                    {{ shift.date|date:"d M Y" }}
+                </p>
+
+                <p>
+                    <strong>Player:</strong>
+                    Player {{ shift.player.player_number }} -
+                    {{ shift.player.name }}
+                </p>
+
+                <p>
+                    <strong>Primary Moderator:</strong>
+                    {{ shift.primary_moderator.get_full_name|default:shift.primary_moderator.username }}
+                </p>
+
+                <p>
+                    <strong>Scheduled Time:</strong>
+                    {{ shift.scheduled_start|time:"H:i" }}
+                    -
+                    {{ shift.scheduled_end|time:"H:i" }}
+                </p>
+
+            </div>
+
+            {% if form.non_field_errors %}
+                <div class="errors">
+                    {{ form.non_field_errors }}
+                </div>
+            {% endif %}
+
+            <form method="post">
+
+                {% csrf_token %}
+
+                <div class="form-group">
+
+                    <label for="{{ form.substitute.id_for_label }}">
+                        Assign Replacement Moderator
+                    </label>
+
+                    {{ form.substitute }}
+
+                    {% if form.substitute.errors %}
+                        <div class="errors">
+                            {{ form.substitute.errors }}
+                        </div>
+                    {% endif %}
+
+                    <div class="help-text">
+                        Select an active Moderator who will cover this shift as the replacement Moderator.
+                    </div>
+
+                </div>
+
+                <div class="actions">
+
+                    <button
+                        type="submit"
+                        class="button button-green"
+                    >
+                        {% if shift.substitute %}
+                            Update Replacement Moderator
+                        {% else %}
+                            Assign Replacement Moderator
+                        {% endif %}
+                    </button>
+
+                    <a
+                        href="{% url 'shifts:shift_list' %}"
+                        class="button button-secondary"
+                    >
+                        Cancel
+                    </a>
+
+                </div>
+
+            </form>
+
+        </div>
+
+    </main>
+
+</body>
+</html>
+

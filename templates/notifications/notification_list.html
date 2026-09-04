@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Notifications | Sansfrontieres</title>
+
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            font-family: Arial, Helvetica, sans-serif;
+            background: #f4f6f8;
+            color: #1f2937;
+        }
+
+        .topbar {
+            background: #111827;
+            color: white;
+            padding: 18px 32px;
+            font-size: 20px;
+            font-weight: 700;
+        }
+
+        .container {
+            max-width: 1100px;
+            margin: 40px auto;
+            padding: 0 24px;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 24px;
+        }
+
+        h1 {
+            margin: 0;
+            font-size: 28px;
+        }
+
+        .subtitle {
+            margin-top: 8px;
+            color: #6b7280;
+        }
+
+        .notification {
+            background: white;
+            border-left: 5px solid #dc2626;
+            border-radius: 10px;
+            padding: 22px;
+            margin-bottom: 16px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+        }
+
+        .notification.read {
+            border-left-color: #9ca3af;
+        }
+
+        .notification-title {
+            font-size: 18px;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+
+        .notification-message {
+            color: #4b5563;
+            line-height: 1.6;
+        }
+
+        .notification-meta {
+            margin-top: 14px;
+            font-size: 13px;
+            color: #6b7280;
+        }
+
+        .empty {
+            background: white;
+            padding: 45px;
+            text-align: center;
+            border-radius: 10px;
+            color: #6b7280;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+        }
+
+        .button {
+            display: inline-block;
+            padding: 10px 16px;
+            border-radius: 7px;
+            background: #374151;
+            color: white;
+            text-decoration: none;
+            font-weight: 600;
+        }
+
+        .button:hover {
+            background: #1f2937;
+        }
+
+        .badge {
+            display: inline-block;
+            margin-left: 10px;
+            padding: 4px 9px;
+            border-radius: 999px;
+            background: #fee2e2;
+            color: #991b1b;
+            font-size: 12px;
+            font-weight: 700;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="topbar">
+        Sansfrontieres
+    </div>
+
+    <div class="container">
+
+        <div class="header">
+            <div>
+                <h1>Manager Notifications</h1>
+                <div class="subtitle">
+                    Review overdue shift reports and operational replacement alerts.
+                </div>
+            </div>
+
+            <a href="{% url 'dashboard:home' %}" class="button">
+                Back to Dashboard
+            </a>
+        </div>
+
+        {% if message %}
+
+            <div class="empty">
+                {{ message }}
+            </div>
+
+        {% elif notifications %}
+
+            {% for notification in notifications %}
+
+                <div class="notification {% if notification.is_read %}read{% endif %}">
+
+                    <div class="notification-title">
+                        {{ notification.title }}
+
+                        {% if not notification.is_read %}
+                            <span class="badge">NEW</span>
+                        {% endif %}
+                    </div>
+
+                    <div class="notification-message">
+                        {{ notification.message }}
+                    </div>
+
+                    <div class="notification-meta">
+                        Received {{ notification.created_at|date:"d M Y H:i" }}
+
+                        {% if notification.shift %}
+                            |
+                            Player {{ notification.shift.player.player_number }}
+                            - {{ notification.shift.player.name }}
+                        {% endif %}
+                    </div>
+
+                </div>
+
+            {% endfor %}
+
+        {% else %}
+
+            <div class="empty">
+                <h2>No notifications</h2>
+                <p>
+                    You currently have no outstanding shift report or replacement notifications.
+                </p>
+            </div>
+
+        {% endif %}
+
+    </div>
+
+</body>
+</html>

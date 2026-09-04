@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Shifts - Sansfrontieres</title>
+
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            font-family: Arial, Helvetica, sans-serif;
+            background: #f4f7f9;
+            color: #1f2933;
+        }
+
+        .topbar {
+            background: #123c2f;
+            color: white;
+            padding: 18px 32px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .brand {
+            font-size: 21px;
+            font-weight: 700;
+        }
+
+        .user-info {
+            font-size: 14px;
+            opacity: 0.95;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 35px auto;
+            padding: 0 24px;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 24px;
+        }
+
+        h1 {
+            margin: 0;
+            font-size: 30px;
+            color: #123c2f;
+        }
+
+        .subtitle {
+            margin-top: 7px;
+            color: #667085;
+            font-size: 14px;
+        }
+
+        .back-button {
+            text-decoration: none;
+            background: #e8eef0;
+            color: #344054;
+            padding: 10px 16px;
+            border-radius: 7px;
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        .card {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 3px 12px rgba(16, 24, 40, 0.08);
+            overflow: hidden;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th {
+            background: #f0f4f3;
+            color: #344054;
+            text-align: left;
+            padding: 15px;
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+        }
+
+        td {
+            padding: 16px 15px;
+            border-top: 1px solid #eaecf0;
+            font-size: 14px;
+            vertical-align: middle;
+        }
+
+        .player {
+            font-weight: 700;
+            color: #123c2f;
+        }
+
+        .status {
+            display: inline-block;
+            padding: 6px 10px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 700;
+        }
+
+        .scheduled {
+            background: #fff4cc;
+            color: #8a6200;
+        }
+
+        .in-progress {
+            background: #dff4e8;
+            color: #166534;
+        }
+
+        .awaiting-report {
+            background: #ffe8cc;
+            color: #9a3412;
+        }
+
+        .completed {
+            background: #dbeafe;
+            color: #1d4ed8;
+        }
+
+        .report-overdue {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        .missed,
+        .cancelled {
+            background: #fee2e2;
+            color: #b42318;
+        }
+
+        .actions {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .button {
+            display: inline-block;
+            padding: 8px 12px;
+            border-radius: 6px;
+            text-decoration: none;
+            font-size: 12px;
+            font-weight: 700;
+            border: none;
+            cursor: pointer;
+        }
+
+        .button-green {
+            background: #198754;
+            color: white;
+        }
+
+        .button-orange {
+            background: #d97706;
+            color: white;
+        }
+
+        .button-blue {
+            background: #2563eb;
+            color: white;
+        }
+
+        .button-disabled {
+            background: #eaecf0;
+            color: #98a2b3;
+            cursor: default;
+        }
+
+        .empty {
+            padding: 50px 25px;
+            text-align: center;
+            color: #667085;
+        }
+
+        .notice {
+            margin-bottom: 20px;
+            padding: 14px 16px;
+            border-radius: 8px;
+            background: #fff4cc;
+            color: #8a6200;
+        }
+
+        @media (max-width: 850px) {
+            .card {
+                overflow-x: auto;
+            }
+
+            table {
+                min-width: 900px;
+            }
+
+            .header {
+                align-items: flex-start;
+                gap: 15px;
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="topbar">
+    <div class="brand">Sansfrontieres</div>
+    <div class="user-info">
+        {{ request.user.get_full_name|default:request.user.username }}
+    </div>
+</div>
+
+<div class="container">
+
+    <div class="header">
+        <div>
+            <h1>My Shifts</h1>
+            <div class="subtitle">
+                View your assigned shifts, sign in, sign out and complete your end-of-shift report.
+            </div>
+        </div>
+
+        <a href="{% url 'dashboard:home' %}" class="back-button">
+            Back to Dashboard
+        </a>
+    </div>
+
+    {% if message %}
+        <div class="notice">
+            {{ message }}
+        </div>
+    {% endif %}
+
+    <div class="card">
+
+        {% if shifts %}
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Player</th>
+                        <th>Shift</th>
+                        <th>Scheduled Time</th>
+                        <th>Role</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+
+                    {% for shift in shifts %}
+
+                        <tr>
+
+                            <td>
+                                {{ shift.date|date:"d M Y" }}
+                            </td>
+
+                            <td>
+                                <div class="player">
+                                    Player {{ shift.player.player_number }}
+                                </div>
+                                {{ shift.player.name }}
+                            </td>
+
+                            <td>
+                                {{ shift.get_shift_type_display }}
+                            </td>
+
+                            <td>
+                                {{ shift.scheduled_start|time:"H:i" }}
+                                -
+                                {{ shift.scheduled_end|time:"H:i" }}
+                            </td>
+
+                            <td>
+                                {% if shift.actual_worker == request.user %}
+                                    Worked
+                                {% elif shift.substitute == request.user %}
+                                    Replacement Moderator
+                                {% else %}
+                                    Primary Moderator
+                                {% endif %}
+                            </td>
+
+                            <td>
+                                {% if shift.status == "SCHEDULED" %}
+                                    <span class="status scheduled">
+                                        Scheduled
+                                    </span>
+                                {% elif shift.status == "IN_PROGRESS" %}
+                                    <span class="status in-progress">
+                                        In Progress
+                                    </span>
+                                {% elif shift.status == "AWAITING_REPORT" %}
+                                    <span class="status awaiting-report">
+                                        Awaiting Report
+                                    </span>
+                                {% elif shift.status == "REPORT_OVERDUE" %}
+                                    <span class="status report-overdue">
+                                        Report Overdue
+                                    </span>
+                                {% elif shift.status == "COMPLETED" %}
+                                    <span class="status completed">
+                                        Completed
+                                    </span>
+                                {% elif shift.status == "MISSED" %}
+                                    <span class="status missed">
+                                        Missed
+                                    </span>
+                                {% elif shift.status == "CANCELLED" %}
+                                    <span class="status cancelled">
+                                        Cancelled
+                                    </span>
+                                {% else %}
+                                    <span class="status">
+                                        {{ shift.get_status_display }}
+                                    </span>
+                                {% endif %}
+                            </td>
+
+                            <td>
+
+                                <div class="actions">
+
+                                    {% if shift.status == "SCHEDULED" and not shift.actual_sign_in %}
+                                        <a
+                                            href="{% url 'shifts:shift_sign_in' shift.id %}"
+                                            class="button button-green"
+                                        >
+                                            Sign In
+                                        </a>
+                                    {% endif %}
+
+                                    {% if shift.actual_worker == request.user and shift.status == "IN_PROGRESS" and not shift.actual_sign_out %}
+                                        <a
+                                            href="{% url 'shifts:shift_sign_out' shift.id %}"
+                                            class="button button-orange"
+                                        >
+                                            Sign Out
+                                        </a>
+                                    {% endif %}
+
+                                    {% if shift.actual_worker == request.user and shift.status == "AWAITING_REPORT" and not shift.report %}
+                                        <a
+                                            href="{% url 'reports:shift_report_submit' shift.id %}"
+                                            class="button button-blue"
+                                        >
+                                            Submit Report
+                                        </a>
+                                    {% endif %}
+
+                                    {% if shift.actual_worker == request.user and shift.status == "REPORT_OVERDUE" and not shift.report %}
+                                        <a
+                                            href="{% url 'reports:shift_report_submit' shift.id %}"
+                                            class="button button-blue"
+                                        >
+                                            Submit Overdue Report
+                                        </a>
+                                    {% endif %}
+
+                                    {% if shift.status == "COMPLETED" %}
+                                        <span class="button button-disabled">
+                                            Report Submitted
+                                        </span>
+                                    {% endif %}
+
+                                </div>
+
+                            </td>
+
+                        </tr>
+
+                    {% endfor %}
+
+                </tbody>
+            </table>
+
+        {% else %}
+
+            <div class="empty">
+                <h3>No shifts assigned</h3>
+                <p>You currently have no assigned shifts.</p>
+            </div>
+
+        {% endif %}
+
+    </div>
+
+</div>
+
+</body>
+</html>
+

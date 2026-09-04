@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Submit Chat | Sansfrontieres</title>
+
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            font-family: Arial, Helvetica, sans-serif;
+            background: #f4f7f9;
+            color: #1f2937;
+        }
+
+        .topbar {
+            background: #123b2a;
+            color: white;
+            padding: 18px 40px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .brand {
+            font-size: 22px;
+            font-weight: 700;
+        }
+
+        .topbar-title {
+            font-size: 14px;
+            opacity: 0.9;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 45px auto;
+            padding: 0 24px;
+        }
+
+        .page-header {
+            margin-bottom: 25px;
+        }
+
+        h1 {
+            margin-bottom: 8px;
+            color: #123b2a;
+            font-size: 30px;
+        }
+
+        .description {
+            color: #64748b;
+            font-size: 15px;
+        }
+
+        .card {
+            background: white;
+            border-radius: 10px;
+            padding: 30px;
+            box-shadow: 0 4px 18px rgba(0, 0, 0, 0.06);
+            border: 1px solid #e2e8f0;
+        }
+
+        .staff-summary {
+            background: #f0fdf4;
+            border: 1px solid #bbf7d0;
+            border-radius: 8px;
+            padding: 18px;
+            margin-bottom: 28px;
+        }
+
+        .staff-name {
+            font-size: 18px;
+            font-weight: 700;
+            color: #166534;
+        }
+
+        .staff-details {
+            margin-top: 5px;
+            color: #64748b;
+            font-size: 14px;
+        }
+
+        .field {
+            margin-bottom: 22px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 700;
+            color: #334155;
+        }
+
+        input,
+        textarea {
+            width: 100%;
+            padding: 12px 14px;
+            border: 1px solid #cbd5e1;
+            border-radius: 7px;
+            font-size: 15px;
+            font-family: inherit;
+            transition: border-color 0.2s;
+        }
+
+        input:focus,
+        textarea:focus {
+            outline: none;
+            border-color: #166534;
+        }
+
+        textarea {
+            resize: vertical;
+            min-height: 180px;
+        }
+
+        .help-text {
+            margin-top: 6px;
+            color: #64748b;
+            font-size: 13px;
+        }
+
+        .error {
+            color: #b91c1c;
+            font-size: 13px;
+            margin-top: 6px;
+        }
+
+        .form-error {
+            background: #fef2f2;
+            border: 1px solid #fecaca;
+            color: #b91c1c;
+            padding: 12px 15px;
+            border-radius: 7px;
+            margin-bottom: 22px;
+        }
+
+        .actions {
+            display: flex;
+            gap: 12px;
+            margin-top: 28px;
+        }
+
+        .button {
+            display: inline-block;
+            padding: 12px 20px;
+            border-radius: 7px;
+            border: none;
+            font-size: 14px;
+            font-weight: 700;
+            cursor: pointer;
+            text-decoration: none;
+        }
+
+        .button-primary {
+            background: #166534;
+            color: white;
+        }
+
+        .button-primary:hover {
+            background: #14532d;
+        }
+
+        .button-secondary {
+            background: #e2e8f0;
+            color: #334155;
+        }
+
+        .button-secondary:hover {
+            background: #cbd5e1;
+        }
+
+        .required {
+            color: #b91c1c;
+        }
+
+        @media (max-width: 600px) {
+            .topbar {
+                padding: 16px 20px;
+            }
+
+            .topbar-title {
+                display: none;
+            }
+
+            .container {
+                margin: 25px auto;
+                padding: 0 15px;
+            }
+
+            .card {
+                padding: 22px;
+            }
+
+            .actions {
+                flex-direction: column;
+            }
+
+            .button {
+                text-align: center;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="topbar">
+        <div class="brand">Sansfrontieres</div>
+        <div class="topbar-title">Chat Moderation Management System</div>
+    </div>
+
+    <main class="container">
+
+        <div class="page-header">
+            <h1>Submit Moderated Chat</h1>
+            <div class="description">
+                Record a completed chat moderation task.
+            </div>
+        </div>
+
+        <div class="card">
+
+            <div class="staff-summary">
+                <div class="staff-name">
+                    {{ request.user.get_full_name|default:request.user.username }}
+                </div>
+
+                <div class="staff-details">
+                    @{{ request.user.username }}
+                    &nbsp; | &nbsp;
+                    {{ request.user.get_role_display }}
+                </div>
+            </div>
+
+            {% if form.non_field_errors %}
+                <div class="form-error">
+                    {{ form.non_field_errors }}
+                </div>
+            {% endif %}
+
+            <form method="post">
+                {% csrf_token %}
+
+                <div class="field">
+                    <label for="{{ form.chat_reference.id_for_label }}">
+                        Chat Reference <span class="required">*</span>
+                    </label>
+
+                    {{ form.chat_reference }}
+
+                    {% if form.chat_reference.errors %}
+                        <div class="error">
+                            {{ form.chat_reference.errors }}
+                        </div>
+                    {% endif %}
+
+                    <div class="help-text">
+                        Enter the reference or identification number of the moderated chat.
+                    </div>
+                </div>
+
+                <div class="field">
+                    <label for="{{ form.chat_content.id_for_label }}">
+                        Chat Content / Summary <span class="required">*</span>
+                    </label>
+
+                    {{ form.chat_content }}
+
+                    {% if form.chat_content.errors %}
+                        <div class="error">
+                            {{ form.chat_content.errors }}
+                        </div>
+                    {% endif %}
+
+                    <div class="help-text">
+                        Provide the relevant chat content or a concise moderation summary.
+                    </div>
+                </div>
+
+                <div class="actions">
+                    <button
+                        type="submit"
+                        class="button button-primary"
+                    >
+                        Submit Chat
+                    </button>
+
+                    <a
+                        href="{% url 'dashboard:home' %}"
+                        class="button button-secondary"
+                    >
+                        Cancel
+                    </a>
+                </div>
+
+            </form>
+
+        </div>
+
+    </main>
+
+</body>
+</html>

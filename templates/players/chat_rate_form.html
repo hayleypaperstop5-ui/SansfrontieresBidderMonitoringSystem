@@ -1,0 +1,235 @@
+{% extends "dashboard/dashboard.html" %}
+
+{% block content %}
+<style>
+    .rate-form-page {
+        max-width: 850px;
+        margin: 0 auto;
+        padding: 30px;
+    }
+
+    .rate-form-card {
+        background: white;
+        border-radius: 14px;
+        padding: 30px;
+        box-shadow: 0 4px 18px rgba(0,0,0,.08);
+    }
+
+    h1 {
+        margin: 0 0 8px;
+        font-size: 28px;
+    }
+
+    .intro {
+        color: #6b7280;
+        margin-bottom: 25px;
+    }
+
+    .rule-box {
+        background: #eff6ff;
+        border: 1px solid #bfdbfe;
+        border-radius: 10px;
+        padding: 16px;
+        margin-bottom: 25px;
+        color: #1e3a8a;
+    }
+
+    .form-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 20px;
+    }
+
+    .form-group {
+        margin-bottom: 20px;
+    }
+
+    label {
+        display: block;
+        font-weight: 700;
+        margin-bottom: 7px;
+        color: #374151;
+    }
+
+    input[type="number"],
+    input[type="date"] {
+        width: 100%;
+        box-sizing: border-box;
+        padding: 12px;
+        border: 1px solid #d1d5db;
+        border-radius: 8px;
+        font-size: 15px;
+    }
+
+    .help {
+        margin-top: 6px;
+        font-size: 13px;
+        color: #6b7280;
+    }
+
+    .error {
+        color: #b91c1c;
+        font-size: 13px;
+        margin-top: 5px;
+    }
+
+    .actions {
+        display: flex;
+        gap: 12px;
+        margin-top: 25px;
+    }
+
+    .btn {
+        padding: 11px 18px;
+        border-radius: 8px;
+        text-decoration: none;
+        border: none;
+        cursor: pointer;
+        font-weight: 700;
+        font-size: 14px;
+    }
+
+    .btn-primary {
+        background: #166534;
+        color: white;
+    }
+
+    .btn-secondary {
+        background: #e5e7eb;
+        color: #374151;
+    }
+
+    .checkbox-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .checkbox-row label {
+        margin: 0;
+    }
+
+    @media (max-width: 700px) {
+        .form-row {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
+
+<div class="rate-form-page">
+
+    <div class="rate-form-card">
+
+        <h1>Add Chat Rate Tier</h1>
+
+        <p class="intro">
+            Create a global payment rate based on the number of chats
+            replied to by a Moderator.
+        </p>
+
+        <div class="rule-box">
+            <strong>Rate rule:</strong>
+            Once a Moderator reaches a higher chat tier,
+            that tier's rate applies to all of their chats for the
+            applicable payment period.
+        </div>
+
+        {% if form.non_field_errors %}
+            <div class="error">
+                {{ form.non_field_errors }}
+            </div>
+        {% endif %}
+
+        <form method="post">
+            {% csrf_token %}
+
+            <div class="form-row">
+
+                <div class="form-group">
+                    <label for="{{ form.minimum_chats.id_for_label }}">
+                        Minimum Chats
+                    </label>
+
+                    {{ form.minimum_chats }}
+
+                    {% for error in form.minimum_chats.errors %}
+                        <div class="error">{{ error }}</div>
+                    {% endfor %}
+                </div>
+
+                <div class="form-group">
+                    <label for="{{ form.maximum_chats.id_for_label }}">
+                        Maximum Chats
+                    </label>
+
+                    {{ form.maximum_chats }}
+
+                    {% for error in form.maximum_chats.errors %}
+                        <div class="error">{{ error }}</div>
+                    {% endfor %}
+
+                    <div class="help">
+                        Leave blank for an unlimited upper range.
+                    </div>
+                </div>
+
+            </div>
+
+            <div class="form-group">
+
+                <label for="{{ form.rate_per_chat.id_for_label }}">
+                    Rate Per Chat
+                </label>
+
+                {{ form.rate_per_chat }}
+
+                {% for error in form.rate_per_chat.errors %}
+                    <div class="error">{{ error }}</div>
+                {% endfor %}
+
+            </div>
+
+            <div class="form-row">
+
+                <div class="form-group">
+                    <label for="{{ form.effective_from.id_for_label }}">
+                        Effective From
+                    </label>
+
+                    {{ form.effective_from }}
+
+                    {% for error in form.effective_from.errors %}
+                        <div class="error">{{ error }}</div>
+                    {% endfor %}
+                </div>
+
+                <div class="form-group checkbox-row">
+                    {{ form.active }}
+
+                    <label for="{{ form.active.id_for_label }}">
+                        Active Rate
+                    </label>
+                </div>
+
+            </div>
+
+            <div class="actions">
+
+                <button type="submit" class="btn btn-primary">
+                    Save Rate Tier
+                </button>
+
+                <a href="{% url 'players:chat_rate_list' %}"
+                   class="btn btn-secondary">
+                    Cancel
+                </a>
+
+            </div>
+
+        </form>
+
+    </div>
+
+</div>
+{% endblock %}
+
