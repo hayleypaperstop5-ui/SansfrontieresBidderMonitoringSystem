@@ -1,4 +1,4 @@
-﻿from django.contrib import admin
+from django.contrib import admin
 from django.urls import include, path
 
 urlpatterns = [
@@ -10,4 +10,5 @@ urlpatterns = [
     path("shifts/", include("shifts.urls")),
     path("reports/", include("reports.urls")),
     path("notifications/", include("notifications.urls")),
+    path("coverage/", include("coverage.urls")),
 ]

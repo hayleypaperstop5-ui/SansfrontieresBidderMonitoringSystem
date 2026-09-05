@@ -157,7 +157,11 @@ def staff_edit(request, staff_id):
 
                 status = form.cleaned_data["status"]
 
-                if status == StaffProfile.Status.ACTIVE:
+                if status in (
+                    StaffProfile.Status.ACTIVE,
+                    StaffProfile.Status.INACTIVE,
+                    StaffProfile.Status.DORMANT,
+                ):
                     user.is_active = True
                 else:
                     user.is_active = False
@@ -317,6 +321,8 @@ def staff_terminate(request, staff_id):
     )
 
     return redirect("accounts:staff_list")
+
+
 
 
 

@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Coverage Alerts | Sansfrontieres</title>
+    <style>
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+            background: #f4f6f8;
+            color: #1f2937;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 40px auto;
+            padding: 0 20px;
+        }
+
+        .header {
+            background: #ffffff;
+            padding: 24px;
+            border-radius: 12px;
+            margin-bottom: 24px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+        }
+
+        .header h1 {
+            margin: 0 0 8px;
+            font-size: 28px;
+        }
+
+        .header p {
+            margin: 0;
+            color: #6b7280;
+        }
+
+        .messages {
+            margin-bottom: 20px;
+        }
+
+        .message {
+            padding: 14px 16px;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            font-weight: 600;
+        }
+
+        .message.success {
+            background: #dcfce7;
+            color: #166534;
+        }
+
+        .message.error {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        .section {
+            margin-bottom: 30px;
+        }
+
+        .section-title {
+            font-size: 22px;
+            margin: 0 0 14px;
+        }
+
+        .section-description {
+            color: #6b7280;
+            margin: 0 0 16px;
+        }
+
+        .coverage-card,
+        .alert-card {
+            background: #ffffff;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 16px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+        }
+
+        .coverage-card {
+            border-left: 5px solid #2563eb;
+        }
+
+        .alert-card {
+            border-left: 5px solid #dc2626;
+        }
+
+        .alert-card.warning {
+            border-left-color: #f59e0b;
+        }
+
+        .alert-card.critical {
+            border-left-color: #dc2626;
+        }
+
+        .card-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 16px;
+            margin-bottom: 15px;
+        }
+
+        .player-name {
+            font-size: 20px;
+            font-weight: 700;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 5px 10px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 700;
+            margin-left: 6px;
+        }
+
+        .badge-active {
+            background: #dcfce7;
+            color: #166534;
+        }
+
+        .badge-replacement_requested {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
+        .badge-handover {
+            background: #ede9fe;
+            color: #5b21b6;
+        }
+
+        .badge-critical {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        .badge-warning {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
+        .badge-open {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        .badge-acknowledged {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
+        .badge-escalated {
+            background: #ede9fe;
+            color: #5b21b6;
+        }
+
+        .details {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 12px;
+        }
+
+        .detail {
+            background: #f9fafb;
+            padding: 12px;
+            border-radius: 8px;
+        }
+
+        .detail-label {
+            display: block;
+            font-size: 12px;
+            color: #6b7280;
+            margin-bottom: 5px;
+        }
+
+        .detail-value {
+            font-weight: 600;
+        }
+
+        .override-form {
+            margin-top: 18px;
+            padding-top: 15px;
+            border-top: 1px solid #e5e7eb;
+        }
+
+        .override-button {
+            border: 0;
+            border-radius: 7px;
+            padding: 10px 16px;
+            background: #b91c1c;
+            color: #ffffff;
+            font-weight: 700;
+            cursor: pointer;
+        }
+
+        .override-button:hover {
+            background: #991b1b;
+        }
+
+        .warning-text {
+            color: #991b1b;
+            font-size: 13px;
+            margin: 0 0 10px;
+        }
+
+        .empty {
+            background: #ffffff;
+            padding: 40px 20px;
+            text-align: center;
+            border-radius: 12px;
+            color: #6b7280;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Coverage Alerts</h1>
+            <p>Monitor Player coverage and manage active coverage sessions.</p>
+        </div>
+
+        {% if messages %}
+            <div class="messages">
+                {% for message in messages %}
+                    <div class="message {{ message.tags }}">
+                        {{ message }}
+                    </div>
+                {% endfor %}
+            </div>
+        {% endif %}
+
+        <div class="section">
+            <h2 class="section-title">Active Player Coverage</h2>
+            <p class="section-description">
+                Review all currently active Player coverage sessions. Manager Override
+                should only be used when a Moderator must be signed out by management.
+            </p>
+
+            {% if active_sessions %}
+                {% for session in active_sessions %}
+                    <div class="coverage-card">
+                        <div class="card-top">
+                            <div class="player-name">
+                                {{ session.player }}
+                            </div>
+
+                            <span class="badge badge-{{ session.status|lower }}">
+                                {{ session.get_status_display }}
+                            </span>
+                        </div>
+
+                        <div class="details">
+                            <div class="detail">
+                                <span class="detail-label">Moderator</span>
+                                <span class="detail-value">
+                                    {{ session.moderator.get_full_name|default:session.moderator.username }}
+                                </span>
+                            </div>
+
+                            <div class="detail">
+                                <span class="detail-label">Session</span>
+                                <span class="detail-value">
+                                    {{ session.get_session_type_display }}
+                                </span>
+                            </div>
+
+                            <div class="detail">
+                                <span class="detail-label">Operating Date</span>
+                                <span class="detail-value">
+                                    {{ session.operating_date }}
+                                </span>
+                            </div>
+
+                            <div class="detail">
+                                <span class="detail-label">Signed In</span>
+                                <span class="detail-value">
+                                    {{ session.signed_in_at|date:"d M Y, H:i" }}
+                                </span>
+                            </div>
+
+                            <div class="detail">
+                                <span class="detail-label">Scheduled Closure</span>
+                                <span class="detail-value">
+                                    {% if session.scheduled_close_at %}
+                                        {{ session.scheduled_close_at|date:"d M Y, H:i" }}
+                                    {% else %}
+                                        Not scheduled
+                                    {% endif %}
+                                </span>
+                            </div>
+                        </div>
+
+                        <div class="override-form">
+                            <p class="warning-text">
+                                This will immediately end the coverage session and record
+                                the closure as a Manager Override.
+                            </p>
+
+                            <form method="post">
+                                {% csrf_token %}
+                                <input type="hidden" name="action" value="manager_override_end">
+                                <input type="hidden" name="session_id" value="{{ session.id }}">
+                                <button
+                                    type="submit"
+                                    class="override-button"
+                                    onclick="return confirm('Are you sure you want to end this coverage session using Manager Override?');"
+                                >
+                                    Manager Override
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                {% endfor %}
+            {% else %}
+                <div class="empty">
+                    <h3>No Active Player Coverage</h3>
+                    <p>There are currently no active Player coverage sessions.</p>
+                </div>
+            {% endif %}
+        </div>
+
+        <div class="section">
+            <h2 class="section-title">Coverage Alerts</h2>
+            <p class="section-description">
+                Monitor Players that currently require coverage.
+            </p>
+
+            {% if alerts %}
+                {% for alert in alerts %}
+                    <div class="alert-card {{ alert.severity|lower }}">
+                        <div class="card-top">
+                            <div class="player-name">
+                                {{ alert.player }}
+                            </div>
+
+                            <div>
+                                <span class="badge badge-{{ alert.severity|lower }}">
+                                    {{ alert.get_severity_display }}
+                                </span>
+
+                                <span class="badge badge-{{ alert.status|lower }}">
+                                    {{ alert.get_status_display }}
+                                </span>
+                            </div>
+                        </div>
+
+                        <div class="details">
+                            <div class="detail">
+                                <span class="detail-label">Session</span>
+                                <span class="detail-value">
+                                    {{ alert.get_session_type_display }}
+                                </span>
+                            </div>
+
+                            <div class="detail">
+                                <span class="detail-label">Operating Date</span>
+                                <span class="detail-value">
+                                    {{ alert.operating_date }}
+                                </span>
+                            </div>
+
+                            <div class="detail">
+                                <span class="detail-label">Alert Started</span>
+                                <span class="detail-value">
+                                    {{ alert.started_at|date:"d M Y, H:i" }}
+                                </span>
+                            </div>
+
+                            <div class="detail">
+                                <span class="detail-label">Reminders Sent</span>
+                                <span class="detail-value">
+                                    {{ alert.reminder_count }}
+                                </span>
+                            </div>
+
+                            <div class="detail">
+                                <span class="detail-label">Next Reminder</span>
+                                <span class="detail-value">
+                                    {% if alert.next_reminder_at %}
+                                        {{ alert.next_reminder_at|date:"d M Y, H:i" }}
+                                    {% else %}
+                                        No reminder scheduled
+                                    {% endif %}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                {% endfor %}
+            {% else %}
+                <div class="empty">
+                    <h3>No Active Coverage Alerts</h3>
+                    <p>All Players currently have the required coverage.</p>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</body>
+</html>

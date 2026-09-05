@@ -92,6 +92,15 @@
             background: #cbd5e1;
         }
 
+        .button-alert {
+            background: #b91c1c;
+            color: white;
+        }
+
+        .button-alert:hover {
+            background: #991b1b;
+        }
+
         .logout {
             margin-top: 30px;
         }
@@ -168,6 +177,12 @@
                         Shift Management
                     </a>
                     <a
+                        href="{% url 'coverage:manager_coverage_alerts' %}"
+                        class="button button-alert"
+                    >
+                        Coverage Alerts
+                    </a>
+                    <a
                         href="{% url 'notifications:list' %}"
                         class="button button-secondary"
                     >
@@ -205,6 +220,12 @@
                         Shift Management
                     </a>
                     <a
+                        href="{% url 'coverage:manager_coverage_alerts' %}"
+                        class="button button-alert"
+                    >
+                        Coverage Alerts
+                    </a>
+                    <a
                         href="{% url 'notifications:list' %}"
                         class="button button-secondary"
                     >
@@ -240,6 +261,12 @@
                         class="button button-primary"
                     >
                         Shift Management
+                    </a>
+                    <a
+                        href="{% url 'coverage:manager_coverage_alerts' %}"
+                        class="button button-alert"
+                    >
+                        Coverage Alerts
                     </a>
                     <a
                         href="{% url 'notifications:list' %}"
@@ -290,25 +317,14 @@
 
     </main>
 
-
-{% if request.user.role == "MODERATOR" %}
-<div style="margin-top: 24px;">
-    <a href="{% url 'dashboard:my_shifts' %}"
-       style="display: inline-block; padding: 12px 20px; background: #198754; color: white; text-decoration: none; border-radius: 7px; font-weight: 700;">
-        My Shifts
-    </a>
-</div>
-{% endif %}
+    {% if request.user.role == "MODERATOR" %}
+    <div style="margin-top: 24px;">
+        <a href="{% url 'dashboard:my_shifts' %}"
+           style="display: inline-block; padding: 12px 20px; background: #198754; color: white; text-decoration: none; border-radius: 7px; font-weight: 700;">
+            My Shifts
+        </a>
+    </div>
+    {% endif %}
 
 </body>
 </html>
-
-
-
-
-
-
-
-
-
-

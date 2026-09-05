@@ -8,3 +8,10 @@ media/
 backups/
 *.log
 .vscode/
+
+celerybeat-schedule
+
+*.backup
+
+*.bak
+*.bak2

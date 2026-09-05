@@ -10,26 +10,14 @@ from pathlib import Path
 import os
 
 from dotenv import load_dotenv
+from celery.schedules import crontab
 
-
-# =============================================================================
-# BASE DIRECTORY
-# =============================================================================
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 
-# =============================================================================
-# ENVIRONMENT VARIABLES
-# =============================================================================
-
-# Load variables from the project's .env file.
 load_dotenv(BASE_DIR / ".env")
 
-
-# =============================================================================
-# SECURITY
-# =============================================================================
 
 SECRET_KEY = os.getenv(
     "DJANGO_SECRET_KEY",
@@ -48,12 +36,7 @@ ALLOWED_HOSTS = [
 ]
 
 
-# =============================================================================
-# APPLICATION DEFINITION
-# =============================================================================
-
 INSTALLED_APPS = [
-    # Sansfrontieres Bidder Monitoring System applications
     "accounts",
     "bidders",
     "shifts",
@@ -65,8 +48,7 @@ INSTALLED_APPS = [
     "audit",
     "dashboard",
     "players",
-
-    # Django applications
+    "coverage",
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
@@ -74,9 +56,7 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
 ]
-# =============================================================================
-# MIDDLEWARE
-# =============================================================================
+
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
@@ -89,16 +69,8 @@ MIDDLEWARE = [
 ]
 
 
-# =============================================================================
-# URL CONFIGURATION
-# =============================================================================
-
 ROOT_URLCONF = "config.urls"
 
-
-# =============================================================================
-# TEMPLATES
-# =============================================================================
 
 TEMPLATES = [
     {
@@ -118,16 +90,8 @@ TEMPLATES = [
 ]
 
 
-# =============================================================================
-# WSGI APPLICATION
-# =============================================================================
-
 WSGI_APPLICATION = "config.wsgi.application"
 
-
-# =============================================================================
-# DATABASE
-# =============================================================================
 
 DATABASES = {
     "default": {
@@ -155,16 +119,8 @@ DATABASES = {
 }
 
 
-# =============================================================================
-# CUSTOM USER MODEL
-# =============================================================================
-
 AUTH_USER_MODEL = "accounts.User"
 
-
-# =============================================================================
-# PASSWORD VALIDATION
-# =============================================================================
 
 AUTH_PASSWORD_VALIDATORS = [
     {
@@ -194,10 +150,6 @@ AUTH_PASSWORD_VALIDATORS = [
 ]
 
 
-# =============================================================================
-# INTERNATIONALIZATION
-# =============================================================================
-
 LANGUAGE_CODE = "en-us"
 
 TIME_ZONE = "Africa/Nairobi"
@@ -207,32 +159,15 @@ USE_I18N = True
 USE_TZ = True
 
 
-# =============================================================================
-# STATIC FILES
-# =============================================================================
-
 STATIC_URL = "static/"
 
 STATIC_ROOT = BASE_DIR / "staticfiles"
 
 
-# =============================================================================
-# MEDIA FILES
-# =============================================================================
-
 MEDIA_URL = "media/"
 
 MEDIA_ROOT = BASE_DIR / "media"
 
-
-# =============================================================================
-# EMAIL CONFIGURATION
-# =============================================================================
-
-# Development configuration.
-#
-# Emails are displayed in the terminal instead of being sent externally.
-# This will later be replaced with a production email service.
 
 EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
 
@@ -241,24 +176,6 @@ DEFAULT_FROM_EMAIL = os.getenv(
     "Sansfrontieres Bidder Monitoring System <noreply@sansfrontieres.local>",
 )
 
-
-# =============================================================================
-# CELERY CONFIGURATION
-# =============================================================================
-
-# Redis will later act as the Celery message broker and result backend.
-#
-# Celery will be responsible for background tasks such as:
-#
-# - Generating random verification codes
-# - Sending verification codes
-# - Monitoring bidder responses
-# - 10-minute manager alerts
-# - 20-minute manager/director escalation alerts
-# - Shift notifications
-# - Shift reminders
-# - End-of-shift notifications
-# - Other scheduled background tasks
 
 CELERY_BROKER_URL = os.getenv(
     "REDIS_URL",
@@ -283,24 +200,36 @@ CELERY_TIMEZONE = TIME_ZONE
 CELERY_ENABLE_UTC = True
 
 
-# =============================================================================
-# SESSION CONFIGURATION
-# =============================================================================
+CELERY_BEAT_SCHEDULE = {
+    "close-expired-coverage-sessions": {
+        "task": "coverage.tasks.close_expired_coverage_sessions_task",
+        "schedule": 60.0,
+    },
+    "check-day-player-coverage": {
+        "task": "coverage.tasks.check_player_coverage_task",
+        "schedule": crontab(
+            minute=0,
+            hour=9,
+        ),
+    },
+    "check-night-player-coverage": {
+        "task": "coverage.tasks.check_player_coverage_task",
+        "schedule": crontab(
+            minute=0,
+            hour=21,
+        ),
+    },
+    "process-coverage-reminders": {
+        "task": "coverage.tasks.process_coverage_reminders_task",
+        "schedule": 900.0,
+    },
+}
 
-# Maximum session lifetime: 12 hours.
 
 SESSION_COOKIE_AGE = 60 * 60 * 12
 
 SESSION_EXPIRE_AT_BROWSER_CLOSE = False
 
-
-# =============================================================================
-# SECURITY CONFIGURATION
-# =============================================================================
-
-# Development configuration.
-#
-# These settings will be changed when the system is deployed using HTTPS.
 
 SESSION_COOKIE_SECURE = False
 
@@ -309,10 +238,6 @@ CSRF_COOKIE_SECURE = False
 SECURE_SSL_REDIRECT = False
 
 
-# =============================================================================
-# DEFAULT PRIMARY KEY
-# =============================================================================
-
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
-LOGIN_URL = '/login/'
 
+LOGIN_URL = "/login/"
