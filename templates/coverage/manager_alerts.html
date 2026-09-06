@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Coverage Alerts | Sansfrontieres</title>
+    <title>Coverage Notifications | Sansfrontieres</title>
     <style>
         body {
             margin: 0;
@@ -324,8 +324,8 @@
 <body>
     <div class="container">
         <div class="header">
-            <h1>Coverage Alerts</h1>
-            <p>Monitor Player coverage and manage active coverage sessions.</p>
+            <h1>Coverage Notifications</h1>
+            <p>Monitor Player coverage, coverage issues and active coverage sessions.</p>
         </div>
 
         {% if messages %}
@@ -597,9 +597,9 @@
         </div>
 
         <div class="section">
-            <h2 class="section-title">Coverage Alerts</h2>
+            <h2 class="section-title">Coverage Notifications</h2>
             <p class="section-description">
-                Monitor Players that currently require coverage.
+                Monitor Players that currently require coverage or require management attention.
             </p>
 
             {% if alerts %}
@@ -665,7 +665,7 @@
                 {% endfor %}
             {% else %}
                 <div class="empty">
-                    <h3>No Active Coverage Alerts</h3>
+                    <h3>No Active Coverage Notifications</h3>
                     <p>All Players currently have the required coverage.</p>
                 </div>
             {% endif %}

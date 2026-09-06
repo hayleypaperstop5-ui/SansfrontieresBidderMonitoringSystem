@@ -3,6 +3,7 @@ from django.shortcuts import redirect, render
 
 from accounts.decorators import role_required
 from accounts.permissions import MANAGER_ROLES, RATE_MANAGEMENT_ROLES
+from coverage.models import CoverageSession
 
 from .forms import ChatRateTierForm, PlayerCreationForm, PlayerEditForm
 from .models import ChatRateTier, Player
@@ -108,8 +109,6 @@ def chat_rate_create(request):
     )
 
 
-
-
 @role_required(*MANAGER_ROLES)
 def player_edit(request, player_id):
 
@@ -146,6 +145,7 @@ def player_edit(request, player_id):
         },
     )
 
+
 @role_required(*MANAGER_ROLES)
 def player_activate(request, player_id):
 
@@ -166,6 +166,29 @@ def player_activate(request, player_id):
 def player_deactivate(request, player_id):
 
     player = Player.objects.get(pk=player_id)
+
+    active_coverage_exists = CoverageSession.objects.filter(
+        player=player,
+        status__in=[
+            CoverageSession.Status.OPEN,
+            CoverageSession.Status.ACTIVE,
+            CoverageSession.Status.REPLACEMENT_REQUESTED,
+            CoverageSession.Status.HANDOVER,
+        ],
+    ).exists()
+
+    if active_coverage_exists:
+
+        messages.error(
+            request,
+            (
+                f"Player {player.player_number} cannot be deactivated "
+                "while a coverage session is assigned. "
+                "Resolve the current coverage first."
+            ),
+        )
+
+        return redirect("players:player_list")
 
     player.status = Player.Status.INACTIVE
     player.save(update_fields=["status", "updated_at"])
