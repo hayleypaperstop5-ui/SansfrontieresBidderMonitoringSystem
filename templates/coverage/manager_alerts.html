@@ -84,6 +84,19 @@
             border-left: 5px solid #2563eb;
         }
 
+        .open-assignment-card {
+            border-left-color: #f59e0b;
+        }
+
+        .assignment-status {
+            margin-top: 18px;
+            padding: 12px 14px;
+            border-radius: 8px;
+            background: #fffbeb;
+            color: #92400e;
+            font-size: 14px;
+        }
+
         .alert-card {
             border-left: 5px solid #dc2626;
         }
@@ -215,6 +228,97 @@
             color: #6b7280;
             box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
         }
+
+        .assignment-card {
+            background: #ffffff;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 16px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+            border-left: 5px solid #2563eb;
+        }
+
+        .assignment-form {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 18px;
+            align-items: end;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 7px;
+        }
+
+        .form-group label {
+            font-size: 13px;
+            font-weight: 700;
+            color: #374151;
+        }
+
+        .form-group select {
+            width: 100%;
+            box-sizing: border-box;
+            padding: 11px 12px;
+            border: 1px solid #d1d5db;
+            border-radius: 7px;
+            background: #ffffff;
+            color: #1f2937;
+            font-size: 14px;
+        }
+
+        .form-group select:focus {
+            outline: none;
+            border-color: #2563eb;
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+        }
+
+        .assign-button {
+            border: 0;
+            border-radius: 7px;
+            padding: 11px 18px;
+            background: #2563eb;
+            color: #ffffff;
+            font-weight: 700;
+            cursor: pointer;
+            min-height: 42px;
+        }
+
+        .assign-button:hover {
+            background: #1d4ed8;
+        }
+
+        .assignment-note {
+            margin: 0 0 18px;
+            color: #6b7280;
+            font-size: 14px;
+            line-height: 1.5;
+        }
+
+        .availability-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 12px;
+            margin-top: 18px;
+        }
+
+        .availability-item {
+            background: #f9fafb;
+            padding: 13px;
+            border-radius: 8px;
+            border: 1px solid #e5e7eb;
+        }
+
+        .availability-item strong {
+            display: block;
+            margin-bottom: 4px;
+        }
+
+        .availability-count {
+            font-size: 13px;
+            color: #6b7280;
+        }
     </style>
 </head>
 <body>
@@ -233,6 +337,174 @@
                 {% endfor %}
             </div>
         {% endif %}
+
+        <div class="section">
+            <h2 class="section-title">Assign Player Coverage</h2>
+            <p class="section-description">
+                Assign an eligible Moderator to an available Player. The assignment
+                creates an open coverage session and does not sign the Moderator in.
+                The Moderator must report and sign in before beginning work.
+            </p>
+
+            <div class="assignment-card">
+                {% if available_eligible_moderators and available_players %}
+                    <form method="post" class="assignment-form">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="assign_coverage">
+
+                        <div class="form-group">
+                            <label for="moderator_id">Eligible Moderator</label>
+                            <select id="moderator_id" name="moderator_id" required>
+                                <option value="">Select an eligible Moderator</option>
+                                {% for moderator in available_eligible_moderators %}
+                                    <option value="{{ moderator.id }}">
+                                        {{ moderator.get_full_name|default:moderator.username }}
+                                        {% if moderator.staff_profile.employee_number %}
+                                            ({{ moderator.staff_profile.employee_number }})
+                                        {% endif %}
+                                    </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="player_id">Available Player</label>
+                            <select id="player_id" name="player_id" required>
+                                <option value="">Select an available Player</option>
+                                {% for player in available_players %}
+                                    <option value="{{ player.id }}">
+                                        Player {{ player.player_number }} - {{ player.name }}
+                                    </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <button type="submit" class="assign-button">
+                            Assign Coverage
+                        </button>
+                    </form>
+
+                    <div class="availability-grid">
+                        <div class="availability-item">
+                            <strong>Eligible Moderators</strong>
+                            <span class="availability-count">
+                                {{ available_eligible_moderators|length }} available for assignment
+                            </span>
+                        </div>
+
+                        <div class="availability-item">
+                            <strong>Available Players</strong>
+                            <span class="availability-count">
+                                {{ available_players|length }} available for assignment
+                            </span>
+                        </div>
+                    </div>
+                {% elif not available_eligible_moderators and not available_players %}
+                    <div class="empty">
+                        <h3>No Eligible Moderators or Available Players</h3>
+                        <p>
+                            There are currently no eligible Moderators and no available
+                            Players for a new coverage assignment.
+                        </p>
+                    </div>
+                {% elif not available_eligible_moderators %}
+                    <div class="empty">
+                        <h3>No Eligible Moderators</h3>
+                        <p>
+                            There are currently no eligible Moderators available for
+                            Player assignment.
+                        </p>
+                    </div>
+                {% else %}
+                    <div class="empty">
+                        <h3>No Available Players</h3>
+                        <p>
+                            All active Players currently have an open or active
+                            coverage assignment.
+                        </p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="section">
+            <h2 class="section-title">Open Coverage Assignments</h2>
+            <p class="section-description">
+                Review coverage assignments that have been made but are still
+                awaiting the Moderator's sign-in. An assignment becomes active
+                when the Moderator reports and signs in.
+            </p>
+
+            {% if open_assignments %}
+                {% for session in open_assignments %}
+                    <div class="coverage-card open-assignment-card">
+                        <div class="card-top">
+                            <div class="player-name">
+                                {{ session.player }}
+                            </div>
+
+                            <span class="badge badge-open">
+                                Awaiting Sign-in
+                            </span>
+                        </div>
+
+                        <div class="details">
+                            <div class="detail">
+                                <span class="detail-label">Moderator</span>
+                                <span class="detail-value">
+                                    {{ session.moderator.get_full_name|default:session.moderator.username }}
+                                </span>
+                            </div>
+
+                            <div class="detail">
+                                <span class="detail-label">Session</span>
+                                <span class="detail-value">
+                                    {{ session.get_session_type_display }}
+                                </span>
+                            </div>
+
+                            <div class="detail">
+                                <span class="detail-label">Operating Date</span>
+                                <span class="detail-value">
+                                    {{ session.operating_date }}
+                                </span>
+                            </div>
+
+                            <div class="detail">
+                                <span class="detail-label">Assigned</span>
+                                <span class="detail-value">
+                                    {{ session.created_at|date:"d M Y, H:i" }}
+                                </span>
+                            </div>
+
+                            <div class="detail">
+                                <span class="detail-label">Scheduled Closure</span>
+                                <span class="detail-value">
+                                    {% if session.scheduled_close_at %}
+                                        {{ session.scheduled_close_at|date:"d M Y, H:i" }}
+                                    {% else %}
+                                        Not scheduled
+                                    {% endif %}
+                                </span>
+                            </div>
+                        </div>
+
+                        <div class="assignment-status">
+                            <strong>Coverage Status:</strong>
+                            Assigned and awaiting Moderator sign-in.
+                        </div>
+                    </div>
+                {% endfor %}
+            {% else %}
+                <div class="empty">
+                    <h3>No Open Coverage Assignments</h3>
+                    <p>
+                        There are currently no Player coverage assignments
+                        awaiting Moderator sign-in.
+                    </p>
+                </div>
+            {% endif %}
+        </div>
 
         <div class="section">
             <h2 class="section-title">Active Player Coverage</h2>

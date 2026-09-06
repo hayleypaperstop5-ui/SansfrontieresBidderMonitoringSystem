@@ -2,17 +2,19 @@ from datetime import timedelta
 
 from django.core.exceptions import ValidationError
 from django.test import TestCase
+from django.urls import reverse
 from django.utils import timezone
 
 from accounts.models import StaffProfile, User
 from players.models import Player
 
-from .models import CoverageSession
+from .models import CoverageSession, EndOfSessionReport
 from .services import (
     end_coverage_session,
     get_uncovered_players,
     request_replacement,
     start_coverage_session,
+    assign_replacement,
 )
 
 
@@ -299,4 +301,150 @@ class CoverageServiceTests(TestCase):
         self.assertEqual(
             session.status,
             CoverageSession.Status.ACTIVE,
+        )
+
+    def _create_signed_out_session(self):
+        session = start_coverage_session(
+            moderator=self.moderator_one,
+            player=self.player_one,
+            moment=self.moment,
+        )
+
+        request_replacement(
+            session=session,
+            moderator=self.moderator_one,
+            moment=self.moment + timedelta(minutes=5),
+        )
+
+        assign_replacement(
+            session=session,
+            replacement_moderator=self.moderator_two,
+            moment=self.moment + timedelta(minutes=10),
+        )
+
+        session.refresh_from_db()
+        return session
+
+    def test_end_of_session_report_page_loads_for_signed_out_session(self):
+        session = self._create_signed_out_session()
+
+        self.client.force_login(self.moderator_one)
+
+        response = self.client.get(
+            reverse(
+                "coverage:end_of_session_report",
+                args=[session.id],
+            )
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "End-of-Session Report")
+        self.assertContains(response, "Player One")
+
+    def test_moderator_cannot_report_on_another_moderators_session(self):
+        session = self._create_signed_out_session()
+
+        self.client.force_login(self.moderator_two)
+
+        response = self.client.get(
+            reverse(
+                "coverage:end_of_session_report",
+                args=[session.id],
+            )
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, reverse("dashboard:home"))
+
+        self.assertEqual(
+            EndOfSessionReport.objects.count(),
+            0,
+        )
+
+    def test_report_cannot_be_submitted_before_sign_out(self):
+        session = start_coverage_session(
+            moderator=self.moderator_one,
+            player=self.player_one,
+            moment=self.moment,
+        )
+
+        self.client.force_login(self.moderator_one)
+
+        response = self.client.get(
+            reverse(
+                "coverage:end_of_session_report",
+                args=[session.id],
+            )
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, reverse("dashboard:home"))
+
+    def test_moderator_can_submit_end_of_session_report(self):
+        session = self._create_signed_out_session()
+
+        self.client.force_login(self.moderator_one)
+
+        response = self.client.post(
+            reverse(
+                "coverage:end_of_session_report",
+                args=[session.id],
+            ),
+            {
+                "chats_responded": 725,
+                "account_rating": "8.50",
+                "comments": "Session completed successfully.",
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, reverse("dashboard:home"))
+
+        report = EndOfSessionReport.objects.get(
+            coverage_session=session,
+        )
+
+        self.assertEqual(report.moderator, self.moderator_one)
+        self.assertEqual(report.player, self.player_one)
+        self.assertEqual(report.chats_responded, 725)
+        self.assertEqual(str(report.account_rating), "8.50")
+        self.assertEqual(
+            report.comments,
+            "Session completed successfully.",
+        )
+
+        session.refresh_from_db()
+
+        self.assertEqual(
+            session.status,
+            CoverageSession.Status.COMPLETED,
+        )
+
+    def test_duplicate_end_of_session_report_is_blocked(self):
+        session = self._create_signed_out_session()
+
+        EndOfSessionReport.objects.create(
+            coverage_session=session,
+            moderator=self.moderator_one,
+            player=self.player_one,
+            chats_responded=700,
+            account_rating="9.00",
+            comments="Existing report.",
+        )
+
+        self.client.force_login(self.moderator_one)
+
+        response = self.client.get(
+            reverse(
+                "coverage:end_of_session_report",
+                args=[session.id],
+            )
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, reverse("dashboard:home"))
+
+        self.assertEqual(
+            EndOfSessionReport.objects.count(),
+            1,
         )

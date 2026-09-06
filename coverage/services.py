@@ -88,6 +88,98 @@ def start_coverage_session(
 
 
 @transaction.atomic
+def assign_coverage_session(
+    *,
+    manager: User,
+    moderator: User,
+    player: Player,
+    moment=None,
+) -> CoverageSession:
+    """
+    Assign an active Moderator to an active Player.
+
+    Assignment does not sign the Moderator in. The resulting CoverageSession
+    remains OPEN until the Moderator explicitly signs in.
+    """
+    if manager.role not in (
+        User.Role.ADMIN,
+        User.Role.DIRECTOR,
+        User.Role.MANAGER,
+    ):
+        raise ValidationError(
+            "Only a Manager, Director, or System Administrator can assign coverage."
+        )
+
+    if moderator.role != User.Role.MODERATOR:
+        raise ValidationError(
+            "Coverage can only be assigned to a Moderator."
+        )
+
+    staff_profile = getattr(moderator, "staff_profile", None)
+
+    if staff_profile is None:
+        raise ValidationError(
+            "The Moderator does not have a staff profile."
+        )
+
+    if staff_profile.status != staff_profile.Status.ACTIVE:
+        raise ValidationError(
+            f"The Moderator is currently {staff_profile.get_status_display()} "
+            "and cannot be assigned coverage."
+        )
+
+    if player.status != Player.Status.ACTIVE:
+        raise ValidationError(
+            f"{player} is not active and cannot receive coverage."
+        )
+
+    if moment is None:
+        moment = timezone.localtime()
+
+    session_type = get_session_type(moment)
+    operating_date = get_operating_date(moment, session_type)
+    scheduled_close_at = get_scheduled_close_at(moment, session_type)
+
+    if CoverageSession.objects.filter(
+        moderator=moderator,
+        status__in=(
+            CoverageSession.Status.OPEN,
+            *ACTIVE_STATUSES,
+        ),
+    ).exists():
+        raise ValidationError(
+            "This Moderator already has an assigned or active Player coverage session."
+        )
+
+    if CoverageSession.objects.filter(
+        player=player,
+        status__in=(
+            CoverageSession.Status.OPEN,
+            *ACTIVE_STATUSES,
+        ),
+    ).exists():
+        raise ValidationError(
+            "This Player is already assigned to or being covered by another Moderator."
+        )
+
+    session = CoverageSession(
+        player=player,
+        moderator=moderator,
+        operating_date=operating_date,
+        session_type=session_type,
+        signed_in_at=None,
+        scheduled_close_at=scheduled_close_at,
+        status=CoverageSession.Status.OPEN,
+        notes=f"Coverage assigned by {manager.get_full_name() or manager.username}.",
+    )
+
+    session.full_clean()
+    session.save()
+
+    return session
+
+
+@transaction.atomic
 def request_replacement(
     *,
     session: CoverageSession,
@@ -275,7 +367,10 @@ def get_uncovered_players(*, moment=None):
     covered_player_ids = CoverageSession.objects.filter(
         operating_date=operating_date,
         session_type=session_type,
-        status__in=ACTIVE_STATUSES,
+        status__in=(
+            CoverageSession.Status.OPEN,
+            *ACTIVE_STATUSES,
+        ),
     ).values_list("player_id", flat=True)
 
     return Player.objects.filter(
@@ -354,3 +449,6 @@ def manager_override_end_coverage(
     )
 
     return session
+
+
+

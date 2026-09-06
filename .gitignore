@@ -15,3 +15,5 @@ celerybeat-schedule
 
 *.bak
 *.bak2
+
+redis_password.tmp

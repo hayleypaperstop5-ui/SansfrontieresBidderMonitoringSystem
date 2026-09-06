@@ -63,7 +63,8 @@ def resolve_covered_alerts(*, moment=None):
     operating_date = get_operating_date(moment)
     session_type = get_session_type(moment)
 
-    active_statuses = (
+    covered_statuses = (
+        CoverageSession.Status.OPEN,
         CoverageSession.Status.ACTIVE,
         CoverageSession.Status.REPLACEMENT_REQUESTED,
         CoverageSession.Status.HANDOVER,
@@ -72,7 +73,7 @@ def resolve_covered_alerts(*, moment=None):
     covered_player_ids = CoverageSession.objects.filter(
         operating_date=operating_date,
         session_type=session_type,
-        status__in=active_statuses,
+        status__in=covered_statuses,
     ).values_list("player_id", flat=True)
 
     alerts = CoverageAlert.objects.select_for_update().filter(
