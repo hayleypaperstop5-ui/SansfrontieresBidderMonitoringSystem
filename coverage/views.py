@@ -229,6 +229,55 @@ def manager_coverage_alerts(request):
         .order_by("player__player_number", "-signed_in_at")
     )
 
+    assigned_moderator_coverage = {}
+
+    for session in open_assignments:
+        assigned_moderator_coverage[session.moderator_id] = {
+            "moderator": session.moderator,
+            "player": session.player,
+            "status": "Awaiting Sign-in",
+        }
+
+    for session in active_sessions:
+        assigned_moderator_coverage[session.moderator_id] = {
+            "moderator": session.moderator,
+            "player": session.player,
+            "status": session.get_status_display(),
+        }
+
+    eligible_moderators = (
+        User.objects
+        .filter(
+            role=User.Role.MODERATOR,
+            is_active=True,
+            staff_profile__status="ACTIVE",
+        )
+        .select_related("staff_profile")
+        .order_by("first_name", "last_name", "username")
+    )
+
+    available_moderators = []
+    assigned_moderators = []
+
+    for moderator in eligible_moderators:
+        coverage = assigned_moderator_coverage.get(moderator.id)
+
+        if coverage is not None:
+            assigned_moderators.append(
+                {
+                    "moderator": moderator,
+                    "player": coverage["player"],
+                    "coverage_status": coverage["status"],
+                }
+            )
+        else:
+            available_moderators.append(
+                {
+                    "moderator": moderator,
+                    "coverage_status": "Available",
+                }
+            )
+
     return render(
         request,
         "coverage/manager_alerts.html",
@@ -238,5 +287,7 @@ def manager_coverage_alerts(request):
             "open_assignments": open_assignments,
             "available_players": available_players,
             "available_eligible_moderators": available_eligible_moderators,
+            "available_moderators": available_moderators,
+            "assigned_moderators": assigned_moderators,
         },
     )

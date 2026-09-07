@@ -214,6 +214,22 @@
             background: #991b1b;
         }
 
+        .dashboard-button {
+            display: inline-block;
+            border-radius: 7px;
+            padding: 10px 18px;
+            background: #16a34a;
+            color: #ffffff;
+            font-weight: 700;
+            text-decoration: none;
+            cursor: pointer;
+        }
+
+        .dashboard-button:hover {
+            background: #15803d;
+        }
+
+
         .warning-text {
             color: #991b1b;
             font-size: 13px;
@@ -507,6 +523,98 @@
         </div>
 
         <div class="section">
+            <h2 class="section-title">Moderator Availability</h2>
+            <p class="section-description">
+                Monitor eligible Moderators and clearly distinguish those available
+                for assignment from those already assigned to a Player.
+            </p>
+
+            <div class="details">
+                <div class="detail">
+                    <span class="detail-label">Available Moderators</span>
+                    <span class="detail-value">{{ available_moderators|length }}</span>
+                </div>
+                <div class="detail">
+                    <span class="detail-label">Assigned Moderators</span>
+                    <span class="detail-value">{{ assigned_moderators|length }}</span>
+                </div>
+            </div>
+
+            <h3 class="section-subtitle">Available Moderators</h3>
+
+            {% if available_moderators %}
+                {% for item in available_moderators %}
+                    <div class="coverage-card">
+                        <div class="card-top">
+                            <div class="player-name">
+                                {{ item.moderator.get_full_name|default:item.moderator.username }}
+                                {% if item.moderator.staff_profile.employee_number %}
+                                    ({{ item.moderator.staff_profile.employee_number }})
+                                {% endif %}
+                            </div>
+                            <span class="badge badge-open">Available</span>
+                        </div>
+
+                        <div class="details">
+                            <div class="detail">
+                                <span class="detail-label">Player Assignment</span>
+                                <span class="detail-value">No Player Assigned</span>
+                            </div>
+                            <div class="detail">
+                                <span class="detail-label">Availability</span>
+                                <span class="detail-value">Available for Assignment / Replacement / Handover</span>
+                            </div>
+                        </div>
+                    </div>
+                {% endfor %}
+            {% else %}
+                <div class="empty">
+                    <h3>No Available Moderators</h3>
+                    <p>All eligible Moderators currently have a Player assignment.</p>
+                </div>
+            {% endif %}
+
+            <h3 class="section-subtitle">Assigned Moderators</h3>
+
+            {% if assigned_moderators %}
+                {% for item in assigned_moderators %}
+                    <div class="coverage-card">
+                        <div class="card-top">
+                            <div class="player-name">
+                                {{ item.moderator.get_full_name|default:item.moderator.username }}
+                                {% if item.moderator.staff_profile.employee_number %}
+                                    ({{ item.moderator.staff_profile.employee_number }})
+                                {% endif %}
+                            </div>
+                            <span class="badge badge-active">Assigned</span>
+                        </div>
+
+                        <div class="details">
+                            <div class="detail">
+                                <span class="detail-label">Player Assignment</span>
+                                <span class="detail-value">{{ item.player }}</span>
+                            </div>
+                            <div class="detail">
+                                <span class="detail-label">Coverage Status</span>
+                                <span class="detail-value">{{ item.coverage_status }}</span>
+                            </div>
+                            <div class="detail">
+                                <span class="detail-label">Availability</span>
+                                <span class="detail-value">Not Available for Another Player</span>
+                            </div>
+                        </div>
+                    </div>
+                {% endfor %}
+            {% else %}
+                <div class="empty">
+                    <h3>No Assigned Moderators</h3>
+                    <p>No eligible Moderators currently have a Player assignment.</p>
+                </div>
+            {% endif %}
+        </div>
+
+
+        <div class="section">
             <h2 class="section-title">Active Player Coverage</h2>
             <p class="section-description">
                 Review all currently active Player coverage sessions. Manager Override
@@ -671,5 +779,12 @@
             {% endif %}
         </div>
     </div>
+
+    <div style="text-align: center; margin-top: 30px;">
+        <a href="{% url 'dashboard:home' %}" class="dashboard-button">
+            Back to Dashboard
+        </a>
+    </div>
+
 </body>
 </html>
