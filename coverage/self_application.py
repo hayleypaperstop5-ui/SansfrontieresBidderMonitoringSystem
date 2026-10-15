@@ -786,7 +786,7 @@ def apply_for_player(
             session_type=replacement_session.session_type,
             signed_in_at=moment,
             sign_in_deadline_at=None,
-            scheduled_close_at=replacement_session.scheduled_close_at,
+            scheduled_close_at=(replacement_session.scheduled_close_at if replacement_session.scheduled_close_at and replacement_session.scheduled_close_at > moment else None),
             status=CoverageSession.Status.ACTIVE,
             notes=f"Replacement for coverage session {replacement_session.id}.",
         )
