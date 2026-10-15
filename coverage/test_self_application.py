@@ -164,7 +164,7 @@ class SelfApplicationAwardTests(SelfApplicationTestDataMixin, TestCase):
         self.assertEqual(application.chats_this_week, 80)
         self.assertEqual(application.status, CoverageApplication.Status.WON)
         self.assertEqual(application.resulting_session_id, session.id)
-        self.assertEqual(CoverageSession.objects.filter(player=player, status=CoverageSession.Status.OPEN).count(), 1)
+        self.assertEqual(CoverageSession.objects.filter(player=player, status=CoverageSession.Status.ACTIVE).count(), 1)
 
     def test_two_moderators_highest_weekly_chats_wins(self):
         moderator_a = self.make_user("competition_a")
@@ -186,7 +186,7 @@ class SelfApplicationAwardTests(SelfApplicationTestDataMixin, TestCase):
             with self.assertRaises(ValueError):
                 apply_for_player(moderator_b, player.id, CoverageApplication.OpportunityType.NEW, moment)
 
-        self.assertEqual(CoverageSession.objects.filter(player=player, status=CoverageSession.Status.OPEN).count(), 1)
+        self.assertEqual(CoverageSession.objects.filter(player=player, status=CoverageSession.Status.ACTIVE).count(), 1)
 
     def test_competition_selection_uses_highest_snapshot_when_pending_applications_exist(self):
         moderator_a = self.make_user("pending_a")
@@ -416,6 +416,6 @@ class ConcurrentApplicationTests(SelfApplicationTestDataMixin, TransactionTestCa
 
         results = [result_a, result_b]
         self.assertEqual(CoverageApplication.objects.filter(player=player, status=CoverageApplication.Status.WON).count(), 1)
-        self.assertEqual(CoverageSession.objects.filter(player=player, status=CoverageSession.Status.OPEN).count(), 1)
+        self.assertEqual(CoverageSession.objects.filter(player=player, status=CoverageSession.Status.ACTIVE).count(), 1)
         self.assertEqual(CoverageApplication.objects.filter(player=player, status=CoverageApplication.Status.LOST).count(), 1)
         self.assertEqual(sum(r[0] == "success" for r in results), 1)
