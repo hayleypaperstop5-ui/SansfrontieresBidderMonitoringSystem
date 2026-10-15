@@ -1,6 +1,19 @@
 {% extends "base.html" %}
 
 {% block content %}
+  {% if messages %}
+    <div style="margin: 16px 0;">
+      {% for message in messages %}
+        <div style="padding: 12px 16px; margin-bottom: 8px; border-radius: 8px; border: 1px solid;
+          {% if message.tags == 'success' %}background:#ecfdf5;color:#065f46;border-color:#a7f3d0;
+          {% elif message.tags == 'error' %}background:#fef2f2;color:#991b1b;border-color:#fecaca;
+          {% elif message.tags == 'warning' %}background:#fffbeb;color:#92400e;border-color:#fde68a;
+          {% else %}background:#eff6ff;color:#1e40af;border-color:#bfdbfe;{% endif %}">
+          {{ message }}
+        </div>
+      {% endfor %}
+    </div>
+  {% endif %}
 <style>
     .coverage-opportunities-page {
         --cp-primary: #2563eb;
