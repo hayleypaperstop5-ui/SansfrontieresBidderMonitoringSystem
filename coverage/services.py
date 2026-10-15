@@ -1,4 +1,4 @@
-﻿from datetime import datetime, timedelta
+from datetime import datetime, timedelta
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
@@ -1230,6 +1230,10 @@ def close_expired_coverage_sessions(*, moment=None) -> int:
     """
     Process coverage boundaries and continuation workflows.
 
+    Also expires OPEN assignments whose sign-in deadline has passed,
+    transitioning them to MISSED and notifying the moderator and
+    management.
+
     Important:
       - Day continuation prompt: 08:45 -> 09:00.
       - Evening continuation prompt: 20:45 -> 21:00.
@@ -1238,6 +1242,51 @@ def close_expired_coverage_sessions(*, moment=None) -> int:
     """
     if moment is None:
         moment = timezone.localtime()
+
+    # ---------------------------------------------------------------
+    # 0. Expire OPEN assignments whose sign-in deadline has passed.
+    # ---------------------------------------------------------------
+    missed_signin_sessions = (
+        CoverageSession.objects
+        .select_for_update()
+        .select_related("player", "moderator")
+        .filter(
+            status=CoverageSession.Status.OPEN,
+            sign_in_deadline_at__isnull=False,
+            sign_in_deadline_at__lte=moment,
+        )
+    )
+
+    for session in missed_signin_sessions:
+        session.status = CoverageSession.Status.MISSED
+        session.closure_reason = CoverageSession.ClosureReason.AUTOMATIC
+        session.save(update_fields=["status", "closure_reason", "updated_at"])
+
+        moderator_label = (
+            session.moderator.get_full_name()
+            or session.moderator.username
+        )
+
+        _notify_moderator(
+            moderator=session.moderator,
+            title="Missed Coverage Sign-in",
+            message=(
+                f"You did not sign in to cover {session.player} before the "
+                "sign-in deadline. This assignment has been marked MISSED "
+                "and the Player has been released for reassignment."
+            ),
+            alert_level=Notification.AlertLevel.CRITICAL,
+        )
+
+        _notify_management_team(
+            title="Missed Coverage Sign-in",
+            message=(
+                f"{moderator_label} did not sign in to cover "
+                f"{session.player} before the sign-in deadline. The "
+                "assignment has been marked MISSED."
+            ),
+            alert_level=Notification.AlertLevel.CRITICAL,
+        )
 
     closed_count = 0
 
