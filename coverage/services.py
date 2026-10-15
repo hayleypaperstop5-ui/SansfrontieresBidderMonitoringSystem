@@ -1243,6 +1243,8 @@ def close_expired_coverage_sessions(*, moment=None) -> int:
     if moment is None:
         moment = timezone.localtime()
 
+    closed_count = 0
+
     # ---------------------------------------------------------------
     # 0. Expire OPEN assignments whose sign-in deadline has passed.
     # ---------------------------------------------------------------
@@ -1261,6 +1263,7 @@ def close_expired_coverage_sessions(*, moment=None) -> int:
         session.status = CoverageSession.Status.MISSED
         session.closure_reason = CoverageSession.ClosureReason.AUTOMATIC
         session.save(update_fields=["status", "closure_reason", "updated_at"])
+        closed_count += 1
 
         moderator_label = (
             session.moderator.get_full_name()
@@ -1288,7 +1291,6 @@ def close_expired_coverage_sessions(*, moment=None) -> int:
             alert_level=Notification.AlertLevel.CRITICAL,
         )
 
-    closed_count = 0
 
     # ---------------------------------------------------------------
     # 1. Prompt active sessions during the 15-minute window.
