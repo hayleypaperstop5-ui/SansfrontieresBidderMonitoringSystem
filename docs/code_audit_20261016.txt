@@ -1,0 +1,183 @@
+========================================================================
+CODE AUDIT REPORT
+========================================================================
+
+## 1. Duplicate definitions in the same file
+
+  accounts\decorators.py: SYNTAX ERROR - invalid non-printable character U+FEFF (<unknown>, line 1)
+  accounts\staff_list_view_temp.py: SYNTAX ERROR - invalid non-printable character U+FEFF (<unknown>, line 1)
+  accounts\urls.py: SYNTAX ERROR - invalid non-printable character U+FEFF (<unknown>, line 1)
+  bonuses\tasks.py: SYNTAX ERROR - invalid non-printable character U+FEFF (<unknown>, line 1)
+  bonuses\urls.py: SYNTAX ERROR - invalid non-printable character U+FEFF (<unknown>, line 1)
+  bonuses\management\commands\evaluate_moderator_bonuses.py: SYNTAX ERROR - invalid non-printable character U+FEFF (<unknown>, line 1)
+  coverage\forms.py: SYNTAX ERROR - invalid non-printable character U+FEFF (<unknown>, line 1)
+  coverage\self_application.py: SYNTAX ERROR - invalid non-printable character U+FEFF (<unknown>, line 1)
+  coverage\session_times.py: SYNTAX ERROR - invalid non-printable character U+FEFF (<unknown>, line 1)
+  coverage\test_self_application_integration.py: SYNTAX ERROR - invalid non-printable character U+FEFF (<unknown>, line 1)
+  coverage\urls.py: SYNTAX ERROR - invalid non-printable character U+FEFF (<unknown>, line 1)
+  coverage\templatetags\coverage_tags.py: SYNTAX ERROR - invalid non-printable character U+FEFF (<unknown>, line 1)
+  dashboard\views.py: SYNTAX ERROR - invalid non-printable character U+FEFF (<unknown>, line 1)
+  notifications\context_processors.py: SYNTAX ERROR - invalid non-printable character U+FEFF (<unknown>, line 1)
+  notifications\models.py: SYNTAX ERROR - invalid non-printable character U+FEFF (<unknown>, line 1)
+  notifications\test_notification_read_state.py: SYNTAX ERROR - invalid non-printable character U+FEFF (<unknown>, line 1)
+  notifications\urls.py: SYNTAX ERROR - invalid non-printable character U+FEFF (<unknown>, line 1)
+  notifications\views.py: SYNTAX ERROR - invalid non-printable character U+FEFF (<unknown>, line 1)
+  payments\forms.py: SYNTAX ERROR - invalid non-printable character U+FEFF (<unknown>, line 1)
+  payments\models.py: SYNTAX ERROR - invalid non-printable character U+FEFF (<unknown>, line 1)
+  reports\admin.py: SYNTAX ERROR - invalid non-printable character U+FEFF (<unknown>, line 1)
+  reports\forms.py: SYNTAX ERROR - invalid non-printable character U+FEFF (<unknown>, line 1)
+  reports\models.py: SYNTAX ERROR - invalid non-printable character U+FEFF (<unknown>, line 1)
+  reports\urls.py: SYNTAX ERROR - invalid non-printable character U+FEFF (<unknown>, line 1)
+  shifts\services.py: SYNTAX ERROR - invalid non-printable character U+FEFF (<unknown>, line 1)
+  shifts\urls.py: SYNTAX ERROR - invalid non-printable character U+FEFF (<unknown>, line 1)
+  shifts\management\commands\enforce_shift_report_deadlines.py: SYNTAX ERROR - invalid non-printable character U+FEFF (<unknown>, line 1)
+
+## 2. Identical function bodies across the codebase
+
+  Identical body in 2 places:
+    - accounts\forms.py:39  def clean_username()
+    - accounts\forms.py:113  def clean_username()
+  Identical body in 2 places:
+    - players\forms.py:52  def clean_name()
+    - players\forms.py:248  def clean_name()
+
+## 3. Names shadowed within the same function
+
+  accounts\forms.py:247 def clean_email() reassigns 'queryset' at lines [250, 259]
+  accounts\forms.py:247 def clean_email() reassigns 'username_queryset' at lines [254, 260]
+  accounts\utils.py:1 def normalize_whatsapp_number() reassigns 'number' at lines [12, 14, 22, 25]
+  accounts\views.py:187 def staff_create() reassigns 'form' at lines [189, 272]
+  accounts\views.py:282 def staff_invitation_setup() reassigns 'form' at lines [305, 325]
+  accounts\views.py:335 def staff_edit() reassigns 'form' at lines [340, 369]
+  accounts\views.py:535 def staff_suspend() reassigns 'form' at lines [540, 567]
+  accounts\views.py:673 def role_edit() reassigns 'name' at lines [682, 695]
+  bonuses\models.py:108 def __str__() reassigns 'chat_range' at lines [110, 112]
+  bonuses\services.py:49 def get_reports_within_window() reassigns 'reports' at lines [68, 75]
+  bonuses\views.py:43 def bonus_settings_create() reassigns 'form' at lines [45, 71]
+  bonuses\views.py:90 def bonus_settings_edit() reassigns 'bonus' at lines [91, 107]
+  bonuses\views.py:90 def bonus_settings_edit() reassigns 'form' at lines [98, 123]
+  coverage\models.py:152 def _generate_session_code() reassigns 'prefix' at lines [154, 157]
+  coverage\models.py:152 def _generate_session_code() reassigns 'counter_type' at lines [155, 158]
+  coverage\services.py:460 def respond_to_coverage_continuation() reassigns 'moderator_name' at lines [541, 606]
+  coverage\services.py:460 def respond_to_coverage_continuation() reassigns 'title' at lines [612, 626]
+  coverage\services.py:460 def respond_to_coverage_continuation() reassigns 'moderator_message' at lines [613, 627]
+  coverage\services.py:460 def respond_to_coverage_continuation() reassigns 'management_message' at lines [619, 633]
+  coverage\services.py:1229 def close_expired_coverage_sessions() reassigns 'signed_out_at' at lines [1337, 1424, 1600]
+  coverage\services.py:1229 def close_expired_coverage_sessions() reassigns 'moderator_name' at lines [1359, 1450, 1551, 1620]
+  coverage\services.py:1229 def close_expired_coverage_sessions() reassigns 'title' at lines [1365, 1379, 1455, 1556, 1625]
+  coverage\services.py:1229 def close_expired_coverage_sessions() reassigns 'message' at lines [1457, 1558, 1627]
+  coverage\services.py:1229 def close_expired_coverage_sessions() reassigns 'new_session' at lines [1442, 1546]
+  coverage\services.py:1229 def close_expired_coverage_sessions() reassigns 'moderator_message' at lines [1366, 1380]
+  coverage\services.py:1229 def close_expired_coverage_sessions() reassigns 'management_message' at lines [1371, 1386]
+  coverage\views.py:33 def moderator_coverage() reassigns 'session' at lines [45, 48]
+  coverage\views.py:164 def end_of_session_report() reassigns 'form' at lines [207, 280]
+  coverage\views.py:293 def manager_coverage_alerts() reassigns 'coverage_history' at lines [490, 501, 506, 511, 516, 521]
+  coverage\views.py:293 def manager_coverage_alerts() reassigns 'session' at lines [304, 343]
+  payments\services.py:283 def calculate_moderator_weekly_earnings() reassigns 'chat_earnings' at lines [322, 334]
+  payments\services.py:283 def calculate_moderator_weekly_earnings() reassigns 'rate_per_chat' at lines [323, 332]
+  payments\services.py:283 def calculate_moderator_weekly_earnings() reassigns 'earned_amount' at lines [339, 346]
+  payments\services.py:551 def build_payroll_plan() reassigns 'payment_method' at lines [571, 575]
+  payments\services.py:551 def build_payroll_plan() reassigns 'monthly_base_amount' at lines [572, 576]
+  payments\services.py:551 def build_payroll_plan() reassigns 'rate_method' at lines [573, 577]
+  payments\services.py:551 def build_payroll_plan() reassigns 'rate_per_chat' at lines [716, 734]
+  payments\services.py:551 def build_payroll_plan() reassigns 'chat_tier_rate' at lines [717, 733]
+  payments\services.py:551 def build_payroll_plan() reassigns 'chat_earnings' at lines [719, 738, 782]
+  payments\services.py:551 def build_payroll_plan() reassigns 'earned_amount' at lines [783, 789]
+  payments\services.py:551 def build_payroll_plan() reassigns 'player_earnings' at lines [762, 767]
+  payments\services.py:1035 def settle_moderator_payment() reassigns 'status' at lines [1070, 1072, 1074]
+  payments\views.py:97 def payment_settings() reassigns 'form' at lines [105, 117]
+  players\models.py:83 def clean() reassigns 'overlaps' at lines [109, 111, 113]
+  players\models.py:123 def __str__() reassigns 'chat_range' at lines [125, 127]
+  players\models.py:174 def clean() reassigns 'overlaps' at lines [196, 198, 200]
+  players\models.py:210 def __str__() reassigns 'chat_range' at lines [212, 214]
+  players\views.py:32 def player_create() reassigns 'form' at lines [36, 51]
+  players\views.py:91 def player_chat_rate_create() reassigns 'form' at lines [96, 109]
+  players\views.py:122 def player_chat_rate_edit() reassigns 'rate_tier' at lines [126, 135]
+  players\views.py:122 def player_chat_rate_edit() reassigns 'form' at lines [129, 145]
+  players\views.py:173 def chat_rate_create() reassigns 'form' at lines [177, 197]
+  players\views.py:209 def chat_rate_edit() reassigns 'rate_tier' at lines [211, 222]
+  players\views.py:209 def chat_rate_edit() reassigns 'form' at lines [215, 238]
+  players\views.py:251 def player_edit() reassigns 'player' at lines [253, 264]
+  players\views.py:251 def player_edit() reassigns 'form' at lines [257, 275]
+  reports\views.py:13 def shift_report_submit() reassigns 'form' at lines [60, 85]
+  shifts\views.py:35 def shift_create() reassigns 'form' at lines [37, 59]
+  shifts\views.py:71 def shift_assign_substitute() reassigns 'shift' at lines [75, 126]
+  shifts\views.py:71 def shift_assign_substitute() reassigns 'form' at lines [107, 137]
+  shifts\views.py:150 def shift_sign_in() reassigns 'coverage_session' at lines [188, 204]
+
+## 4. Coverage-named files not imported anywhere
+
+  accounts\admin.py
+  accounts\apps.py
+  accounts\staff_list_view_temp.py
+  accounts\tests.py
+  accounts\urls.py
+  accounts\views.py
+  bonuses\admin.py
+  bonuses\apps.py
+  bonuses\forms.py
+  bonuses\tasks.py
+  bonuses\tests.py
+  bonuses\urls.py
+  bonuses\views.py
+  bonuses\management\commands\determine_daily_bonuses.py
+  bonuses\management\commands\evaluate_moderator_bonuses.py
+  coverage\admin.py
+  coverage\apps.py
+  coverage\session_times.py
+  coverage\tasks.py
+  coverage\tests.py
+  coverage\test_self_application_integration.py
+  coverage\urls.py
+  coverage\views.py
+  coverage\templatetags\coverage_tags.py
+  dashboard\admin.py
+  dashboard\apps.py
+  dashboard\models.py
+  dashboard\tests.py
+  dashboard\urls.py
+  dashboard\views.py
+  notifications\admin.py
+  notifications\apps.py
+  notifications\context_processors.py
+  notifications\tests.py
+  notifications\test_notification_read_state.py
+  notifications\urls.py
+  notifications\views.py
+  payments\admin.py
+  payments\apps.py
+  payments\forms.py
+  payments\tests.py
+  payments\urls.py
+  players\admin.py
+  players\apps.py
+  players\forms.py
+  players\tests.py
+  players\urls.py
+  players\views.py
+  reports\admin.py
+  reports\apps.py
+  reports\forms.py
+  reports\models.py
+  reports\tests.py
+  reports\urls.py
+  reports\views.py
+  shifts\admin.py
+  shifts\apps.py
+  shifts\forms.py
+  shifts\tests.py
+  shifts\urls.py
+  shifts\views.py
+  shifts\management\commands\enforce_shift_report_deadlines.py
+
+## 5. Confusing identifiers (temp/todo/old/backup/new in code)
+
+  coverage\test_self_application.py:396  attempt
+  payments\services.py:161  get_player_payment_threshold
+  payments\tests.py:220  test_player_chats_carry_forward_until_threshold_is_reached
+  payments\tests.py:1009  test_player_below_threshold_remains_unpaid_and_audited
+  payments\tests.py:1385  test_different_players_cannot_combine_to_reach_threshold
+
+========================================================================
+END OF REPORT
+========================================================================
