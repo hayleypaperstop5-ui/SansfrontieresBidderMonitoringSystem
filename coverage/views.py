@@ -576,8 +576,6 @@ def coverage_opportunities(request):
 @login_required
 def apply_for_coverage(request, player_id):
     if request.method != "POST" or getattr(request.user, "role", None) != "MODERATOR":
-        _role = getattr(request.user, "role", None)
-        messages.error(request, "Apply blocked: method=" + request.method + " role=" + str(_role) + " user=" + str(request.user.username))
         return redirect("coverage:opportunities")
 
     from .self_application import apply_for_player
