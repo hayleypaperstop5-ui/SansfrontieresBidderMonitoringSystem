@@ -1250,10 +1250,10 @@ def close_expired_coverage_sessions(*, moment=None) -> int:
         CoverageSession.objects
         .select_for_update()
         .select_related("player", "moderator")
+        .filter(status=CoverageSession.Status.OPEN)
         .filter(
-            status=CoverageSession.Status.OPEN,
-            sign_in_deadline_at__isnull=False,
-            sign_in_deadline_at__lte=moment,
+            Q(sign_in_deadline_at__isnull=False, sign_in_deadline_at__lte=moment)
+            | Q(scheduled_close_at__isnull=False, scheduled_close_at__lte=moment)
         )
     )
 
