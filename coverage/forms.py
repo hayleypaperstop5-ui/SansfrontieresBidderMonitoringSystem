@@ -10,7 +10,7 @@ class EndOfSessionReportForm(forms.ModelForm):
     )
 
     screenshot = forms.ImageField(
-        required=True,
+        required=False,
     )
 
     class Meta:
