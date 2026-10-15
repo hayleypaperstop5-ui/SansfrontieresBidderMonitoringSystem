@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Complete Moderator Setup | Sansfrontieres</title>
+
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+            background: #f4f7fb;
+            color: #1f2937;
+        }
+
+        .topbar {
+            background: #12372a;
+            color: white;
+            padding: 18px 40px;
+            font-size: 20px;
+            font-weight: 700;
+        }
+
+        .container {
+            max-width: 850px;
+            margin: 45px auto;
+            padding: 0 20px;
+        }
+
+        .card {
+            background: white;
+            border-radius: 12px;
+            padding: 35px;
+            box-shadow: 0 4px 18px rgba(0, 0, 0, 0.08);
+        }
+
+        h1 {
+            margin-top: 0;
+            margin-bottom: 8px;
+            color: #12372a;
+        }
+
+        .description {
+            color: #6b7280;
+            margin-bottom: 25px;
+            line-height: 1.5;
+        }
+
+        .notice {
+            background: #ecfdf5;
+            border-left: 4px solid #198754;
+            padding: 14px 16px;
+            margin-bottom: 28px;
+            border-radius: 6px;
+            color: #14532d;
+            line-height: 1.5;
+        }
+
+        .field {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 7px;
+        }
+
+        input {
+            width: 100%;
+            padding: 11px 13px;
+            border: 1px solid #d1d5db;
+            border-radius: 7px;
+            font-size: 15px;
+        }
+
+        input:focus {
+            outline: none;
+            border-color: #198754;
+            box-shadow: 0 0 0 3px rgba(25, 135, 84, 0.12);
+        }
+
+        .errors {
+            color: #b91c1c;
+            font-size: 14px;
+            margin-top: 5px;
+        }
+
+        .help {
+            color: #6b7280;
+            font-size: 13px;
+            margin-top: 5px;
+        }
+
+        .actions {
+            margin-top: 30px;
+        }
+
+        .btn {
+            display: inline-block;
+            padding: 11px 20px;
+            border-radius: 7px;
+            border: none;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 15px;
+        }
+
+        .btn-primary {
+            background: #198754;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #157347;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="topbar">
+        Sansfrontieres
+    </div>
+
+    <div class="container">
+
+        <div class="card">
+
+            <h1>Complete Your Moderator Setup</h1>
+
+            <p class="description">
+                Welcome{% if staff_name %}, {{ staff_name }}{% endif %}.
+                Complete the details below to activate your Moderator account.
+            </p>
+
+            <div class="notice">
+                Your email address will be your username for signing in. Create your own password. Your phone, WhatsApp, and M-Pesa
+                details will be stored as part of your staff profile. This invitation is
+                valid for 24 hours and can only be used once.
+            </div>
+
+            <form method="post">
+
+                {% csrf_token %}
+
+                {{ form.non_field_errors }}
+
+                <div class="field">
+                </div>
+
+                <div class="field">
+                    {{ form.password.label_tag }}
+                    {{ form.password }}
+                    {% if form.password.errors %}
+                        <div class="errors">{{ form.password.errors }}</div>
+                    {% endif %}
+                </div>
+
+                <div class="field">
+                    {{ form.password_confirm.label_tag }}
+                    {{ form.password_confirm }}
+                    {% if form.password_confirm.errors %}
+                        <div class="errors">{{ form.password_confirm.errors }}</div>
+                    {% endif %}
+                </div>
+
+                <div class="field">
+                    {{ form.phone_number.label_tag }}
+                    {{ form.phone_number }}
+                    {% if form.phone_number.errors %}
+                        <div class="errors">{{ form.phone_number.errors }}</div>
+                    {% endif %}
+                </div>
+
+                <div class="field">
+                    {{ form.whatsapp_number.label_tag }}
+                    {{ form.whatsapp_number }}
+                    {% if form.whatsapp_number.errors %}
+                        <div class="errors">{{ form.whatsapp_number.errors }}</div>
+                    {% endif %}
+                </div>
+
+                <div class="field">
+                    {{ form.mpesa_number.label_tag }}
+                    {{ form.mpesa_number }}
+                    {% if form.mpesa_number.errors %}
+                        <div class="errors">{{ form.mpesa_number.errors }}</div>
+                    {% endif %}
+                </div>
+
+                <div class="actions">
+                    <button type="submit" class="btn btn-primary">
+                        Complete Account Setup
+                    </button>
+                </div>
+
+            </form>
+
+        </div>
+
+    </div>
+
+</body>
+</html>
+
+

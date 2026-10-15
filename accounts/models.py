@@ -25,10 +25,45 @@ class User(AbstractUser):
         )
 
 
+class StaffRole(models.Model):
+
+    name = models.CharField(
+        max_length=100,
+        unique=True,
+    )
+
+    description = models.TextField(
+        blank=True,
+    )
+
+    active = models.BooleanField(
+        default=True,
+    )
+
+    is_system_role = models.BooleanField(
+        default=False,
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+    )
+
+    updated_at = models.DateTimeField(
+        auto_now=True,
+    )
+
+    class Meta:
+        ordering = ["name"]
+
+    def __str__(self):
+        return self.name
+
+
 class StaffProfile(models.Model):
 
     class Status(models.TextChoices):
         ACTIVE = "ACTIVE", "Active"
+        INVITED = "INVITED", "Invited"
         INACTIVE = "INACTIVE", "Inactive"
         SUSPENDED = "SUSPENDED", "Suspended"
         DORMANT = "DORMANT", "Dormant"
@@ -40,11 +75,28 @@ class StaffProfile(models.Model):
         related_name="staff_profile",
     )
 
+    designation = models.ForeignKey(
+        StaffRole,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="staff_profiles",
+    )
+
     phone_number = models.CharField(
         max_length=30,
         blank=True,
     )
 
+    whatsapp_number = models.CharField(
+        max_length=30,
+        blank=True,
+    )
+
+    mpesa_number = models.CharField(
+        max_length=30,
+        blank=True,
+    )
     employee_number = models.CharField(
         max_length=50,
         unique=True,
@@ -102,6 +154,7 @@ class StaffProfile(models.Model):
         super().save(*args, **kwargs)
 
         if is_new and not self.employee_number:
+
             self.employee_number = f"SF{self.pk:04d}"
 
             super().save(
@@ -111,15 +164,31 @@ class StaffProfile(models.Model):
     def __str__(self):
         return (
             f"{self.user.get_full_name() or self.user.username} "
-            f"({self.get_role_display()})"
+            f"({self.user.get_role_display()})"
         )
 
 
+class StaffInvitation(models.Model):
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="staff_invitations",
+    )
+    invited_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="sent_staff_invitations",
+    )
+    token_hash = models.CharField(max_length=64, unique=True, db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+    revoked_at = models.DateTimeField(null=True, blank=True)
+    used_at = models.DateTimeField(null=True, blank=True)
 
+    class Meta:
+        ordering = ["-created_at"]
 
-
-
-
-
-
-
+    def __str__(self):
+        return f"Invitation for {self.user.get_full_name() or self.user.email}"

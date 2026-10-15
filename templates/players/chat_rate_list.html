@@ -1,55 +1,185 @@
-{% extends "dashboard/dashboard.html" %}
-
-{% block content %}
-<style>
+﻿<style>
     .rate-page {
-        max-width: 1200px;
+        max-width: 1280px;
         margin: 0 auto;
-        padding: 30px;
+        padding: 32px;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+        color: #1e293b;
     }
 
     .rate-header {
         display: flex;
         justify-content: space-between;
         align-items: center;
-        margin-bottom: 25px;
-        gap: 20px;
+        gap: 24px;
+        margin-bottom: 28px;
+    }
+
+    .rate-title-area {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+    }
+
+    .rate-icon {
+        width: 56px;
+        height: 56px;
+        border-radius: 14px;
+        background: linear-gradient(135deg, #1e3a8a, #2563eb);
+        color: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 24px;
+        font-weight: 700;
+        box-shadow: 0 8px 20px rgba(37, 99, 235, 0.22);
     }
 
     .rate-header h1 {
-        margin: 0;
+        margin: 0 0 5px;
         font-size: 28px;
+        font-weight: 700;
+        color: #0f172a;
     }
 
     .rate-header p {
-        margin: 8px 0 0;
-        color: #6b7280;
+        margin: 0;
+        color: #64748b;
+        font-size: 14px;
     }
 
     .btn {
-        display: inline-block;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
         padding: 11px 18px;
-        border-radius: 8px;
+        border-radius: 9px;
+        background: #2563eb;
+        color: white !important;
         text-decoration: none;
+        font-size: 14px;
         font-weight: 600;
-        background: #166534;
-        color: white;
+        border: none;
+        box-shadow: 0 4px 12px rgba(37, 99, 235, 0.20);
+        transition: all 0.2s ease;
     }
 
-    .notice {
-        background: #eff6ff;
+    .btn:hover {
+        background: #1d4ed8;
+        transform: translateY(-1px);
+    }
+
+    .director-notice {
+        display: flex;
+        align-items: flex-start;
+        gap: 14px;
+        background: linear-gradient(135deg, #eff6ff, #f8fafc);
         border: 1px solid #bfdbfe;
-        border-radius: 10px;
-        padding: 16px;
-        margin-bottom: 22px;
+        border-left: 4px solid #2563eb;
+        border-radius: 12px;
+        padding: 16px 18px;
+        margin-bottom: 25px;
+    }
+
+    .notice-icon {
+        color: #2563eb;
+        font-size: 18px;
+        margin-top: 2px;
+    }
+
+    .director-notice strong {
         color: #1e3a8a;
+    }
+
+    .director-notice p {
+        margin: 4px 0 0;
+        color: #475569;
+        font-size: 13px;
+        line-height: 1.5;
+    }
+
+    .summary-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 18px;
+        margin-bottom: 25px;
+    }
+
+    .summary-card {
+        background: white;
+        border: 1px solid #e2e8f0;
+        border-radius: 13px;
+        padding: 20px;
+        display: flex;
+        align-items: center;
+        gap: 15px;
+        box-shadow: 0 3px 12px rgba(15, 23, 42, 0.05);
+    }
+
+    .summary-icon {
+        width: 45px;
+        height: 45px;
+        border-radius: 11px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 18px;
+        font-weight: 700;
+    }
+
+    .summary-icon.blue {
+        background: #dbeafe;
+        color: #2563eb;
+    }
+
+    .summary-icon.green {
+        background: #dcfce7;
+        color: #16a34a;
+    }
+
+    .summary-icon.orange {
+        background: #ffedd5;
+        color: #ea580c;
+    }
+
+    .summary-label {
+        color: #64748b;
+        font-size: 12px;
+        margin-bottom: 3px;
+    }
+
+    .summary-value {
+        color: #0f172a;
+        font-size: 21px;
+        font-weight: 700;
     }
 
     .table-card {
         background: white;
-        border-radius: 12px;
+        border: 1px solid #e2e8f0;
+        border-radius: 14px;
         overflow: hidden;
-        box-shadow: 0 4px 16px rgba(0,0,0,.08);
+        box-shadow: 0 5px 18px rgba(15, 23, 42, 0.06);
+    }
+
+    .table-header {
+        padding: 20px 22px;
+        border-bottom: 1px solid #e2e8f0;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .table-header h2 {
+        margin: 0;
+        font-size: 17px;
+        color: #0f172a;
+    }
+
+    .table-header span {
+        font-size: 12px;
+        color: #64748b;
     }
 
     table {
@@ -57,51 +187,185 @@
         border-collapse: collapse;
     }
 
-    th, td {
-        padding: 15px 18px;
-        text-align: left;
-        border-bottom: 1px solid #e5e7eb;
-    }
-
     th {
         background: #f8fafc;
-        font-size: 13px;
-        text-transform: uppercase;
-        letter-spacing: .04em;
         color: #475569;
+        font-size: 11px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        padding: 14px 20px;
+        text-align: left;
+        border-bottom: 1px solid #e2e8f0;
+    }
+
+    td {
+        padding: 17px 20px;
+        font-size: 14px;
+        color: #334155;
+        border-bottom: 1px solid #f1f5f9;
+    }
+
+    tbody tr {
+        transition: background 0.15s ease;
+    }
+
+    tbody tr:hover {
+        background: #f8fafc;
+    }
+
+    tbody tr:last-child td {
+        border-bottom: none;
+    }
+
+    .chat-range {
+        font-weight: 700;
+        color: #0f172a;
+    }
+
+    .rate-value {
+        font-size: 15px;
+        font-weight: 700;
+        color: #047857;
+    }
+
+    .currency {
+        display: inline-block;
+        margin-right: 5px;
+        padding: 3px 6px;
+        border-radius: 5px;
+        background: #ecfdf5;
+        color: #047857;
+        font-size: 10px;
+        font-weight: 800;
+        letter-spacing: 0.03em;
     }
 
     .badge {
-        display: inline-block;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
         padding: 5px 10px;
         border-radius: 999px;
-        font-size: 12px;
+        font-size: 11px;
         font-weight: 700;
     }
 
-    .active {
-        background: #dcfce7;
-        color: #166534;
+    .badge::before {
+        content: "";
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: currentColor;
     }
 
-    .inactive {
-        background: #fee2e2;
-        color: #991b1b;
+    .badge.active {
+        background: #dcfce7;
+        color: #15803d;
+    }
+
+    .badge.inactive {
+        background: #f1f5f9;
+        color: #64748b;
+    }
+
+    .edit-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 7px 12px;
+        border-radius: 7px;
+        background: #eff6ff;
+        color: #2563eb !important;
+        text-decoration: none;
+        font-size: 12px;
+        font-weight: 700;
+        border: 1px solid #dbeafe;
+        transition: all 0.2s ease;
+    }
+
+    .edit-btn:hover {
+        background: #dbeafe;
+        border-color: #bfdbfe;
+    }
+
+    .message {
+        padding: 13px 16px;
+        border-radius: 9px;
+        margin-bottom: 18px;
+        background: #ecfdf5;
+        border: 1px solid #a7f3d0;
+        color: #065f46;
+        font-size: 13px;
+        font-weight: 600;
     }
 
     .empty {
-        padding: 45px;
+        padding: 65px 25px;
         text-align: center;
-        color: #6b7280;
+    }
+
+    .empty-icon {
+        width: 58px;
+        height: 58px;
+        margin: 0 auto 15px;
+        border-radius: 14px;
+        background: #eff6ff;
+        color: #2563eb;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 22px;
+        font-weight: 700;
+    }
+
+    .empty h3 {
+        margin: 0 0 7px;
+        color: #0f172a;
+    }
+
+    .empty p {
+        margin: 0;
+        color: #64748b;
+        font-size: 13px;
+    }
+
+    @media (max-width: 850px) {
+        .rate-page {
+            padding: 20px;
+        }
+
+        .rate-header {
+            align-items: flex-start;
+            flex-direction: column;
+        }
+
+        .summary-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .table-card {
+            overflow-x: auto;
+        }
+
+        table {
+            min-width: 750px;
+        }
     }
 </style>
 
 <div class="rate-page">
 
     <div class="rate-header">
-        <div>
-            <h1>Chat Rate Management</h1>
-            <p>Configure global payment rates based on the number of chats replied to.</p>
+        <div class="rate-title-area">
+            <div class="rate-icon">KES</div>
+
+            <div>
+                <h1>Chat Rate Management</h1>
+                <p>
+                    Configure global payment rates based on the number of chats replied to.
+                </p>
+            </div>
         </div>
 
         <a href="{% url 'players:chat_rate_create' %}" class="btn">
@@ -109,80 +373,158 @@
         </a>
     </div>
 
-    <div class="notice">
-        <strong>Director Controlled:</strong>
-        These rates apply globally to Moderators.
-        They are not assigned to individual Players.
+
+    <div class="director-notice">
+        <div class="notice-icon">●</div>
+
+        <div>
+            <strong>Director Controlled Payment Rates</strong>
+
+            <p>
+                These rates apply globally to Moderators and are configured by the Director.
+                All payment rates are managed in Kenyan Shillings (KES) and are not assigned
+                to individual Players.
+            </p>
+        </div>
     </div>
+
 
     {% if messages %}
         {% for message in messages %}
-            <div class="notice">
+            <div class="message">
                 {{ message }}
             </div>
         {% endfor %}
     {% endif %}
 
+
+    <div class="summary-grid">
+
+        <div class="summary-card">
+            <div class="summary-icon blue">#</div>
+
+            <div>
+                <div class="summary-label">Total Rate Tiers</div>
+                <div class="summary-value">{{ rate_tiers|length }}</div>
+            </div>
+        </div>
+
+
+        <div class="summary-card">
+            <div class="summary-icon green">✓</div>
+
+            <div>
+                <div class="summary-label">Active Rate Tiers</div>
+                <div class="summary-value">{{ active_tiers }}</div>
+            </div>
+        </div>
+
+
+        <div class="summary-card">
+            <div class="summary-icon orange">K</div>
+
+            <div>
+                <div class="summary-label">Payment Currency</div>
+                <div class="summary-value">KES</div>
+            </div>
+        </div>
+
+    </div>
+
+
     <div class="table-card">
 
         {% if rate_tiers %}
 
-        <table>
-            <thead>
-                <tr>
-                    <th>Chat Range</th>
-                    <th>Rate Per Chat</th>
-                    <th>Status</th>
-                    <th>Effective From</th>
-                </tr>
-            </thead>
+            <div class="table-header">
+                <h2>Configured Chat Rates</h2>
+                <span>Director managed</span>
+            </div>
 
-            <tbody>
-                {% for tier in rate_tiers %}
-                <tr>
-                    <td>
-                        {% if tier.maximum_chats %}
-                            {{ tier.minimum_chats }}-{{ tier.maximum_chats }}
-                        {% else %}
-                            {{ tier.minimum_chats }}+
-                        {% endif %}
-                    </td>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Chat Range</th>
+                        <th>Rate Per Chat (KES)</th>
+                        <th>Status</th>
+                        <th>Effective From</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
 
-                    <td>
-                        <strong>${{ tier.rate_per_chat }}</strong>
-                    </td>
+                <tbody>
 
-                    <td>
-                        {% if tier.active %}
-                            <span class="badge active">Active</span>
-                        {% else %}
-                            <span class="badge inactive">Inactive</span>
-                        {% endif %}
-                    </td>
+                    {% for tier in rate_tiers %}
 
-                    <td>
-                        {% if tier.effective_from %}
-                            {{ tier.effective_from }}
-                        {% else %}
-                            Not specified
-                        {% endif %}
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+                        <tr>
+
+                            <td>
+                                <span class="chat-range">
+                                    {% if tier.maximum_chats %}
+                                        {{ tier.minimum_chats }}–{{ tier.maximum_chats }}
+                                    {% else %}
+                                        {{ tier.minimum_chats }}+
+                                    {% endif %}
+                                </span>
+                            </td>
+
+                            <td>
+                                <span class="rate-value">
+                                    <span class="currency">KES</span>
+                                    {{ tier.rate_per_chat|floatformat:2 }}
+                                </span>
+                            </td>
+
+                            <td>
+                                {% if tier.active %}
+                                    <span class="badge active">Active</span>
+                                {% else %}
+                                    <span class="badge inactive">Inactive</span>
+                                {% endif %}
+                            </td>
+
+                            <td>
+                                {% if tier.effective_from %}
+                                    {{ tier.effective_from }}
+                                {% else %}
+                                    <span style="color:#94a3b8;">
+                                        Not specified
+                                    </span>
+                                {% endif %}
+                            </td>
+
+                            <td>
+                                <a
+                                    href="{% url 'players:chat_rate_edit' tier.id %}"
+                                    class="edit-btn"
+                                >
+                                    ✎ Edit
+                                </a>
+                            </td>
+
+                        </tr>
+
+                    {% endfor %}
+
+                </tbody>
+            </table>
 
         {% else %}
 
-        <div class="empty">
-            <h3>No chat-rate tiers configured</h3>
-            <p>The Director can add the first global payment rate.</p>
-        </div>
+            <div class="empty">
+
+                <div class="empty-icon">KES</div>
+
+                <h3>No Chat Rate Tiers Configured</h3>
+
+                <p>
+                    The Director can add the first global Moderator payment rate.
+                </p>
+
+            </div>
 
         {% endif %}
 
     </div>
 
 </div>
-{% endblock %}
-

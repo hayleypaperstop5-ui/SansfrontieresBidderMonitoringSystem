@@ -1,0 +1,431 @@
+﻿{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Player Coverage | Sansfrontieres</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            background: #f5f7fa;
+            color: #212529;
+        }
+
+        header {
+            background: #212529;
+            color: white;
+            padding: 18px 32px;
+        }
+
+        header h1 {
+            margin: 0;
+            font-size: 22px;
+        }
+
+        main {
+            max-width: 900px;
+            margin: 40px auto;
+            padding: 0 20px;
+        }
+
+        .page-header {
+            margin-bottom: 24px;
+        }
+
+        .page-header h1 {
+            margin-bottom: 8px;
+        }
+
+        .page-header p {
+            color: #6c757d;
+        }
+
+        .card {
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+            margin-bottom: 24px;
+            overflow: hidden;
+        }
+
+        .card-header {
+            padding: 18px 22px;
+            border-bottom: 1px solid #dee2e6;
+        }
+
+        .card-header h2 {
+            margin: 0;
+            font-size: 20px;
+        }
+
+        .card-body {
+            padding: 22px;
+        }
+
+        .card-body p {
+            margin: 0 0 12px;
+        }
+
+        .alert {
+            padding: 14px 16px;
+            border-radius: 7px;
+            margin: 18px 0;
+        }
+
+        .alert-success {
+            background: #d1e7dd;
+            color: #0f5132;
+        }
+
+        .alert-error {
+            background: #f8d7da;
+            color: #842029;
+        }
+
+        .alert-warning {
+            background: #fff3cd;
+            color: #664d03;
+        }
+
+        .alert-info {
+            background: #cff4fc;
+            color: #055160;
+        }
+
+        .button {
+            display: inline-block;
+            padding: 11px 18px;
+            border-radius: 7px;
+            text-decoration: none;
+            font-weight: 700;
+            border: none;
+            cursor: pointer;
+            font-size: 15px;
+            margin-right: 8px;
+        }
+
+        .button-primary {
+            background: #0d6efd;
+            color: white;
+        }
+
+        .button-secondary {
+            background: #6c757d;
+            color: white;
+        }
+
+        form {
+            display: inline-block;
+            margin-bottom: 12px;
+        }
+    </style>
+<style>
+.coverage-navigation {
+    margin-top: 14px;
+}
+
+.coverage-back-button {
+    display: inline-block;
+    padding: 9px 16px;
+    border-radius: 6px;
+    background: #198754;
+    color: #ffffff;
+    text-decoration: none;
+    font-size: 14px;
+    font-weight: 600;
+    transition: background 0.2s ease;
+}
+
+.coverage-back-button:hover {
+    background: #157347;
+    color: #ffffff;
+}
+</style>
+</head>
+
+<body>
+
+<header>
+    <h1>Sansfrontieres</h1>
+</header>
+
+<main>
+
+    <div class="page-header">
+        <h1>My Player Coverage</h1>
+        <p>View your assigned Player coverage and report for your session.</p>
+
+        <div class="coverage-navigation">
+            <a href="{% url 'dashboard:home' %}" class="coverage-back-button">
+                Back to Dashboard
+            </a>
+        </div>
+    </div>
+
+    {% if messages %}
+        {% for message in messages %}
+            <div class="alert alert-{{ message.tags }}">
+                {{ message }}
+            </div>
+        {% endfor %}
+    {% endif %}
+
+    {% if active_session %}
+
+        <section class="card">
+            <div class="card-header">
+                <h2>Active Coverage</h2>
+            </div>
+
+            <div class="card-body">
+                <p>
+                    <strong>Player:</strong>
+                    {{ active_session.player }}
+                </p>
+
+                <p>
+                    <strong>Session:</strong>
+                    {{ active_session.get_session_type_display }}
+                </p>
+
+                <p>
+                    <strong>Operating Date:</strong>
+                    {{ active_session.operating_date|date:"d M Y" }}
+                </p>
+
+                <p>
+                    <strong>Signed In:</strong>
+                    {{ active_session.signed_in_at|date:"d M Y, H:i" }}
+                </p>
+
+                <p>
+                    <strong>Scheduled Closure:</strong>
+                    {{ active_session.scheduled_close_at|date:"d M Y, H:i" }}
+                </p>
+
+                <p>
+                    <strong>Status:</strong>
+                    {{ active_session.get_status_display }}
+                </p>
+
+                <div class="alert alert-info">
+                    You are currently covering this Player. Continue working until
+                    your replacement has been secured or the Manager provides an
+                    authorised override.
+                </div>
+<form method="post">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="request_replacement">
+
+                    <button type="submit" class="button button-primary">
+                        Request Replacement
+                    </button>
+                </form>
+
+                <a href="{% url 'dashboard:home' %}" class="button button-secondary">
+                    Back to Dashboard
+                </a>
+            </div>
+        </section>
+
+    {% elif awaiting_report_session %}
+
+        <section class="card">
+            <div class="card-header">
+                <h2>Replacement Completed</h2>
+            </div>
+
+            <div class="card-body">
+                <p>
+                    <strong>Player:</strong>
+                    {{ awaiting_report_session.player }}
+                </p>
+
+                <p>
+                    <strong>Session:</strong>
+                    {{ awaiting_report_session.get_session_type_display }}
+                </p>
+
+                <p>
+                    <strong>Operating Date:</strong>
+                    {{ awaiting_report_session.operating_date|date:"d M Y" }}
+                </p>
+
+                <p>
+                    <strong>Signed In:</strong>
+                    {{ awaiting_report_session.signed_in_at|date:"d M Y, H:i" }}
+                </p>
+
+                {% if awaiting_report_session.replacement_moderator %}
+                    <p>
+                        <strong>Replacement Moderator:</strong>
+                        {{ awaiting_report_session.replacement_moderator.get_full_name|default:awaiting_report_session.replacement_moderator.username }}
+                    </p>
+                {% endif %}
+
+                {% if awaiting_report_session.status == "HANDOVER" %}
+
+                    <div class="alert alert-success">
+                        <strong>Replacement Confirmed</strong>
+                        Your replacement has been assigned successfully.
+                        You have been signed out of this coverage session.
+                        Your End-of-Session Report is now required.
+                    </div>
+
+                    <a
+                        href="{% url 'coverage:end_of_session_report' awaiting_report_session.id %}"
+                        class="button button-primary"
+                    >
+                        Submit End-of-Session Report
+                    </a>
+
+                {% elif not awaiting_report_session.signed_out_at %}
+
+                    <div class="alert alert-success">
+                        <strong>Your replacement has been assigned successfully.</strong>
+                        You may now sign out of this Player coverage session.
+                        After signing out, you must submit your
+                        End-of-Session Report.
+                    </div>
+
+                    <form method="post">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="sign_out">
+                        <input
+                            type="hidden"
+                            name="session_id"
+                            value="{{ awaiting_report_session.id }}"
+                        >
+
+                        <button
+                            type="submit"
+                            class="button button-primary"
+                            onclick="return confirm('Confirm that you have handed over this Player and want to sign out?');"
+                        >
+                            Sign Out of Coverage
+                        </button>
+                    </form>
+
+                {% else %}
+
+                    <div class="alert alert-warning">
+                        You have signed out of this coverage session.
+                        Your End-of-Session Report is now required.
+                    </div>
+
+                    <a
+                        href="{% url 'coverage:end_of_session_report' awaiting_report_session.id %}"
+                        class="button button-primary"
+                    >
+                        Submit End-of-Session Report
+                    </a>
+
+                {% endif %}
+
+                <a
+                    href="{% url 'dashboard:home' %}"
+                    class="button button-secondary"
+                >
+                    Back to Dashboard
+                </a>
+            </div>
+        </section>
+
+    {% elif assigned_session %}
+
+        <section class="card">
+            <div class="card-header">
+                <h2>Active Assigned Coverage</h2>
+            </div>
+
+            <div class="card-body">
+                <p>
+                    <strong>Player:</strong>
+                    {{ assigned_session.player }}
+                </p>
+
+                <p>
+                    <strong>Session:</strong>
+                    {{ assigned_session.get_session_type_display }}
+                </p>
+
+                <p>
+                    <strong>Operating Date:</strong>
+                    {{ assigned_session.operating_date|date:"d M Y" }}
+                </p>
+
+                <p>
+                    <strong>Coverage Started:</strong>
+                    {{ assigned_session.signed_in_at|date:"d M Y, H:i" }}
+                </p>
+
+                <p>
+                    <strong>Scheduled Closure:</strong>
+                    {{ assigned_session.scheduled_close_at|date:"d M Y, H:i" }}
+                </p>
+
+                <div class="alert alert-success">
+                    Your coverage assignment is active. You are currently covering
+                    this Player and may begin moderation immediately.
+                </div>
+
+                <a href="{% url 'dashboard:home' %}" class="button button-secondary">
+                    Back to Dashboard
+                </a>
+            </div>
+        </section>
+
+    {% else %}
+
+        <section class="card">
+            <div class="card-header">
+                <h2>No Active Coverage Assignment</h2>
+            </div>
+
+            <div class="card-body">
+                <p>
+                    You currently have no Player coverage assignment awaiting
+                    sign-in or active coverage session.
+                </p>
+
+                <p>
+                    Please contact the Manager if you believe you should have
+                    an assignment.
+                </p>
+
+                <a href="{% url 'dashboard:home' %}" class="button button-secondary">
+                    Back to Dashboard
+                </a>
+            </div>
+        </section>
+
+    {% endif %}
+
+</main>
+
+</body>
+</html>
+
+
+<script src="{% static 'js/notification_alerts.js' %}"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

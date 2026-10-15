@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>
+        {% if is_edit %}Edit{% else %}Add{% endif %}
+        Player Chat Rate
+    </title>
+
+    <style>
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+            background: #f5f7fa;
+            color: #1f2937;
+        }
+
+        .container {
+            max-width: 760px;
+            margin: 40px auto;
+            padding: 0 24px;
+        }
+
+        .card {
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            box-shadow: 0 2px 10px rgba(0,0,0,.06);
+        }
+
+        h1 {
+            margin-top: 0;
+        }
+
+        .subtitle {
+            color: #6b7280;
+            margin-bottom: 28px;
+        }
+
+        .field {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 7px;
+            font-weight: 600;
+        }
+
+        input,
+        select {
+            width: 100%;
+            box-sizing: border-box;
+            padding: 11px 12px;
+            border: 1px solid #d1d5db;
+            border-radius: 8px;
+            background: white;
+        }
+
+        .help {
+            margin-top: 6px;
+            color: #6b7280;
+            font-size: 13px;
+        }
+
+        .error {
+            margin-top: 6px;
+            color: #b91c1c;
+        }
+
+        .checkbox-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .checkbox-row input {
+            width: auto;
+        }
+
+        .checkbox-row label {
+            margin: 0;
+        }
+
+        .actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 28px;
+        }
+
+        button,
+        .cancel {
+            padding: 11px 17px;
+            border-radius: 8px;
+            text-decoration: none;
+            cursor: pointer;
+        }
+
+        button {
+            border: 0;
+            background: #111827;
+            color: white;
+        }
+
+        .cancel {
+            background: #e5e7eb;
+            color: #111827;
+        }
+    </style>
+</head>
+
+<body>
+<div class="container">
+    <div class="card">
+
+        <h1>
+            {% if is_edit %}Edit{% else %}Add{% endif %}
+            Player Chat Rate
+        </h1>
+
+        <p class="subtitle">
+            Configure a rate independently for the selected Player.
+        </p>
+
+        <form method="post">
+            {% csrf_token %}
+
+            {% if form.non_field_errors %}
+                <div class="error">
+                    {{ form.non_field_errors }}
+                </div>
+            {% endif %}
+
+            {% for field in form %}
+                <div class="field">
+
+                    {% if field.name == "active" %}
+                        <div class="checkbox-row">
+                            {{ field }}
+                            <label for="{{ field.id_for_label }}">
+                                {{ field.label }}
+                            </label>
+                        </div>
+                    {% else %}
+                        <label for="{{ field.id_for_label }}">
+                            {{ field.label }}
+                        </label>
+                        {{ field }}
+                    {% endif %}
+
+                    {% if field.help_text %}
+                        <div class="help">
+                            {{ field.help_text }}
+                        </div>
+                    {% endif %}
+
+                    {% for error in field.errors %}
+                        <div class="error">
+                            {{ error }}
+                        </div>
+                    {% endfor %}
+
+                </div>
+            {% endfor %}
+
+            <div class="actions">
+                <button type="submit">
+                    {% if is_edit %}Save Changes{% else %}Create Rate{% endif %}
+                </button>
+
+                <a
+                    class="cancel"
+                    href="{% url 'players:player_chat_rate_list' %}"
+                >
+                    Cancel
+                </a>
+            </div>
+        </form>
+
+    </div>
+</div>
+</body>
+</html>

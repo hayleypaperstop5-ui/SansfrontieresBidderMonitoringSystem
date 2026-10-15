@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Settle Moderator Payroll</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #f5f7fa;
+            margin: 0;
+            padding: 32px;
+            color: #1f2937;
+        }
+
+        .container {
+            max-width: 760px;
+            margin: 0 auto;
+        }
+
+        .card {
+            background: #ffffff;
+            border-radius: 12px;
+            padding: 28px;
+            box-shadow: 0 4px 18px rgba(0, 0, 0, 0.06);
+        }
+
+        h1 {
+            margin-top: 0;
+        }
+
+        .summary {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 16px;
+            margin: 24px 0;
+        }
+
+        .summary-item {
+            background: #f8fafc;
+            padding: 16px;
+            border-radius: 8px;
+        }
+
+        .summary-item span {
+            display: block;
+            font-size: 13px;
+            color: #64748b;
+            margin-bottom: 6px;
+        }
+
+        .summary-item strong {
+            font-size: 18px;
+        }
+
+        label {
+            display: block;
+            font-weight: 600;
+            margin: 18px 0 7px;
+        }
+
+        input,
+        textarea {
+            width: 100%;
+            box-sizing: border-box;
+            padding: 11px 12px;
+            border: 1px solid #cbd5e1;
+            border-radius: 7px;
+            font: inherit;
+        }
+
+        textarea {
+            min-height: 100px;
+            resize: vertical;
+        }
+
+        .actions {
+            display: flex;
+            gap: 12px;
+            margin-top: 24px;
+        }
+
+        button,
+        .back-link {
+            border: 0;
+            border-radius: 7px;
+            padding: 11px 18px;
+            font: inherit;
+            font-weight: 600;
+            text-decoration: none;
+            cursor: pointer;
+        }
+
+        button {
+            background: #2563eb;
+            color: #ffffff;
+        }
+
+        .back-link {
+            background: #e5e7eb;
+            color: #1f2937;
+        }
+
+        .warning {
+            margin-top: 18px;
+            padding: 12px 14px;
+            background: #fff7ed;
+            border-radius: 7px;
+            color: #9a3412;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="card">
+        <h1>Settle Moderator Payroll</h1>
+
+        <div class="summary">
+            <div class="summary-item">
+                <span>Moderator</span>
+                <strong>
+                    {{ moderator_payment.moderator.get_full_name|default:moderator_payment.moderator.username }}
+                </strong>
+            </div>
+
+            <div class="summary-item">
+                <span>Payment Week</span>
+                <strong>
+                    {{ moderator_payment.payment_week_start|date:"d M Y" }}
+                    ?
+                    {{ moderator_payment.payment_week_end|date:"d M Y" }}
+                </strong>
+            </div>
+
+            <div class="summary-item">
+                <span>Earned Amount</span>
+                <strong>KES {{ moderator_payment.earned_amount|floatformat:2 }}</strong>
+            </div>
+
+            <div class="summary-item">
+                <span>Already Paid</span>
+                <strong>KES {{ moderator_payment.amount_paid|floatformat:2 }}</strong>
+            </div>
+
+            <div class="summary-item">
+                <span>Outstanding</span>
+                <strong>KES {{ moderator_payment.outstanding_amount|floatformat:2 }}</strong>
+            </div>
+
+            <div class="summary-item">
+                <span>Status</span>
+                <strong>{{ moderator_payment.get_status_display }}</strong>
+            </div>
+        </div>
+
+        <form method="post">
+            {% csrf_token %}
+
+            <label for="amount_paid">Payment Amount</label>
+            <input
+                type="number"
+                id="amount_paid"
+                name="amount_paid"
+                min="0.01"
+                max="{{ moderator_payment.outstanding_amount }}"
+                step="0.01"
+                value="{{ moderator_payment.outstanding_amount }}"
+                required
+            >
+
+            <label for="payment_reference">Payment Reference</label>
+            <input
+                type="text"
+                id="payment_reference"
+                name="payment_reference"
+                maxlength="100"
+                placeholder="Transaction or payment reference"
+            >
+
+            <label for="notes">Notes</label>
+            <textarea
+                id="notes"
+                name="notes"
+                placeholder="Optional settlement notes"
+            ></textarea>
+
+            <div class="warning">
+                The amount entered will be added to the amount already paid.
+                It cannot exceed the current outstanding balance.
+            </div>
+
+            <div class="actions">
+                <button type="submit">Record Payment</button>
+                <a class="back-link" href="{% url 'dashboard:home' %}">Cancel</a>
+            </div>
+        </form>
+    </div>
+</div>
+</body>
+</html>

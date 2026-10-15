@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Payroll Results</title>
+    <style>
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+            background: #f5f7fb;
+            color: #172033;
+        }
+        .container {
+            max-width: 1100px;
+            margin: 40px auto;
+            padding: 0 24px;
+        }
+        .success {
+            background: #ecfdf5;
+            color: #065f46;
+            border-radius: 14px;
+            padding: 18px 20px;
+            margin: 20px 0;
+        }
+        .panel {
+            background: white;
+            border-radius: 16px;
+            padding: 24px;
+            margin-bottom: 24px;
+            box-shadow: 0 4px 18px rgba(15, 23, 42, .06);
+        }
+        .summary {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 14px;
+        }
+        .card {
+            background: #f8fafc;
+            border-radius: 12px;
+            padding: 16px;
+        }
+        .label {
+            font-size: 12px;
+            text-transform: uppercase;
+            color: #64748b;
+            font-weight: 700;
+        }
+        .value {
+            margin-top: 6px;
+            font-size: 20px;
+            font-weight: 800;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        th, td {
+            padding: 13px 10px;
+            border-bottom: 1px solid #e2e8f0;
+            text-align: left;
+        }
+        th {
+            font-size: 12px;
+            text-transform: uppercase;
+            color: #64748b;
+        }
+        td.num {
+            text-align: right;
+        }
+        .actions {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+            margin-top: 24px;
+        }
+        .button {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 12px 18px;
+            border-radius: 10px;
+            text-decoration: none;
+            font-weight: 800;
+            font-size: 14px;
+        }
+        .primary {
+            background: #4f46e5;
+            color: white;
+        }
+        .secondary {
+            background: #e2e8f0;
+            color: #172033;
+        }
+    </style>
+</head>
+<body>
+<div class="container" id="results">
+    <h1>Payroll Successfully Processed</h1>
+
+    <div class="success">
+        The payroll transaction completed successfully. Qualifying unpaid
+        chats were consumed and the resulting ModeratorPayment records were created.
+    </div>
+
+    <div class="panel">
+        <div class="summary">
+            <div class="card">
+                <div class="label">Payroll Period</div>
+                <div class="value">
+                    {{ week_start|date:"d M Y" }} - {{ week_end|date:"d M Y" }}
+                </div>
+            </div>
+            <div class="card">
+                <div class="label">Moderators</div>
+                <div class="value">{{ result.payments_created }}</div>
+            </div>
+            <div class="card">
+                <div class="label">Payable Chats</div>
+                <div class="value">{{ result.total_payable_chats }}</div>
+            </div>
+            <div class="card">
+                <div class="label">Chat Earnings</div>
+                <div class="value">KES {{ result.total_chat_earnings }}</div>
+            </div>
+            <div class="card">
+                <div class="label">Bonuses</div>
+                <div class="value">KES {{ result.total_bonuses }}</div>
+            </div>
+            <div class="card">
+                <div class="label">Total Earned</div>
+                <div class="value">KES {{ result.total_earned }}</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="panel">
+        <h2>Moderator Payroll Records</h2>
+
+        {% if payments %}
+        <div style="overflow-x:auto;">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Moderator</th>
+                        <th>Payable Chats</th>
+                        <th>Chat Earnings</th>
+                        <th>Bonuses</th>
+                        <th>Earned Amount</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for payment in payments %}
+                    <tr>
+                        <td>{{ payment.moderator }}</td>
+                        <td class="num">{{ payment.payable_chats }}</td>
+                        <td class="num">KES {{ payment.chat_earnings|floatformat:2 }}</td>
+                        <td class="num">KES {{ payment.bonus_earned|floatformat:2 }}</td>
+                        <td class="num">KES {{ payment.earned_amount|floatformat:2 }}</td>
+                        <td>{{ payment.get_status_display }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+            <p>No Moderator payment records were created.</p>
+        {% endif %}
+    </div>
+
+    <div class="actions">
+        <a
+            class="button primary"
+            href="#results"
+        >
+            View Payroll Results
+        </a>
+
+        <a
+            class="button secondary"
+            href="{% url 'payments:payroll_review' %}"
+        >
+            Back to Payroll Review
+        </a>
+
+        <a
+            class="button secondary"
+            href="/dashboard/"
+        >
+            Director Dashboard
+        </a>
+    </div>
+</div>
+</body>
+</html>

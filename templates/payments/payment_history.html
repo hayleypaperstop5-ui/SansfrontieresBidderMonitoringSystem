@@ -1,0 +1,608 @@
+﻿{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Payment History | Sansfrontieres</title>
+
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            font-family: Arial, Helvetica, sans-serif;
+            background: #f4f7f9;
+            color: #1f2937;
+        }
+
+        .topbar {
+            background: #123b2a;
+            color: white;
+            padding: 18px 32px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .brand {
+            font-size: 22px;
+            font-weight: 700;
+        }
+
+        .notifications-link {
+            color: white;
+            text-decoration: none;
+            font-size: 14px;
+            font-weight: 700;
+        }
+
+        .notifications-link:hover {
+            text-decoration: underline;
+        }
+
+        .layout {
+            display: flex;
+            min-height: calc(100vh - 65px);
+        }
+
+        .sidebar {
+            width: 230px;
+            background: #0f2f23;
+            padding: 28px 16px;
+            flex-shrink: 0;
+        }
+
+        .sidebar-title {
+            color: #d1fae5;
+            font-size: 12px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin: 0 12px 18px;
+        }
+
+        .nav-link {
+            display: block;
+            color: #dbe7e1;
+            text-decoration: none;
+            padding: 12px 14px;
+            border-radius: 8px;
+            margin-bottom: 6px;
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        .nav-link:hover,
+        .nav-link.active {
+            background: #174936;
+            color: white;
+        }
+
+        .main {
+            flex: 1;
+            padding: 32px;
+            min-width: 0;
+        }
+
+        .container {
+            max-width: 1250px;
+            margin: 0 auto;
+        }
+
+        .page-heading {
+            margin-bottom: 28px;
+        }
+
+        .page-heading h1 {
+            margin: 0 0 6px;
+            color: #123b2a;
+            font-size: 30px;
+        }
+
+        .page-heading p {
+            margin: 0;
+            color: #64748b;
+        }
+
+        .metrics {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 16px;
+            margin-bottom: 28px;
+        }
+
+        .metric-card {
+            background: white;
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            padding: 22px;
+            box-shadow: 0 3px 12px rgba(0, 0, 0, 0.04);
+        }
+
+        .metric-label {
+            color: #64748b;
+            font-size: 13px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: .4px;
+        }
+
+        .metric-value {
+            margin-top: 8px;
+            color: #123b2a;
+            font-size: 28px;
+            font-weight: 800;
+        }
+
+        .section-title {
+            margin: 30px 0 14px;
+            color: #123b2a;
+            font-size: 19px;
+        }
+
+        .panel {
+            background: white;
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            padding: 22px;
+            box-shadow: 0 3px 12px rgba(0, 0, 0, 0.04);
+            overflow-x: auto;
+        }
+
+        .table {
+            width: 100%;
+            border-collapse: collapse;
+            min-width: 700px;
+        }
+
+        .table th {
+            padding: 13px 12px;
+            text-align: left;
+            color: #64748b;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: .4px;
+            border-bottom: 2px solid #e2e8f0;
+        }
+
+        .table td {
+            padding: 15px 12px;
+            color: #334155;
+            font-size: 14px;
+            border-bottom: 1px solid #eef2f7;
+        }
+
+        .table tr:last-child td {
+            border-bottom: none;
+        }
+
+        .player-name {
+            font-weight: 700;
+            color: #1f2937;
+        }
+
+        .amount {
+            font-weight: 800;
+            color: #123b2a;
+        }
+
+        .status {
+            display: inline-block;
+            padding: 6px 10px;
+            border-radius: 999px;
+            font-size: 11px;
+            font-weight: 800;
+        }
+
+        .status-paid {
+            background: #dcfce7;
+            color: #166534;
+        }
+
+        .status-unpaid {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
+        .status-partial {
+            background: #dbeafe;
+            color: #1d4ed8;
+        }
+
+        .empty-state {
+            padding: 40px 20px;
+            text-align: center;
+            color: #64748b;
+        }
+
+        .empty-state strong {
+            display: block;
+            color: #334155;
+            margin-bottom: 7px;
+            font-size: 16px;
+        }
+
+        .actions {
+            margin-top: 22px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .button {
+            display: inline-block;
+            padding: 11px 16px;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: 700;
+            font-size: 13px;
+        }
+
+        .button-primary {
+            background: #166534;
+            color: white;
+        }
+
+        .button-primary:hover {
+            background: #14532d;
+        }
+
+        .button-secondary {
+            background: #e2e8f0;
+            color: #334155;
+        }
+
+        .button-secondary:hover {
+            background: #cbd5e1;
+        }
+
+        .logout {
+            margin-top: 30px;
+        }
+
+        .logout a {
+            display: inline-block;
+            background: #b91c1c;
+            color: white;
+            padding: 11px 16px;
+            border-radius: 8px;
+            font-weight: 700;
+            text-decoration: none;
+            font-size: 13px;
+        }
+
+        .logout a:hover {
+            background: #991b1b;
+        }
+
+        @media (max-width: 1050px) {
+            .metrics {
+                grid-template-columns: 1fr 1fr;
+            }
+        }
+
+        @media (max-width: 650px) {
+            .layout {
+                display: block;
+            }
+
+            .sidebar {
+                width: 100%;
+                padding: 14px;
+            }
+
+            .sidebar-title {
+                margin-bottom: 10px;
+            }
+
+            .nav-link {
+                display: inline-block;
+                margin-right: 4px;
+            }
+
+            .main {
+                padding: 20px 15px;
+            }
+
+            .metrics {
+                grid-template-columns: 1fr;
+            }
+
+            .topbar {
+                padding: 16px 18px;
+            }
+
+            .page-heading h1 {
+                font-size: 25px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="topbar">
+    <div class="brand">Sansfrontieres</div>
+
+    <a href="{% url 'notifications:list' %}" class="notifications-link">
+        &#128276; Notifications
+        {% if unread_notification_count %}
+            <span class="badge bg-danger ms-1">
+                {{ unread_notification_count }}
+            </span>
+        {% endif %}
+    </a>
+</div>
+
+{% if request.user.role == "MODERATOR" %}
+
+<div class="layout">
+
+    <aside class="sidebar">
+        <div class="sidebar-title">Moderator Portal</div>
+
+        <a href="{% url 'dashboard:home' %}" class="nav-link">
+            Dashboard
+        </a>
+
+        <a href="{% url 'coverage:moderator_coverage' %}" class="nav-link">
+            My Coverage
+        </a>
+
+        <a href="{% url 'dashboard:coverage_history' %}" class="nav-link">
+            Coverage History
+        </a>
+
+        <a href="{% url 'payments:history' %}" class="nav-link active">
+            Payments
+        </a>
+
+        <a href="{% url 'notifications:list' %}" class="nav-link">
+            Notifications
+            {% if unread_notification_count %}
+                <span class="badge bg-danger ms-1">
+                    {{ unread_notification_count }}
+                </span>
+            {% endif %}
+        </a>
+
+        <div class="logout">
+            <a href="{% url 'accounts:logout' %}">
+                Log out
+            </a>
+        </div>
+    </aside>
+
+    <main class="main">
+        <div class="container">
+
+            <div class="page-heading">
+                <h1>Payment History</h1>
+                <p>
+                    Review your chats, earnings, payments and outstanding balance.
+                </p>
+            </div>
+
+            <div class="metrics">
+
+                <div class="metric-card">
+                    <div class="metric-label">Total Chats</div>
+                    <div class="metric-value">
+                        {{ total_chats }}
+                    </div>
+                </div>
+
+                <div class="metric-card">
+                    <div class="metric-label">Gross Earnings</div>
+                    <div class="metric-value">
+                        KES {{ gross_earnings|floatformat:2 }}
+                    </div>
+                </div>
+
+                <div class="metric-card">
+                    <div class="metric-label">Paid</div>
+                    <div class="metric-value">
+                        KES {{ amount_paid|floatformat:2 }}
+                    </div>
+                </div>
+
+                <div class="metric-card">
+                    <div class="metric-label">Outstanding</div>
+                    <div class="metric-value">
+                        KES {{ outstanding_amount|floatformat:2 }}
+                    </div>
+                </div>
+
+            </div>
+            <h2 class="section-title">Chat Ledger</h2>
+
+            <div class="panel">
+
+                {% if payment_records %}
+
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Player</th>
+                                <th>Chats</th>
+                                <th>Payroll Processed</th>
+                                <th>Unprocessed</th>
+                            </tr>
+                        </thead>
+
+                        <tbody>
+
+                            {% for payment in payment_records %}
+
+                                <tr>
+                                    <td>
+                                        {{ payment.coverage_session.operating_date|date:"d M Y" }}
+                                    </td>
+
+                                    <td>
+                                        <span class="player-name">
+                                            Player {{ payment.coverage_session.player.player_number }}
+                                        </span>
+                                        <br>
+                                        {{ payment.coverage_session.player.name }}
+                                    </td>
+
+                                    <td>
+                                        {{ payment.chats_responded }}
+                                    </td>
+
+                                    <td>
+                                        {{ payment.payroll_processed_chats }}
+                                    </td>
+
+                                    <td>
+                                        {{ payment.unprocessed_chats }}
+                                    </td>
+                                </tr>
+
+                            {% endfor %}
+
+                        </tbody>
+                    </table>
+
+                {% else %}
+
+                    <div class="empty-state">
+                        <strong>No chat ledger records yet</strong>
+                        Your completed coverage sessions will appear here after you submit your End-of-Session Report.
+                    </div>
+
+                {% endif %}
+
+            </div>
+
+            <h2 class="section-title">Payroll Payments</h2>
+
+            <div class="panel">
+
+                {% if payroll_payments %}
+
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Payroll Week</th>
+                                <th>Payable Chats</th>
+                                <th>Chat Earnings</th>
+                                <th>Bonus</th>
+                                <th>Earned</th>
+                                <th>Paid</th>
+                                <th>Outstanding</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+
+                        <tbody>
+
+                            {% for payment in payroll_payments %}
+
+                                <tr>
+                                    <td>
+                                        {{ payment.payment_week_start|date:"d M Y" }}
+                                        -
+                                        {{ payment.payment_week_end|date:"d M Y" }}
+                                    </td>
+
+                                    <td>
+                                        {{ payment.payable_chats }}
+                                    </td>
+
+                                    <td>
+                                        KES {{ payment.chat_earnings|floatformat:2 }}
+                                    </td>
+
+                                    <td>
+                                        KES {{ payment.bonus_earned|floatformat:2 }}
+                                    </td>
+
+                                    <td>
+                                        <span class="amount">
+                                            KES {{ payment.earned_amount|floatformat:2 }}
+                                        </span>
+                                    </td>
+
+                                    <td>
+                                        KES {{ payment.amount_paid|floatformat:2 }}
+                                    </td>
+
+                                    <td>
+                                        KES {{ payment.outstanding_amount|floatformat:2 }}
+                                    </td>
+
+                                    <td>
+                                        {% if payment.status == "PAID" %}
+                                            <span class="status status-paid">
+                                                Paid
+                                            </span>
+                                        {% elif payment.status == "PARTIALLY_PAID" %}
+                                            <span class="status status-partial">
+                                                Partially Paid
+                                            </span>
+                                        {% else %}
+                                            <span class="status status-unpaid">
+                                                Unpaid
+                                            </span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+
+                            {% endfor %}
+
+                        </tbody>
+                    </table>
+
+                {% else %}
+
+                    <div class="empty-state">
+                        <strong>No payroll payments yet</strong>
+                        Payroll earnings and payments will appear here after a qualifying payroll run.
+                    </div>
+
+                {% endif %}
+
+            </div>
+
+                <div class="actions">
+                    <a href="{% url 'dashboard:home' %}" class="button button-primary">
+                        Back to Dashboard
+                    </a>
+
+                    <a href="{% url 'dashboard:coverage_history' %}" class="button button-secondary">
+                        Coverage History
+                    </a>
+                </div>
+
+            </div>
+
+        </div>
+    </main>
+
+</div>
+
+{% else %}
+
+<div class="main">
+    <div class="container">
+        <div class="empty-state">
+            <strong>Payment History is available to Moderators only.</strong>
+            Please return to your dashboard.
+        </div>
+    </div>
+</div>
+
+{% endif %}
+
+</body>
+</html>
+
+<script src="{% static 'js/notification_alerts.js' %}"></script>
+
+

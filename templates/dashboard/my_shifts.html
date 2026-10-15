@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -211,7 +211,70 @@
                 flex-direction: column;
             }
         }
-    </style>
+    
+        .toast-container {
+            position: fixed;
+            top: 24px;
+            right: 24px;
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            max-width: 420px;
+        }
+
+        .toast {
+            padding: 14px 18px;
+            border-radius: 8px;
+            background: #ffffff;
+            border: 1px solid #d1d5db;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+            color: #1f2937;
+            font-size: 14px;
+            line-height: 1.5;
+            animation: toastIn 0.25s ease-out, toastOut 0.4s ease-in 2.6s forwards;
+        }
+
+        .toast-success {
+            border-left: 5px solid #16a34a;
+        }
+
+        .toast-error {
+            border-left: 5px solid #dc2626;
+        }
+
+        .toast-warning {
+            border-left: 5px solid #d97706;
+        }
+
+        .toast-info {
+            border-left: 5px solid #2563eb;
+        }
+
+        @keyframes toastIn {
+            from {
+                opacity: 0;
+                transform: translateX(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        @keyframes toastOut {
+            from {
+                opacity: 1;
+                transform: translateX(0);
+            }
+            to {
+                opacity: 0;
+                transform: translateX(20px);
+                visibility: hidden;
+            }
+        }
+
+</style>
 </head>
 
 <body>
@@ -239,23 +302,32 @@
     </div>
 
     {% if message %}
-        <div class="notice">
+        <div class="toast toast-info">
             {{ message }}
+        </div>
+    {% endif %}
+
+    {% if messages %}
+        <div class="toast-container">
+            {% for message in messages %}
+                <div class="toast toast-{{ message.tags|default:'info' }}">
+                    {{ message }}
+                </div>
+            {% endfor %}
         </div>
     {% endif %}
 
     <div class="card">
 
-        {% if shifts %}
+        {% if coverage_sessions %}
 
             <table>
                 <thead>
                     <tr>
                         <th>Date</th>
                         <th>Player</th>
-                        <th>Shift</th>
-                        <th>Scheduled Time</th>
-                        <th>Role</th>
+                        <th>Session</th>
+                        <th>Scheduled Closure</th>
                         <th>Status</th>
                         <th>Actions</th>
                     </tr>
@@ -263,125 +335,143 @@
 
                 <tbody>
 
-                    {% for shift in shifts %}
+                    {% for session in coverage_sessions %}
 
                         <tr>
 
                             <td>
-                                {{ shift.date|date:"d M Y" }}
+                                {{ session.operating_date|date:"d M Y" }}
                             </td>
 
                             <td>
                                 <div class="player">
-                                    Player {{ shift.player.player_number }}
+                                    Player {{ session.player.player_number }}
                                 </div>
-                                {{ shift.player.name }}
+                                {{ session.player.name }}
                             </td>
 
                             <td>
-                                {{ shift.get_shift_type_display }}
+                                {{ session.get_session_type_display }}
                             </td>
 
                             <td>
-                                {{ shift.scheduled_start|time:"H:i" }}
-                                -
-                                {{ shift.scheduled_end|time:"H:i" }}
-                            </td>
-
-                            <td>
-                                {% if shift.actual_worker == request.user %}
-                                    Worked
-                                {% elif shift.substitute == request.user %}
-                                    Replacement Moderator
+                                {% if session.scheduled_close_at %}
+                                    {{ session.scheduled_close_at|date:"d M Y, H:i" }}
                                 {% else %}
-                                    Primary Moderator
+                                    -
                                 {% endif %}
                             </td>
 
                             <td>
-                                {% if shift.status == "SCHEDULED" %}
-                                    <span class="status scheduled">
-                                        Scheduled
-                                    </span>
-                                {% elif shift.status == "IN_PROGRESS" %}
-                                    <span class="status in-progress">
-                                        In Progress
-                                    </span>
-                                {% elif shift.status == "AWAITING_REPORT" %}
-                                    <span class="status awaiting-report">
-                                        Awaiting Report
-                                    </span>
-                                {% elif shift.status == "REPORT_OVERDUE" %}
-                                    <span class="status report-overdue">
-                                        Report Overdue
-                                    </span>
-                                {% elif shift.status == "COMPLETED" %}
-                                    <span class="status completed">
-                                        Completed
-                                    </span>
-                                {% elif shift.status == "MISSED" %}
-                                    <span class="status missed">
-                                        Missed
-                                    </span>
-                                {% elif shift.status == "CANCELLED" %}
-                                    <span class="status cancelled">
-                                        Cancelled
-                                    </span>
+                                {% if session.status == "OPEN" %}
+                                    <span class="status scheduled">Awaiting Sign In</span>
+                                {% elif session.status == "ACTIVE" %}
+                                    <span class="status in-progress">Active</span>
+                                {% elif session.status == "REPLACEMENT_REQUESTED" %}
+                                    <span class="status awaiting-report">Replacement Requested</span>
+                                {% elif session.status == "HANDOVER" %}
+                                    <span class="status awaiting-report">Handover</span>
+                                {% elif session.status == "COMPLETED" %}
+                                    <span class="status completed">Completed</span>
+                                {% elif session.status == "EXPIRED" %}
+                                    <span class="status missed">Missed</span>
+                                {% elif session.status == "MISSED" %}
+                                    <span class="status missed">Missed</span>
+                                {% elif session.status == "CANCELLED" %}
+                                    <span class="status cancelled">Cancelled</span>
                                 {% else %}
-                                    <span class="status">
-                                        {{ shift.get_status_display }}
-                                    </span>
+                                    <span class="status">{{ session.get_status_display }}</span>
                                 {% endif %}
                             </td>
 
                             <td>
-
                                 <div class="actions">
 
-                                    {% if shift.status == "SCHEDULED" and not shift.actual_sign_in %}
-                                        <a
-                                            href="{% url 'shifts:shift_sign_in' shift.id %}"
-                                            class="button button-green"
-                                        >
-                                            Sign In
-                                        </a>
+                                    {% if session.status == "OPEN" %}
+                                        <form method="post">
+                                            {% csrf_token %}
+                                            <input type="hidden" name="action" value="sign_in">
+                                            <input type="hidden" name="session_id" value="{{ session.id }}">
+                                            <button type="submit" class="button button-green">
+                                                Sign In
+                                            </button>
+                                        </form>
                                     {% endif %}
 
-                                    {% if shift.actual_worker == request.user and shift.status == "IN_PROGRESS" and not shift.actual_sign_out %}
-                                        <a
-                                            href="{% url 'shifts:shift_sign_out' shift.id %}"
-                                            class="button button-orange"
-                                        >
-                                            Sign Out
-                                        </a>
+                                    {% if session.status == "ACTIVE" %}
+                                        <form method="post">
+                                            {% csrf_token %}
+                                            <input type="hidden" name="action" value="request_replacement">
+                                            <button type="submit" class="button button-blue">
+                                                Request Replacement
+                                            </button>
+                                        </form>
                                     {% endif %}
 
-                                    {% if shift.actual_worker == request.user and shift.status == "AWAITING_REPORT" and not shift.report %}
+
+                                    {% if session.status == "CONTINUATION_PENDING" %}
+                                        <form method="post">
+                                            {% csrf_token %}
+                                            <input type="hidden" name="action" value="respond_continuation">
+                                            <input type="hidden" name="session_id" value="{{ session.id }}">
+                                            <div style="margin-bottom: 8px;">
+                                                Continuation required. Respond by {{ session.continuation_deadline_at|date:"H:i" }}.
+                                            </div>
+                                            <button type="submit" name="response" value="YES" class="button button-green">
+                                                YES - Continue
+                                            </button>
+                                            <button type="submit" name="response" value="NO" class="button button-blue">
+                                                NO - End Session
+                                            </button>
+                                        </form>
+                                    {% endif %}
+
+                                    {% if session.status == "REPLACEMENT_REQUESTED" %}
+                                        <span class="button button-disabled">
+                                            Waiting for Manager
+                                        </span>
+                                    {% endif %}
+
+                                    {% if session.status == "HANDOVER" %}
+                                        <span class="button button-disabled">
+                                            Handover in Progress
+                                        </span>
+                                    {% endif %}
+
+                                    {% if session.status == "AWAITING_REPORT" %}
                                         <a
-                                            href="{% url 'reports:shift_report_submit' shift.id %}"
+                                            href="{% url "coverage:end_of_session_report" session.id %}"
                                             class="button button-blue"
                                         >
                                             Submit Report
                                         </a>
                                     {% endif %}
 
-                                    {% if shift.actual_worker == request.user and shift.status == "REPORT_OVERDUE" and not shift.report %}
-                                        <a
-                                            href="{% url 'reports:shift_report_submit' shift.id %}"
-                                            class="button button-blue"
-                                        >
-                                            Submit Overdue Report
-                                        </a>
+                                    {% if session.status == "COMPLETED" %}
+                                        <span class="button button-disabled">
+                                            Completed
+                                        </span>
                                     {% endif %}
 
-                                    {% if shift.status == "COMPLETED" %}
+                                    {% if session.status == "EXPIRED" %}
                                         <span class="button button-disabled">
-                                            Report Submitted
+                                            Missed
+                                        </span>
+                                    {% endif %}
+
+                                    {% if session.status == "MISSED" %}
+                                        <span class="button button-disabled">
+                                            Missed
+                                        </span>
+                                    {% endif %}
+
+                                    {% if session.status == "CANCELLED" %}
+                                        <span class="button button-disabled">
+                                            Cancelled
                                         </span>
                                     {% endif %}
 
                                 </div>
-
                             </td>
 
                         </tr>
@@ -395,7 +485,7 @@
 
             <div class="empty">
                 <h3>No shifts assigned</h3>
-                <p>You currently have no assigned shifts.</p>
+                <p>You currently have no assigned Player coverage sessions.</p>
             </div>
 
         {% endif %}

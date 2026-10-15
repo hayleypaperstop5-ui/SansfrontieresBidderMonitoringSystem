@@ -1,0 +1,2 @@
+from accounts.permissions import RATE_MANAGEMENT_ROLES
+from accounts.decorators import role_required

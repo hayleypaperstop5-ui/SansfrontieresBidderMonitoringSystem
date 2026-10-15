@@ -1,4 +1,5 @@
 from django import forms
+from django.contrib.auth.password_validation import validate_password
 
 from .models import StaffProfile, User
 
@@ -47,6 +48,92 @@ class StaffCreationForm(forms.Form):
 
         return username
 
+
+
+class StaffInvitationForm(forms.Form):
+
+    first_name = forms.CharField(
+        max_length=150,
+        required=True,
+    )
+
+    last_name = forms.CharField(
+        max_length=150,
+        required=True,
+    )
+
+    email = forms.EmailField(
+        required=True,
+    )
+
+    def clean_email(self):
+        email = self.cleaned_data["email"].strip().lower()
+
+        if User.objects.filter(email__iexact=email).exists():
+            raise forms.ValidationError(
+                "A user with this email address already exists."
+            )
+
+        return email
+class ModeratorSetupForm(forms.Form):
+
+    password = forms.CharField(
+        min_length=8,
+        widget=forms.PasswordInput,
+        required=True,
+    )
+
+    password_confirm = forms.CharField(
+        widget=forms.PasswordInput,
+        required=True,
+        label="Confirm password",
+    )
+
+    phone_number = forms.CharField(
+        max_length=30,
+        required=True,
+    )
+
+    whatsapp_number = forms.CharField(
+        max_length=30,
+        required=True,
+    )
+
+    mpesa_number = forms.CharField(
+        max_length=30,
+        required=True,
+        label="M-Pesa number",
+    )
+
+    def clean_password(self):
+        password = self.cleaned_data["password"]
+        validate_password(password)
+        return password
+
+    def clean_username(self):
+        username = self.cleaned_data["username"].strip()
+
+        if User.objects.filter(
+            username__iexact=username
+        ).exists():
+            raise forms.ValidationError(
+                "A user with this username already exists."
+            )
+
+        return username
+
+    def clean(self):
+        cleaned_data = super().clean()
+        password = cleaned_data.get("password")
+        password_confirm = cleaned_data.get("password_confirm")
+
+        if password and password_confirm and password != password_confirm:
+            self.add_error(
+                "password_confirm",
+                "The passwords do not match.",
+            )
+
+        return cleaned_data
 
 class StaffEditForm(forms.Form):
 
@@ -107,6 +194,78 @@ class StaffEditForm(forms.Form):
                 }
             )
 
+class StaffSelfProfileForm(forms.Form):
+
+    first_name = forms.CharField(
+        max_length=150,
+        required=True,
+    )
+
+    last_name = forms.CharField(
+        max_length=150,
+        required=True,
+    )
+
+    email = forms.EmailField(
+        required=True,
+    )
+
+    phone_number = forms.CharField(
+        max_length=30,
+        required=True,
+    )
+
+    whatsapp_number = forms.CharField(
+        max_length=30,
+        required=True,
+    )
+
+    mpesa_number = forms.CharField(
+        max_length=30,
+        required=True,
+        label="M-Pesa number",
+    )
+
+    def __init__(self, *args, user=None, staff_profile=None, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        self.user = user
+        self.staff_profile = staff_profile
+
+        if user and staff_profile and not self.is_bound:
+            self.initial.update(
+                {
+                    "first_name": user.first_name,
+                    "last_name": user.last_name,
+                    "email": user.email,
+                    "phone_number": staff_profile.phone_number,
+                    "whatsapp_number": staff_profile.whatsapp_number,
+                    "mpesa_number": staff_profile.mpesa_number,
+                }
+            )
+
+    def clean_email(self):
+        email = self.cleaned_data["email"].strip().lower()
+
+        queryset = User.objects.filter(
+            email__iexact=email,
+        )
+
+        username_queryset = User.objects.filter(
+            username__iexact=email,
+        )
+
+        if self.user:
+            queryset = queryset.exclude(pk=self.user.pk)
+            username_queryset = username_queryset.exclude(pk=self.user.pk)
+
+        if queryset.exists() or username_queryset.exists():
+            raise forms.ValidationError(
+                "This email address is already in use."
+            )
+
+        return email
+
 class StaffSuspensionForm(forms.Form):
 
     suspension_start = forms.DateTimeField(
@@ -151,4 +310,8 @@ class StaffSuspensionForm(forms.Form):
             )
 
         return cleaned_data
+
+
+
+
 

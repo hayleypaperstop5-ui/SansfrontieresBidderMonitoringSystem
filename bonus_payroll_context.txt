@@ -1,0 +1,1424 @@
+from django.conf import settings
+from django.core.exceptions import ValidationError
+from django.core.validators import MinValueValidator
+from django.db import models
+
+
+class ChatBonusTier(models.Model):
+    """
+    Director-controlled rule defining when a Moderator qualifies
+    for a chat-volume bonus.
+    """
+
+    minimum_chats = models.PositiveIntegerField(
+        validators=[MinValueValidator(0)],
+    )
+
+    maximum_chats = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(0)],
+    )
+
+    bonus_amount = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        validators=[MinValueValidator(0)],
+        help_text="Bonus amount in KES.",
+    )
+
+    qualifying_window_hours = models.PositiveIntegerField(
+        default=24,
+        validators=[MinValueValidator(1)],
+        help_text="Number of hours within which the Moderator must reach the chat threshold.",
+    )
+
+    active = models.BooleanField(default=True)
+
+    effective_from = models.DateField(
+        null=True,
+        blank=True,
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = [
+            "minimum_chats",
+            "id",
+        ]
+        indexes = [
+            models.Index(
+                fields=["active", "minimum_chats"],
+                name="bonus_tier_active_min_idx",
+            ),
+            models.Index(
+                fields=["effective_from"],
+                name="bonus_tier_effective_idx",
+            ),
+        ]
+
+    def clean(self):
+        super().clean()
+
+        if (
+            self.maximum_chats is not None
+            and self.maximum_chats < self.minimum_chats
+        ):
+            raise ValidationError(
+                {
+                    "maximum_chats": (
+                        "Maximum chats must be greater than or equal "
+                        "to minimum chats."
+                    )
+                }
+            )
+
+        overlapping = ChatBonusTier.objects.filter(
+            active=True,
+            qualifying_window_hours=self.qualifying_window_hours,
+        ).exclude(pk=self.pk)
+
+        for tier in overlapping:
+            # Different effective dates represent different versions
+            # of the bonus rule and are therefore allowed.
+            if tier.effective_from != self.effective_from:
+                continue
+
+            self_max = (
+                self.maximum_chats
+                if self.maximum_chats is not None
+                else 10**18
+            )
+
+            tier_max = (
+                tier.maximum_chats
+                if tier.maximum_chats is not None
+                else 10**18
+            )
+
+            if (
+                tier.minimum_chats <= self_max
+                and tier_max >= self.minimum_chats
+            ):
+                raise ValidationError(
+                    "This chat range overlaps with another active bonus tier "
+                    "using the same qualifying window and effective date."
+                )
+
+    def __str__(self):
+        if self.maximum_chats is None:
+            chat_range = f"{self.minimum_chats}+ chats"
+        else:
+            chat_range = (
+                f"{self.minimum_chats}-{self.maximum_chats} chats"
+            )
+
+        return (
+            f"{chat_range} | "
+            f"{self.bonus_amount} KES | "
+            f"{self.qualifying_window_hours}h"
+        )
+
+
+class BonusAward(models.Model):
+    """
+    Permanent historical record of a bonus actually awarded to a Moderator.
+
+    The tier values are copied onto this record so future changes to
+    ChatBonusTier do not alter historical payments.
+    """
+
+    moderator = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="bonus_awards",
+        limit_choices_to={"role": "MODERATOR"},
+    )
+
+    qualifying_report = models.OneToOneField(
+        "coverage.EndOfSessionReport",
+        on_delete=models.PROTECT,
+        related_name="bonus_award",
+    )
+
+    bonus_tier = models.ForeignKey(
+        ChatBonusTier,
+        on_delete=models.PROTECT,
+        related_name="awards",
+    )
+
+    bonus_date = models.DateField(
+        help_text="Business date on which the bonus was awarded.",
+    )
+
+    qualifying_window_start = models.DateTimeField()
+
+    qualifying_window_end = models.DateTimeField()
+
+    chats_counted = models.PositiveIntegerField(
+        validators=[MinValueValidator(0)],
+    )
+
+    minimum_chats_snapshot = models.PositiveIntegerField()
+
+    maximum_chats_snapshot = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+    )
+
+    qualifying_window_hours_snapshot = models.PositiveIntegerField()
+
+    bonus_amount = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        validators=[MinValueValidator(0)],
+        help_text="Actual bonus amount awarded in KES.",
+    )
+
+    awarded_at = models.DateTimeField(
+        auto_now_add=True,
+    )
+
+    notes = models.TextField(
+        blank=True,
+    )
+
+    class Meta:
+        ordering = [
+            "-bonus_date",
+            "-awarded_at",
+        ]
+        indexes = [
+            models.Index(
+                fields=["moderator", "bonus_date"],
+                name="bonus_award_mod_date_idx",
+            ),
+            models.Index(
+                fields=["bonus_date"],
+                name="bonus_award_date_idx",
+            ),
+        ]
+
+    def clean(self):
+        super().clean()
+
+        if self.qualifying_window_start > self.qualifying_window_end:
+            raise ValidationError(
+                {
+                    "qualifying_window_end": (
+                        "The qualifying window end cannot be earlier "
+                        "than the window start."
+                    )
+                }
+            )
+
+        if self.chats_counted < self.minimum_chats_snapshot:
+            raise ValidationError(
+                {
+                    "chats_counted": (
+                        "Chats counted cannot be below the minimum "
+                        "chat threshold."
+                    )
+                }
+            )
+
+    def __str__(self):
+        return (
+            f"{self.moderator} | "
+            f"{self.bonus_date} | "
+            f"{self.bonus_amount} KES"
+        )
+
+from datetime import date
+from decimal import Decimal
+
+from django.core.exceptions import ValidationError
+from django.db import models, transaction
+
+from players.models import ChatRateTier
+
+from .models import PaymentRecord, PaymentSettings
+
+
+def get_applicable_rate_tier(chats_responded, operating_date):
+    """
+    Return the global ChatRateTier applicable to the supplied
+    chat count and operating date.
+    """
+
+    if chats_responded < 0:
+        raise ValidationError("Chats responded cannot be negative.")
+
+    if not isinstance(operating_date, date):
+        raise ValidationError("A valid operating date is required.")
+
+    tiers = (
+        ChatRateTier.objects
+        .filter(
+            active=True,
+            minimum_chats__lte=chats_responded,
+        )
+        .filter(
+            models.Q(maximum_chats__isnull=True)
+            | models.Q(maximum_chats__gte=chats_responded)
+        )
+        .filter(
+            models.Q(effective_from__isnull=True)
+            | models.Q(effective_from__lte=operating_date)
+        )
+        .order_by(
+            "-effective_from",
+            "-minimum_chats",
+            "-id",
+        )
+    )
+
+    tier = tiers.first()
+
+    if tier is None:
+        raise ValidationError(
+            "No active chat rate tier applies to this coverage session."
+        )
+
+    return tier
+
+
+def calculate_gross_amount(chats_responded, rate_per_chat):
+    """
+    Calculate gross earnings using the flat applicable rate.
+    """
+
+    if chats_responded < 0:
+        raise ValidationError("Chats responded cannot be negative.")
+
+    rate = Decimal(rate_per_chat)
+
+    if rate < 0:
+        raise ValidationError("Rate per chat cannot be negative.")
+
+    return (
+        Decimal(chats_responded) * rate
+    ).quantize(Decimal("0.01"))
+
+
+def create_payment_record(coverage_session, chats_responded):
+    """
+    Create the payment record for a completed coverage session.
+
+    The applicable rate is stored as a snapshot so historical
+    earnings remain unchanged if the Director later changes rates.
+    """
+
+    if coverage_session.moderator.role != "MODERATOR":
+        raise ValidationError(
+            "Only Moderator coverage sessions can generate payments."
+        )
+
+    if chats_responded < 0:
+        raise ValidationError("Chats responded cannot be negative.")
+
+    if hasattr(coverage_session, "payment_record"):
+        raise ValidationError(
+            "A payment record already exists for this coverage session."
+        )
+
+    rate_tier = get_applicable_rate_tier(
+        chats_responded=chats_responded,
+        operating_date=coverage_session.operating_date,
+    )
+
+    gross_amount = calculate_gross_amount(
+        chats_responded=chats_responded,
+        rate_per_chat=rate_tier.rate_per_chat,
+    )
+
+    return PaymentRecord.objects.create(
+        moderator=coverage_session.moderator,
+        coverage_session=coverage_session,
+        chats_responded=chats_responded,
+        rate_per_chat=rate_tier.rate_per_chat,
+        gross_amount=gross_amount,
+        status=PaymentRecord.Status.UNPAID,
+        amount_paid=Decimal("0.00"),
+    )
+
+from datetime import timedelta
+from django.db.models import Sum
+
+from bonuses.models import BonusAward
+from coverage.models import EndOfSessionReport
+
+from .models import ModeratorPayment, ManagerPayment
+
+
+def get_player_payment_threshold(operating_date):
+    """
+    Return the Player chat qualification threshold configured by the
+    Director through PaymentSettings.
+    """
+
+    if not isinstance(operating_date, date):
+        raise ValidationError("A valid operating date is required.")
+
+    settings = (
+        PaymentSettings.objects
+        .order_by("-id")
+        .first()
+    )
+
+    if settings is None:
+        return 700
+
+    return settings.minimum_chats_per_player
+
+
+def get_payment_week_dates(payment_date):
+    """
+    Return Monday-Sunday dates for the payment week containing payment_date.
+    """
+
+    week_start = payment_date - timedelta(days=payment_date.weekday())
+    week_end = week_start + timedelta(days=6)
+
+    return week_start, week_end
+
+
+def get_qualifying_player_chats(
+    week_start,
+    week_end,
+    threshold=None,
+):
+    """
+    Determine which Players have reached the payment threshold using
+    accumulated unpaid chats across all Moderators.
+
+    Only chats that have not already been consumed by payroll processing
+    are considered. This allows chats below the threshold to carry forward
+    until the Player reaches the configured threshold.
+
+    The week dates are retained for API compatibility with the existing
+    payroll functions. Historical unprocessed chats are intentionally
+    included so that carry-forward works across payment weeks.
+    """
+
+    if threshold is None:
+        threshold = get_player_payment_threshold(
+            operating_date=week_end,
+        )
+
+    reports = (
+        PaymentRecord.objects
+        .select_related("coverage_session")
+        .values(
+            "coverage_session__player_id",
+        )
+        .annotate(
+            total_chats=Sum(
+                models.F("chats_responded")
+                - models.F("payroll_processed_chats")
+            )
+        )
+    )
+
+    return {
+        row["coverage_session__player_id"]: row["total_chats"]
+        for row in reports
+        if row["total_chats"] >= threshold
+    }
+
+
+def get_moderator_payable_chats(
+    moderator,
+    week_start,
+    week_end,
+    threshold=None,
+):
+    """
+    Return the Moderator's currently payable accumulated chats.
+
+    A Player qualifies when all Moderators combined have accumulated
+    at least the configured threshold of unprocessed chats.
+
+    Once the Player qualifies, this Moderator receives credit only for
+    the Moderator's own unprocessed chats for that Player.
+    """
+
+    qualifying_players = get_qualifying_player_chats(
+        week_start=week_start,
+        week_end=week_end,
+        threshold=threshold,
+    )
+
+    if not qualifying_players:
+        return 0
+
+    result = (
+        PaymentRecord.objects
+        .filter(
+            moderator=moderator,
+            coverage_session__player_id__in=qualifying_players.keys(),
+        )
+        .aggregate(
+            total=Sum(
+                models.F("chats_responded")
+                - models.F("payroll_processed_chats")
+            )
+        )
+    )
+
+    return result["total"] or 0
+
+
+def calculate_moderator_weekly_earnings(
+    moderator,
+    week_start,
+    week_end,
+    payment_method=ModeratorPayment.PaymentMethod.WEEKLY_PER_CHAT,
+    monthly_base_amount=Decimal("0.00"),
+):
+    """
+    Calculate Moderator earnings without creating a payment record.
+
+    Weekly/per-chat:
+        payable accumulated chats x applicable current chat-rate tier
+        + bonuses.
+
+    Monthly:
+        monthly amount / 4 + weekly bonuses.
+
+    Player qualification is based on the combined unprocessed chats
+    received by each Player across all Moderators.
+    """
+
+    payable_chats = get_moderator_payable_chats(
+        moderator=moderator,
+        week_start=week_start,
+        week_end=week_end,
+    )
+
+    bonus_total = (
+        BonusAward.objects
+        .filter(
+            moderator=moderator,
+            bonus_date__gte=week_start,
+            bonus_date__lte=week_end,
+        )
+        .aggregate(total=Sum("bonus_amount"))
+        ["total"]
+        or Decimal("0.00")
+    )
+
+    chat_earnings = Decimal("0.00")
+    rate_per_chat = Decimal("0.00")
+
+    if payment_method == ModeratorPayment.PaymentMethod.WEEKLY_PER_CHAT:
+        if payable_chats > 0:
+            rate_tier = get_applicable_rate_tier(
+                chats_responded=payable_chats,
+                operating_date=week_end,
+            )
+
+            rate_per_chat = rate_tier.rate_per_chat
+
+            chat_earnings = calculate_gross_amount(
+                chats_responded=payable_chats,
+                rate_per_chat=rate_per_chat,
+            )
+
+        earned_amount = chat_earnings + bonus_total
+
+    else:
+        weekly_base = (
+            Decimal(monthly_base_amount) / Decimal("4")
+        ).quantize(Decimal("0.01"))
+
+        earned_amount = weekly_base + bonus_total
+
+    return {
+        "payable_chats": payable_chats,
+        "rate_per_chat": rate_per_chat,
+        "chat_earnings": chat_earnings,
+        "bonus_earned": bonus_total,
+        "monthly_base_amount": Decimal(monthly_base_amount),
+        "earned_amount": earned_amount,
+    }
+
+
+def process_qualifying_player_chats(
+    week_start,
+    week_end,
+    threshold=None,
+):
+    """
+    Atomically consume all currently unprocessed chats for Players
+    who have reached the configured payment threshold.
+
+    Chats are accumulated across all Moderators working on the same
+    Player. Once a Player reaches the threshold, ALL of that Player's
+    unprocessed chats become payable.
+
+    Each Moderator receives credit only for that Moderator's own
+    unprocessed chats for the qualifying Player.
+
+    Players below the threshold are left completely untouched so their
+    chats carry forward to a later payroll run.
+
+    Returns a dictionary containing the processed Player totals and
+    Moderator-level payable chat totals.
+    """
+
+    if threshold is None:
+        threshold = get_player_payment_threshold(
+            operating_date=week_end,
+        )
+
+    with transaction.atomic():
+        records = list(
+            PaymentRecord.objects
+            .select_for_update()
+            .select_related(
+                "coverage_session",
+                "moderator",
+            )
+            .filter(
+                coverage_session__operating_date__lte=week_end,
+                chats_responded__gt=models.F("payroll_processed_chats"),
+            )
+            .order_by(
+                "coverage_session__player_id",
+                "id",
+            )
+        )
+
+        player_records = {}
+
+        for record in records:
+            player_id = record.coverage_session.player_id
+
+            player_records.setdefault(
+                player_id,
+                [],
+            ).append(record)
+
+        processed_players = {}
+        moderator_totals = {}
+
+        for player_id, player_payment_records in player_records.items():
+
+            player_unprocessed = sum(
+                (
+                    record.chats_responded
+                    - record.payroll_processed_chats
+                    for record in player_payment_records
+                ),
+                0,
+            )
+
+            if player_unprocessed < threshold:
+                continue
+
+            moderator_breakdown = {}
+
+            for record in player_payment_records:
+                unprocessed = (
+                    record.chats_responded
+                    - record.payroll_processed_chats
+                )
+
+                if unprocessed <= 0:
+                    continue
+
+                record.payroll_processed_chats = (
+                    record.chats_responded
+                )
+
+                record.save(
+                    update_fields=[
+                        "payroll_processed_chats",
+                        "updated_at",
+                    ]
+                )
+
+                moderator_id = record.moderator_id
+
+                moderator_breakdown[moderator_id] = (
+                    moderator_breakdown.get(moderator_id, 0)
+                    + unprocessed
+                )
+
+                moderator_totals[moderator_id] = (
+                    moderator_totals.get(moderator_id, 0)
+                    + unprocessed
+                )
+
+            processed_players[player_id] = {
+                "total_chats": player_unprocessed,
+                "moderator_breakdown": moderator_breakdown,
+            }
+
+        return {
+            "threshold": threshold,
+            "processed_players": processed_players,
+            "moderator_totals": moderator_totals,
+        }
+
+def calculate_manager_weekly_earnings(
+    manager,
+    week_start,
+    week_end,
+    payment_method=ManagerPayment.PaymentMethod.COMMISSION,
+    commission_percentage=Decimal("10.00"),
+    monthly_base_amount=Decimal("0.00"),
+):
+    """
+    Calculate Manager weekly earnings without creating a payment record.
+
+    Commission:
+        total generated amount during the week x commission percentage.
+
+    Monthly:
+        monthly amount / 4.
+
+    Manager bonus configuration will be connected separately so that
+    Manager bonuses do not interfere with the existing Moderator bonus
+    calculation.
+    """
+    generated_result = (
+        PaymentRecord.objects
+        .filter(
+            coverage_session__operating_date__gte=week_start,
+            coverage_session__operating_date__lte=week_end,
+        )
+        .aggregate(total=Sum("gross_amount"))
+    )
+
+    generated_amount = (
+        generated_result["total"]
+        or Decimal("0.00")
+    )
+
+    commission_earned = Decimal("0.00")
+    monthly_base = Decimal("0.00")
+
+    if payment_method == ManagerPayment.PaymentMethod.COMMISSION:
+        commission_earned = (
+            generated_amount
+            * Decimal(commission_percentage)
+            / Decimal("100")
+        ).quantize(Decimal("0.01"))
+
+        earned_amount = commission_earned
+    else:
+        monthly_base = (
+            Decimal(monthly_base_amount) / Decimal("4")
+        ).quantize(Decimal("0.01"))
+
+        earned_amount = monthly_base
+
+    return {
+        "generated_amount": generated_amount,
+        "commission_percentage": Decimal(commission_percentage),
+        "commission_earned": commission_earned,
+        "monthly_base_amount": monthly_base_amount,
+        "bonus_earned": Decimal("0.00"),
+        "earned_amount": earned_amount,
+    }
+
+def process_thursday_payroll(payment_date):
+    """
+    Process the weekly Moderator payroll on Thursday.
+
+    Payment week is Monday-Sunday. A Player qualifies when accumulated
+    unprocessed chats across all Moderators reach the configured threshold.
+    Once qualified, all accumulated chats are payable and are allocated
+    back to the Moderators who contributed them.
+
+    The entire operation is atomic.
+    """
+
+    from accounts.models import User
+
+    if not isinstance(payment_date, date):
+        raise ValidationError("A valid payment date is required.")
+
+    if payment_date.weekday() != 3:
+        raise ValidationError(
+            "Moderator payroll can only be processed on Thursday."
+        )
+
+    week_start, week_end = get_payment_week_dates(payment_date)
+
+    settings = (
+        PaymentSettings.objects
+        .order_by("-id")
+        .first()
+    )
+
+    if settings is None:
+        payment_method = ModeratorPayment.PaymentMethod.WEEKLY_PER_CHAT
+        monthly_base_amount = Decimal("0.00")
+    else:
+        payment_method = settings.moderator_payment_method
+        monthly_base_amount = settings.moderator_monthly_amount
+
+    with transaction.atomic():
+
+        qualifying = process_qualifying_player_chats(
+            week_start=week_start,
+            week_end=week_end,
+        )
+
+        moderator_totals = qualifying["moderator_totals"]
+
+        created_payments = []
+
+        for moderator_id, payable_chats in moderator_totals.items():
+
+            if payable_chats <= 0:
+                continue
+
+            moderator = User.objects.get(
+                id=moderator_id,
+                role=User.Role.MODERATOR,
+            )
+
+            existing_payment = (
+                ModeratorPayment.objects
+                .select_for_update()
+                .filter(
+                    moderator=moderator,
+                    payment_week_start=week_start,
+                    payment_week_end=week_end,
+                )
+                .first()
+            )
+
+            if existing_payment is not None:
+                raise ValidationError(
+                    (
+                        "A Moderator payroll record already exists for "
+                        f"{moderator.username} for "
+                        f"{week_start} to {week_end}."
+                    )
+                )
+
+            bonus_total = (
+                BonusAward.objects
+                .filter(
+                    moderator=moderator,
+                    bonus_date__gte=week_start,
+                    bonus_date__lte=week_end,
+                )
+                .aggregate(total=Sum("bonus_amount"))
+                ["total"]
+                or Decimal("0.00")
+            )
+
+            rate_per_chat = Decimal("0.00")
+            chat_earnings = Decimal("0.00")
+
+            if (
+                payment_method
+                == ModeratorPayment.PaymentMethod.WEEKLY_PER_CHAT
+            ):
+                rate_tier = get_applicable_rate_tier(
+                    chats_responded=payable_chats,
+                    operating_date=payment_date,
+                )
+
+                rate_per_chat = rate_tier.rate_per_chat
+
+                chat_earnings = calculate_gross_amount(
+                    chats_responded=payable_chats,
+                    rate_per_chat=rate_per_chat,
+                )
+
+                earned_amount = (
+                    chat_earnings + bonus_total
+                )
+
+            else:
+                weekly_base = (
+                    Decimal(monthly_base_amount)
+                    / Decimal("4")
+                ).quantize(Decimal("0.01"))
+
+                earned_amount = (
+                    weekly_base + bonus_total
+                )
+
+            outstanding_amount = earned_amount
+
+            payment = ModeratorPayment.objects.create(
+                moderator=moderator,
+                payment_week_start=week_start,
+                payment_week_end=week_end,
+                payment_date=payment_date,
+                payment_method=payment_method,
+                payable_chats=payable_chats,
+                payroll_processed_chats=payable_chats,
+                rate_per_chat=rate_per_chat,
+                generated_amount=chat_earnings,
+                chat_earnings=chat_earnings,
+                bonus_earned=bonus_total,
+                monthly_base_amount=monthly_base_amount,
+                earned_amount=earned_amount,
+                carried_forward=Decimal("0.00"),
+                amount_paid=Decimal("0.00"),
+                outstanding_amount=outstanding_amount,
+                status=ModeratorPayment.Status.UNPAID,
+            )
+
+            created_payments.append(payment)
+
+        return {
+            "payment_date": payment_date,
+            "week_start": week_start,
+            "week_end": week_end,
+            "threshold": qualifying["threshold"],
+            "processed_players": qualifying["processed_players"],
+            "moderator_totals": moderator_totals,
+            "payments_created": len(created_payments),
+            "payment_ids": [
+                payment.id
+                for payment in created_payments
+            ],
+        }
+
+def process_thursday_payroll(payment_date):
+    """
+    Process the weekly Moderator payroll on Thursday.
+
+    Payment week is Monday-Sunday. A Player qualifies when accumulated
+    unprocessed chats across all Moderators reach the configured threshold.
+    Once qualified, all accumulated chats are payable and are allocated
+    back to the Moderators who contributed them.
+
+    The entire operation is atomic.
+    """
+
+    from accounts.models import User
+
+    if not isinstance(payment_date, date):
+        raise ValidationError("A valid payment date is required.")
+
+    if payment_date.weekday() != 3:
+        raise ValidationError(
+            "Moderator payroll can only be processed on Thursday."
+        )
+
+    week_start, week_end = get_payment_week_dates(payment_date)
+
+    settings = (
+        PaymentSettings.objects
+        .order_by("-id")
+        .first()
+    )
+
+    if settings is None:
+        payment_method = ModeratorPayment.PaymentMethod.WEEKLY_PER_CHAT
+        monthly_base_amount = Decimal("0.00")
+    else:
+        payment_method = settings.moderator_payment_method
+        monthly_base_amount = settings.moderator_monthly_amount
+
+    with transaction.atomic():
+
+        qualifying = process_qualifying_player_chats(
+            week_start=week_start,
+            week_end=week_end,
+        )
+
+        moderator_totals = qualifying["moderator_totals"]
+
+        created_payments = []
+
+        for moderator_id, payable_chats in moderator_totals.items():
+
+            if payable_chats <= 0:
+                continue
+
+            moderator = User.objects.get(
+                id=moderator_id,
+                role=User.Role.MODERATOR,
+            )
+
+            existing_payment = (
+                ModeratorPayment.objects
+                .select_for_update()
+                .filter(
+                    moderator=moderator,
+                    payment_week_start=week_start,
+                    payment_week_end=week_end,
+                )
+                .first()
+            )
+
+            if existing_payment is not None:
+                raise ValidationError(
+                    (
+                        "A Moderator payroll record already exists for "
+                        f"{moderator.username} for "
+                        f"{week_start} to {week_end}."
+                    )
+                )
+
+            bonus_total = (
+                BonusAward.objects
+                .filter(
+                    moderator=moderator,
+                    bonus_date__gte=week_start,
+                    bonus_date__lte=week_end,
+                )
+                .aggregate(total=Sum("bonus_amount"))
+                ["total"]
+                or Decimal("0.00")
+            )
+
+            rate_per_chat = Decimal("0.00")
+            chat_earnings = Decimal("0.00")
+
+            if (
+                payment_method
+                == ModeratorPayment.PaymentMethod.WEEKLY_PER_CHAT
+            ):
+                rate_tier = get_applicable_rate_tier(
+                    chats_responded=payable_chats,
+                    operating_date=payment_date,
+                )
+
+                rate_per_chat = rate_tier.rate_per_chat
+
+                chat_earnings = calculate_gross_amount(
+                    chats_responded=payable_chats,
+                    rate_per_chat=rate_per_chat,
+                )
+
+                earned_amount = (
+                    chat_earnings + bonus_total
+                )
+
+            else:
+                weekly_base = (
+                    Decimal(monthly_base_amount)
+                    / Decimal("4")
+                ).quantize(Decimal("0.01"))
+
+                earned_amount = (
+                    weekly_base + bonus_total
+                )
+
+            outstanding_amount = earned_amount
+
+            payment = ModeratorPayment.objects.create(
+                moderator=moderator,
+                payment_week_start=week_start,
+                payment_week_end=week_end,
+                payment_date=payment_date,
+                payment_method=payment_method,
+                payable_chats=payable_chats,
+                payroll_processed_chats=payable_chats,
+                rate_per_chat=rate_per_chat,
+                generated_amount=chat_earnings,
+                chat_earnings=chat_earnings,
+                bonus_earned=bonus_total,
+                monthly_base_amount=monthly_base_amount,
+                earned_amount=earned_amount,
+                carried_forward=Decimal("0.00"),
+                amount_paid=Decimal("0.00"),
+                outstanding_amount=outstanding_amount,
+                status=ModeratorPayment.Status.UNPAID,
+            )
+
+            created_payments.append(payment)
+
+        return {
+            "payment_date": payment_date,
+            "week_start": week_start,
+            "week_end": week_end,
+            "threshold": qualifying["threshold"],
+            "processed_players": qualifying["processed_players"],
+            "moderator_totals": moderator_totals,
+            "payments_created": len(created_payments),
+            "payment_ids": [
+                payment.id
+                for payment in created_payments
+            ],
+        }
+from django.conf import settings
+from django.core.exceptions import ValidationError
+from django.core.validators import MinValueValidator, MaxValueValidator
+from django.db import models
+from django.db.models import Q
+
+
+class CoverageSession(models.Model):
+    class SessionType(models.TextChoices):
+        DAY = "DAY", "Day"
+        NIGHT = "NIGHT", "Night"
+
+    class Status(models.TextChoices):
+        OPEN = "OPEN", "Open"
+        ACTIVE = "ACTIVE", "Active"
+        REPLACEMENT_REQUESTED = "REPLACEMENT_REQUESTED", "Replacement Requested"
+        HANDOVER = "HANDOVER", "Handover"
+        AWAITING_REPORT = "AWAITING_REPORT", "Awaiting Report"
+        EXPIRED = "EXPIRED", "Expired"
+        COMPLETED = "COMPLETED", "Completed"
+        MISSED = "MISSED", "Missed"
+        CANCELLED = "CANCELLED", "Cancelled"
+
+    class ClosureReason(models.TextChoices):
+        NORMAL = "NORMAL", "Normal Sign-out"
+        AUTOMATIC = "AUTOMATIC", "Automatic Session Closure"
+        REPLACED = "REPLACED", "Replaced by Another Moderator"
+        MANAGER_OVERRIDE = "MANAGER_OVERRIDE", "Manager Override"
+        CANCELLED = "CANCELLED", "Cancelled"
+
+    player = models.ForeignKey(
+        "players.Player",
+        on_delete=models.PROTECT,
+        related_name="coverage_sessions",
+    )
+
+    moderator = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="coverage_sessions",
+        limit_choices_to={"role": "MODERATOR"},
+    )
+
+    operating_date = models.DateField()
+
+    session_type = models.CharField(
+        max_length=10,
+        choices=SessionType.choices,
+    )
+
+    signed_in_at = models.DateTimeField(null=True, blank=True)
+    sign_in_deadline_at = models.DateTimeField(null=True, blank=True, help_text="Deadline by which the assigned Moderator must sign in.")
+
+    scheduled_close_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="System calculated boundary for automatic session closure.",
+    )
+
+    signed_out_at = models.DateTimeField(null=True, blank=True)
+
+    closure_reason = models.CharField(
+        max_length=30,
+        choices=ClosureReason.choices,
+        blank=True,
+    )
+
+    status = models.CharField(
+        max_length=30,
+        choices=Status.choices,
+        default=Status.OPEN,
+    )
+
+    replacement_requested_at = models.DateTimeField(
+        null=True,
+        blank=True,
+    )
+
+    replacement_moderator = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="replacement_coverage_sessions",
+        limit_choices_to={"role": "MODERATOR"},
+        null=True,
+        blank=True,
+    )
+
+    replacement_session = models.OneToOneField(
+        "self",
+        on_delete=models.PROTECT,
+        related_name="replaced_session",
+        null=True,
+        blank=True,
+    )
+
+    notes = models.TextField(blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-operating_date", "session_type", "-created_at"]
+        indexes = [
+            models.Index(
+                fields=["player", "operating_date", "session_type"],
+                name="coverage_player_date_type_idx",
+            ),
+            models.Index(
+                fields=["moderator", "operating_date", "session_type"],
+                name="coverage_mod_date_type_idx",
+            ),
+            models.Index(
+                fields=["status"],
+                name="coverage_status_idx",
+            ),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["player"],
+                condition=Q(
+                    status__in=[
+                        "OPEN",
+                        "ACTIVE",
+                        "REPLACEMENT_REQUESTED",
+                        "HANDOVER",
+                    ]
+                ),
+                name="unique_active_coverage_per_player",
+            ),
+            models.UniqueConstraint(
+                fields=["moderator"],
+                condition=Q(
+                    status__in=[
+                        "OPEN",
+                        "ACTIVE",
+                        "REPLACEMENT_REQUESTED",
+                        "HANDOVER",
+                    ]
+                ),
+                name="unique_active_player_per_moderator",
+            ),
+        ]
+
+    def clean(self):
+        super().clean()
+
+        if self.moderator_id:
+            moderator_role = getattr(self.moderator, "role", None)
+            if moderator_role != "MODERATOR":
+                raise ValidationError(
+                    {"moderator": "Coverage sessions can only be assigned to Moderators."}
+                )
+
+        if self.replacement_moderator_id:
+            replacement_role = getattr(self.replacement_moderator, "role", None)
+            if replacement_role != "MODERATOR":
+                raise ValidationError(
+                    {
+                        "replacement_moderator": (
+                            "Replacement coverage can only be assigned to a Moderator."
+                        )
+                    }
+                )
+
+        if self.signed_out_at and self.signed_in_at:
+            if self.signed_out_at < self.signed_in_at:
+                raise ValidationError(
+                    {"signed_out_at": "Sign-out time cannot be earlier than sign-in time."}
+                )
+
+        if self.replacement_moderator_id and self.replacement_moderator_id == self.moderator_id:
+            raise ValidationError(
+                {
+                    "replacement_moderator": (
+                        "A Moderator cannot replace their own coverage session."
+                    )
+                }
+            )
+
+    def __str__(self):
+        return (
+            f"{self.player} | {self.moderator} | "
+            f"{self.get_session_type_display()} | "
+            f"{self.operating_date}"
+        )
+
+
+class EndOfSessionReport(models.Model):
+    coverage_session = models.OneToOneField(
+        CoverageSession,
+        on_delete=models.PROTECT,
+        related_name="end_of_session_report",
+    )
+
+    moderator = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="end_of_session_reports",
+        limit_choices_to={"role": "MODERATOR"},
+    )
+
+    player = models.ForeignKey(
+        "players.Player",
+        on_delete=models.PROTECT,
+        related_name="end_of_session_reports",
+    )
+
+    chats_responded = models.PositiveIntegerField(
+        validators=[MinValueValidator(0)],
+    )
+
+    account_rating = models.DecimalField(
+        max_digits=4,
+        decimal_places=2,
+        validators=[
+            MinValueValidator(0),
+            MaxValueValidator(10),
+        ],
+    )
+
+    screenshot = models.ImageField(
+        upload_to="coverage_reports/%Y/%m/%d/",
+        blank=True,
+        null=True,
+    )
+
+    comments = models.TextField(blank=True)
+
+    submitted_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-submitted_at"]
+
+    def __str__(self):
+        return (
+            f"{self.player} | {self.moderator} | "
+            f"{self.coverage_session.get_session_type_display()} | "
+            f"{self.coverage_session.operating_date}"
+        )
+
+
+class CoverageAlert(models.Model):
+    class AlertType(models.TextChoices):
+        PLAYER_UNCOVERED = "PLAYER_UNCOVERED", "Player Uncovered"
+        COVERAGE_MISSED = "COVERAGE_MISSED", "Coverage Missed"
+        ESCALATION = "ESCALATION", "Escalation"
+
+    class Severity(models.TextChoices):
+        WARNING = "WARNING", "Warning"
+        CRITICAL = "CRITICAL", "Critical"
+
+    class Status(models.TextChoices):
+        OPEN = "OPEN", "Open"
+        ACKNOWLEDGED = "ACKNOWLEDGED", "Acknowledged"
+        RESOLVED = "RESOLVED", "Resolved"
+        ESCALATED = "ESCALATED", "Escalated"
+
+    player = models.ForeignKey(
+        "players.Player",
+        on_delete=models.PROTECT,
+        related_name="coverage_alerts",
+    )
+
+    alert_type = models.CharField(
+        max_length=30,
+        choices=AlertType.choices,
+        default=AlertType.PLAYER_UNCOVERED,
+    )
+
+    severity = models.CharField(
+        max_length=20,
+        choices=Severity.choices,
+        default=Severity.CRITICAL,
+    )
+
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.OPEN,
+    )
+
+    operating_date = models.DateField()
+
+    session_type = models.CharField(
+        max_length=10,
+        choices=CoverageSession.SessionType.choices,
+    )
+
+    started_at = models.DateTimeField()
+
+    last_reminder_at = models.DateTimeField(
+        null=True,
+        blank=True,
+    )
+
+    next_reminder_at = models.DateTimeField(
+        null=True,
+        blank=True,
+    )
+
+    reminder_count = models.PositiveIntegerField(
+        default=0,
+    )
+
+    acknowledged_at = models.DateTimeField(
+        null=True,
+        blank=True,
+    )
+
+    acknowledged_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="acknowledged_coverage_alerts",
+    )
+
+    resolved_at = models.DateTimeField(
+        null=True,
+        blank=True,
+    )
+
+    resolved_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="resolved_coverage_alerts",
+    )
+
+    escalated_at = models.DateTimeField(
+        null=True,
+        blank=True,
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+    )
+
+    updated_at = models.DateTimeField(
+        auto_now=True,
+    )
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(
+                fields=["player", "status"],
+                name="cov_alert_player_status_idx",
+            ),
+            models.Index(
+                fields=["status", "next_reminder_at"],
+                name="cov_alert_reminder_idx",
+            ),
+            models.Index(
+                fields=["operating_date", "session_type"],
+                name="cov_alert_operation_idx",
+            ),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["player", "operating_date", "session_type"],
+                condition=models.Q(
+                    status__in=["OPEN", "ACKNOWLEDGED", "ESCALATED"]
+                ),
+                name="unique_open_coverage_alert",
+            ),
+        ]
+
+    def __str__(self):
+        return (
+            f"{self.player} - {self.get_alert_type_display()} "
+            f"({self.get_status_display()})"
+        )

@@ -1,0 +1,593 @@
+from datetime import datetime, time, timedelta
+from decimal import Decimal
+
+from django.core.exceptions import ValidationError
+from django.test import TestCase
+from django.utils import timezone
+
+from accounts.models import StaffProfile, User
+from coverage.models import CoverageSession, EndOfSessionReport
+from coverage.services import start_coverage_session
+
+from .models import BonusAward, ChatBonusTier
+from .services import (
+    award_bonus_for_report,
+    calculate_chats_within_window,
+    get_applicable_bonus_tier,
+)
+
+
+class BonusServiceTests(TestCase):
+    def setUp(self):
+        self.moderator = User.objects.create_user(
+            username="bonus_moderator",
+            password="testpass123",
+            role=User.Role.MODERATOR,
+            first_name="Bonus",
+            last_name="Moderator",
+        )
+
+        StaffProfile.objects.create(
+            user=self.moderator,
+            status=StaffProfile.Status.ACTIVE,
+        )
+
+        self.player = self._create_player()
+
+        self.moment = timezone.now()
+        self.operating_date = self.moment.date()
+
+        self.tier_500 = ChatBonusTier.objects.create(
+            minimum_chats=500,
+            maximum_chats=699,
+            bonus_amount=Decimal("200.00"),
+            qualifying_window_hours=24,
+            active=True,
+            effective_from=self.operating_date,
+        )
+
+        self.tier_700 = ChatBonusTier.objects.create(
+            minimum_chats=700,
+            maximum_chats=999,
+            bonus_amount=Decimal("350.00"),
+            qualifying_window_hours=24,
+            active=True,
+            effective_from=self.operating_date,
+        )
+
+        self.tier_1000 = ChatBonusTier.objects.create(
+            minimum_chats=1000,
+            maximum_chats=None,
+            bonus_amount=Decimal("500.00"),
+            qualifying_window_hours=24,
+            active=True,
+            effective_from=self.operating_date,
+        )
+
+    def _create_player(self):
+        from players.models import Player
+
+        return Player.objects.create(
+            player_number=1,
+            name="Bonus Test Player",
+            status=Player.Status.ACTIVE,
+        )
+
+    def _create_report(
+        self,
+        chats,
+        submitted_at=None,
+        moderator=None,
+    ):
+        moderator = moderator or self.moderator
+
+        session = start_coverage_session(
+            moderator=moderator,
+            player=self.player,
+            moment=submitted_at or self.moment,
+        )
+
+        session.status = CoverageSession.Status.AWAITING_REPORT
+        session.signed_out_at = submitted_at or self.moment
+        session.save(
+            update_fields=[
+                "status",
+                "signed_out_at",
+                "updated_at",
+            ]
+        )
+
+        report = EndOfSessionReport.objects.create(
+            coverage_session=session,
+            moderator=moderator,
+            player=self.player,
+            chats_responded=chats,
+            account_rating=Decimal("8.50"),
+            comments="Bonus test report.",
+        )
+
+        if submitted_at is not None:
+            EndOfSessionReport.objects.filter(
+                pk=report.pk,
+            ).update(
+                submitted_at=submitted_at,
+            )
+            report.refresh_from_db()
+
+        return report
+
+    def test_below_minimum_chats_does_not_qualify(self):
+        report = self._create_report(
+            chats=499,
+            submitted_at=self.moment,
+        )
+
+        award = award_bonus_for_report(
+            report=report,
+            bonus_date=self.operating_date,
+        )
+
+        self.assertIsNone(award)
+        self.assertEqual(
+            BonusAward.objects.count(),
+            0,
+        )
+
+    def test_exactly_500_chats_qualifies_for_200_bonus(self):
+        report = self._create_report(
+            chats=500,
+            submitted_at=self.moment,
+        )
+
+        award = award_bonus_for_report(
+            report=report,
+            bonus_date=self.operating_date,
+        )
+
+        self.assertIsNotNone(award)
+        self.assertEqual(
+            award.moderator,
+            self.moderator,
+        )
+        self.assertEqual(
+            award.chats_counted,
+            500,
+        )
+        self.assertEqual(
+            award.bonus_amount,
+            Decimal("200.00"),
+        )
+        self.assertEqual(
+            award.bonus_date,
+            self.operating_date,
+        )
+        self.assertEqual(
+            award.minimum_chats_snapshot,
+            500,
+        )
+        self.assertEqual(
+            award.qualifying_window_hours_snapshot,
+            24,
+        )
+
+    def test_chats_across_multiple_reports_are_accumulated(self):
+        first_time = self.moment
+        second_time = self.moment + timedelta(hours=8)
+
+        self._create_report(
+            chats=300,
+            submitted_at=first_time,
+        )
+
+        second_report = self._create_report(
+            chats=250,
+            submitted_at=second_time,
+        )
+
+        total = calculate_chats_within_window(
+            moderator=self.moderator,
+            window_end=second_time,
+            window_hours=24,
+        )
+
+        self.assertEqual(total, 550)
+
+        award = award_bonus_for_report(
+            report=second_report,
+            bonus_date=self.operating_date,
+        )
+
+        self.assertIsNotNone(award)
+        self.assertEqual(
+            award.chats_counted,
+            550,
+        )
+        self.assertEqual(
+            award.bonus_amount,
+            Decimal("200.00"),
+        )
+
+    def test_reports_more_than_24_hours_apart_are_not_accumulated(self):
+        first_time = self.moment
+        second_time = self.moment + timedelta(hours=25)
+
+        self._create_report(
+            chats=300,
+            submitted_at=first_time,
+        )
+
+        second_report = self._create_report(
+            chats=250,
+            submitted_at=second_time,
+        )
+
+        total = calculate_chats_within_window(
+            moderator=self.moderator,
+            window_end=second_time,
+            window_hours=24,
+        )
+
+        self.assertEqual(total, 250)
+
+        award = award_bonus_for_report(
+            report=second_report,
+            bonus_date=self.operating_date,
+        )
+
+        self.assertIsNone(award)
+
+    def test_700_chats_uses_700_tier(self):
+        report = self._create_report(
+            chats=700,
+            submitted_at=self.moment,
+        )
+
+        award = award_bonus_for_report(
+            report=report,
+            bonus_date=self.operating_date,
+        )
+
+        self.assertIsNotNone(award)
+        self.assertEqual(
+            award.bonus_amount,
+            Decimal("350.00"),
+        )
+        self.assertEqual(
+            award.minimum_chats_snapshot,
+            700,
+        )
+
+    def test_1000_chats_uses_open_ended_tier(self):
+        report = self._create_report(
+            chats=1200,
+            submitted_at=self.moment,
+        )
+
+        award = award_bonus_for_report(
+            report=report,
+            bonus_date=self.operating_date,
+        )
+
+        self.assertIsNotNone(award)
+        self.assertEqual(
+            award.bonus_amount,
+            Decimal("500.00"),
+        )
+        self.assertEqual(
+            award.minimum_chats_snapshot,
+            1000,
+        )
+        self.assertIsNone(
+            award.maximum_chats_snapshot,
+        )
+
+    def test_bonus_amount_is_snapshotted(self):
+        report = self._create_report(
+            chats=500,
+            submitted_at=self.moment,
+        )
+
+        award = award_bonus_for_report(
+            report=report,
+            bonus_date=self.operating_date,
+        )
+
+        self.assertEqual(
+            award.bonus_amount,
+            Decimal("200.00"),
+        )
+
+        self.tier_500.bonus_amount = Decimal("999.00")
+        self.tier_500.save(
+            update_fields=[
+                "bonus_amount",
+                "updated_at",
+            ]
+        )
+
+        award.refresh_from_db()
+
+        self.assertEqual(
+            award.bonus_amount,
+            Decimal("200.00"),
+        )
+
+    def test_bonus_date_is_recorded(self):
+        report = self._create_report(
+            chats=500,
+            submitted_at=self.moment,
+        )
+
+        award = award_bonus_for_report(
+            report=report,
+            bonus_date=self.operating_date,
+        )
+
+        self.assertEqual(
+            award.bonus_date,
+            self.operating_date,
+        )
+
+    def test_awarded_at_is_recorded(self):
+        before = timezone.now()
+
+        report = self._create_report(
+            chats=500,
+            submitted_at=self.moment,
+        )
+
+        award = award_bonus_for_report(
+            report=report,
+            bonus_date=self.operating_date,
+        )
+
+        after = timezone.now()
+
+        self.assertIsNotNone(award.awarded_at)
+        self.assertGreaterEqual(
+            award.awarded_at,
+            before,
+        )
+        self.assertLessEqual(
+            award.awarded_at,
+            after,
+        )
+
+    def test_same_report_does_not_receive_duplicate_bonus(self):
+        report = self._create_report(
+            chats=500,
+            submitted_at=self.moment,
+        )
+
+        first_award = award_bonus_for_report(
+            report=report,
+            bonus_date=self.operating_date,
+        )
+
+        second_award = award_bonus_for_report(
+            report=report,
+            bonus_date=self.operating_date,
+        )
+
+        self.assertEqual(
+            first_award.pk,
+            second_award.pk,
+        )
+        self.assertEqual(
+            BonusAward.objects.count(),
+            1,
+        )
+
+    def test_applicable_tier_returns_highest_matching_tier(self):
+        tier = get_applicable_bonus_tier(
+            chats_counted=750,
+            bonus_date=self.operating_date,
+            qualifying_window_hours=24,
+        )
+
+        self.assertEqual(
+            tier,
+            self.tier_700,
+        )
+
+    def test_bonus_requires_moderator(self):
+        from players.models import Player
+
+        bidder = User.objects.create_user(
+            username="bonus_bidder",
+            password="testpass123",
+            role=User.Role.BIDDER,
+        )
+
+        with self.assertRaises(ValidationError):
+            award_bonus_for_report(
+                report=self._create_report(
+                    chats=500,
+                    submitted_at=self.moment,
+                    moderator=bidder,
+                ),
+                bonus_date=self.operating_date,
+            )
+
+    def test_daily_bonus_determination_uses_0945_boundary(self):
+        from .services import determine_daily_moderator_bonuses
+
+        determination_date = self.operating_date
+        local_tz = timezone.get_current_timezone()
+        determination_time = timezone.make_aware(
+            datetime.combine(
+                determination_date,
+                time(9, 45),
+            ),
+            local_tz,
+        )
+
+        before_cutoff = self._create_report(
+            chats=200,
+            submitted_at=determination_time - timedelta(seconds=1),
+        )
+
+        at_cutoff = self._create_report(
+            chats=300,
+            submitted_at=determination_time,
+        )
+
+        after_cutoff = self._create_report(
+            chats=400,
+            submitted_at=determination_time + timedelta(seconds=1),
+        )
+
+        awards = determine_daily_moderator_bonuses(
+            determination_date=determination_date,
+        )
+
+        self.assertEqual(len(awards), 1)
+
+        award = awards[0]
+
+        self.assertEqual(award.chats_counted, 500)
+        self.assertEqual(
+            award.bonus_amount,
+            Decimal("200.00"),
+        )
+        self.assertEqual(
+            award.qualifying_window_end,
+            determination_time,
+        )
+        self.assertEqual(
+            award.qualifying_report_id,
+            at_cutoff.id,
+        )
+
+        self.assertTrue(
+            EndOfSessionReport.objects.filter(
+                pk=after_cutoff.pk,
+            ).exists()
+        )
+        self.assertEqual(
+            before_cutoff.chats_responded,
+            200,
+        )
+        self.assertEqual(
+            at_cutoff.chats_responded,
+            300,
+        )
+        self.assertEqual(
+            after_cutoff.chats_responded,
+            400,
+        )
+
+    def test_daily_bonus_determination_aggregates_all_players_and_sessions(self):
+        from .services import determine_daily_moderator_bonuses
+        from players.models import Player
+
+        second_player = Player.objects.create(
+            player_number=2,
+            name="Bonus Test Player Two",
+            status=Player.Status.ACTIVE,
+        )
+
+        determination_date = self.operating_date
+        local_tz = timezone.get_current_timezone()
+        determination_time = timezone.make_aware(
+            datetime.combine(
+                determination_date,
+                time(9, 45),
+            ),
+            local_tz,
+        )
+
+        first_report = self._create_report(
+            chats=200,
+            submitted_at=determination_time - timedelta(hours=20),
+        )
+
+        second_session = start_coverage_session(
+            moderator=self.moderator,
+            player=second_player,
+            moment=determination_time - timedelta(hours=10),
+        )
+
+        second_session.status = CoverageSession.Status.AWAITING_REPORT
+        second_session.signed_out_at = (
+            determination_time - timedelta(hours=10)
+        )
+        second_session.save(
+            update_fields=[
+                "status",
+                "signed_out_at",
+                "updated_at",
+            ]
+        )
+
+        second_report = EndOfSessionReport.objects.create(
+            coverage_session=second_session,
+            moderator=self.moderator,
+            player=second_player,
+            chats_responded=300,
+            account_rating=Decimal("8.50"),
+            comments="Second player bonus test report.",
+        )
+
+        EndOfSessionReport.objects.filter(
+            pk=second_report.pk,
+        ).update(
+            submitted_at=determination_time - timedelta(hours=10),
+        )
+        second_report.refresh_from_db()
+
+        third_report = self._create_report(
+            chats=100,
+            submitted_at=determination_time - timedelta(hours=2),
+        )
+
+        awards = determine_daily_moderator_bonuses(
+            determination_date=determination_date,
+        )
+
+        self.assertEqual(len(awards), 1)
+
+        award = awards[0]
+
+        self.assertEqual(
+            award.moderator,
+            self.moderator,
+        )
+        self.assertEqual(
+            award.chats_counted,
+            600,
+        )
+        self.assertEqual(
+            award.bonus_amount,
+            Decimal("200.00"),
+        )
+        self.assertEqual(
+            award.qualifying_window_hours_snapshot,
+            24,
+        )
+        self.assertEqual(
+            award.qualifying_window_end,
+            determination_time,
+        )
+        self.assertEqual(
+            award.qualifying_window_start,
+            determination_time - timedelta(hours=24),
+        )
+        self.assertEqual(
+            award.qualifying_report_id,
+            third_report.id,
+        )
+        self.assertNotEqual(
+            first_report.player_id,
+            second_report.player_id,
+        )
+        self.assertNotEqual(
+            second_report.player_id,
+            third_report.player_id,
+        )
+
+        self.assertEqual(
+            BonusAward.objects.count(),
+            1,
+        )
+

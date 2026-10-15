@@ -1,3 +1,4 @@
+from payments.models import PaymentRecord
 from datetime import timedelta
 
 from django.core.exceptions import ValidationError
@@ -6,7 +7,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from accounts.models import StaffProfile, User
-from players.models import Player
+from players.models import ChatRateTier, Player
 
 from .models import CoverageSession, EndOfSessionReport
 from .services import (
@@ -15,6 +16,7 @@ from .services import (
     request_replacement,
     start_coverage_session,
     assign_replacement,
+    assign_coverage_session,
 )
 
 
@@ -60,6 +62,284 @@ class CoverageServiceTests(TestCase):
         )
 
         self.moment = timezone.localtime()
+
+    def test_day_and_night_session_boundaries(self):
+        from datetime import datetime, time
+
+        from .session_times import (
+            get_operating_date,
+            get_scheduled_close_at,
+            get_session_type,
+        )
+
+        tz = timezone.get_current_timezone()
+
+        cases = [
+            (
+                timezone.make_aware(datetime(2026, 9, 7, 8, 44), tz),
+                CoverageSession.SessionType.NIGHT,
+                timezone.make_aware(datetime(2026, 9, 7, 9, 0), tz),
+            ),
+            (
+                timezone.make_aware(datetime(2026, 9, 7, 8, 59), tz),
+                CoverageSession.SessionType.NIGHT,
+                timezone.make_aware(datetime(2026, 9, 7, 9, 0), tz),
+            ),
+            (
+                timezone.make_aware(datetime(2026, 9, 7, 9, 0), tz),
+                CoverageSession.SessionType.DAY,
+                timezone.make_aware(datetime(2026, 9, 7, 21, 0), tz),
+            ),
+            (
+                timezone.make_aware(datetime(2026, 9, 7, 20, 44), tz),
+                CoverageSession.SessionType.DAY,
+                timezone.make_aware(datetime(2026, 9, 7, 21, 0), tz),
+            ),
+            (
+                timezone.make_aware(datetime(2026, 9, 7, 20, 59), tz),
+                CoverageSession.SessionType.DAY,
+                timezone.make_aware(datetime(2026, 9, 7, 21, 0), tz),
+            ),
+            (
+                timezone.make_aware(datetime(2026, 9, 7, 21, 0), tz),
+                CoverageSession.SessionType.NIGHT,
+                timezone.make_aware(datetime(2026, 9, 8, 9, 0), tz),
+            ),
+        ]
+
+        for moment, expected_type, expected_close in cases:
+            with self.subTest(moment=moment):
+                self.assertEqual(
+                    get_session_type(moment),
+                    expected_type,
+                )
+
+                self.assertEqual(
+                    get_scheduled_close_at(moment),
+                    expected_close,
+                )
+
+                expected_operating_date = (
+                    moment.date()
+                    if expected_type == CoverageSession.SessionType.DAY
+                    or moment.time() >= time(21, 0)
+                    else moment.date() - timedelta(days=1)
+                )
+
+                self.assertEqual(
+                    get_operating_date(moment),
+                    expected_operating_date,
+                )
+
+    def test_created_session_persists_day_session_timestamps(self):
+        from datetime import datetime
+
+        moment = timezone.make_aware(
+            datetime(2026, 9, 7, 9, 0),
+            timezone.get_current_timezone(),
+        )
+
+        session = start_coverage_session(
+            moderator=self.moderator_one,
+            player=self.player_one,
+            moment=moment,
+        )
+
+        session.refresh_from_db()
+
+        self.assertEqual(
+            session.session_type,
+            CoverageSession.SessionType.DAY,
+        )
+        self.assertEqual(
+            session.operating_date,
+            moment.date(),
+        )
+        self.assertEqual(
+            session.signed_in_at,
+            moment,
+        )
+        self.assertEqual(
+            timezone.localtime(session.scheduled_close_at),
+            timezone.make_aware(
+                datetime(2026, 9, 7, 21, 0),
+                timezone.get_current_timezone(),
+            ),
+        )
+        self.assertIsNotNone(session.created_at)
+        self.assertIsNotNone(session.updated_at)
+
+    def test_created_session_persists_night_session_timestamps(self):
+        from datetime import datetime
+
+        moment = timezone.make_aware(
+            datetime(2026, 9, 7, 21, 0),
+            timezone.get_current_timezone(),
+        )
+
+        session = start_coverage_session(
+            moderator=self.moderator_one,
+            player=self.player_one,
+            moment=moment,
+        )
+
+        session.refresh_from_db()
+
+        self.assertEqual(
+            session.session_type,
+            CoverageSession.SessionType.NIGHT,
+        )
+        self.assertEqual(
+            session.operating_date,
+            moment.date(),
+        )
+        self.assertEqual(
+            session.signed_in_at,
+            moment,
+        )
+        self.assertEqual(
+            timezone.localtime(session.scheduled_close_at),
+            timezone.make_aware(
+                datetime(2026, 9, 8, 9, 0),
+                timezone.get_current_timezone(),
+            ),
+        )
+        self.assertIsNotNone(session.created_at)
+        self.assertIsNotNone(session.updated_at)
+
+    def test_replacement_requested_session_is_not_auto_closed(self):
+        from datetime import datetime
+
+        moment = timezone.make_aware(
+            datetime(2026, 9, 7, 9, 0),
+            timezone.get_current_timezone(),
+        )
+
+        session = start_coverage_session(
+            moderator=self.moderator_one,
+            player=self.player_one,
+            moment=moment,
+        )
+
+        request_replacement(
+            session=session,
+            moderator=self.moderator_one,
+            moment=timezone.make_aware(
+                datetime(2026, 9, 7, 20, 30),
+                timezone.get_current_timezone(),
+            ),
+        )
+
+        close_moment = timezone.make_aware(
+            datetime(2026, 9, 7, 21, 0),
+            timezone.get_current_timezone(),
+        )
+
+        from .services import close_expired_coverage_sessions
+
+        closed_count = close_expired_coverage_sessions(
+            moment=close_moment,
+        )
+
+        session.refresh_from_db()
+
+        self.assertEqual(closed_count, 1)
+        self.assertEqual(
+            session.status,
+            CoverageSession.Status.AWAITING_REPORT,
+        )
+        self.assertEqual(
+            session.signed_out_at,
+            session.scheduled_close_at,
+        )
+        self.assertEqual(
+            session.closure_reason,
+            CoverageSession.ClosureReason.AUTOMATIC,
+        )
+        self.assertIsNone(session.replacement_requested_at)
+        self.assertIsNone(session.replacement_moderator)
+
+    def test_expired_day_session_closes_automatically(self):
+        from datetime import datetime
+
+        moment = timezone.make_aware(
+            datetime(2026, 9, 7, 9, 0),
+            timezone.get_current_timezone(),
+        )
+
+        session = start_coverage_session(
+            moderator=self.moderator_one,
+            player=self.player_one,
+            moment=moment,
+        )
+
+        close_moment = timezone.make_aware(
+            datetime(2026, 9, 7, 21, 0),
+            timezone.get_current_timezone(),
+        )
+
+        from .services import close_expired_coverage_sessions
+
+        closed_count = close_expired_coverage_sessions(
+            moment=close_moment,
+        )
+
+        session.refresh_from_db()
+
+        self.assertEqual(closed_count, 1)
+        self.assertEqual(
+            session.status,
+            CoverageSession.Status.AWAITING_REPORT,
+        )
+        self.assertEqual(
+            session.signed_out_at,
+            close_moment,
+        )
+        self.assertEqual(
+            session.closure_reason,
+            CoverageSession.ClosureReason.AUTOMATIC,
+        )
+
+    def test_expired_night_session_closes_automatically(self):
+        from datetime import datetime
+
+        moment = timezone.make_aware(
+            datetime(2026, 9, 7, 21, 0),
+            timezone.get_current_timezone(),
+        )
+
+        session = start_coverage_session(
+            moderator=self.moderator_one,
+            player=self.player_one,
+            moment=moment,
+        )
+
+        close_moment = timezone.make_aware(
+            datetime(2026, 9, 8, 9, 0),
+            timezone.get_current_timezone(),
+        )
+
+        from .services import close_expired_coverage_sessions
+
+        closed_count = close_expired_coverage_sessions(
+            moment=close_moment,
+        )
+
+        session.refresh_from_db()
+
+        self.assertEqual(closed_count, 1)
+        self.assertEqual(
+            session.status,
+            CoverageSession.Status.AWAITING_REPORT,
+        )
+        self.assertEqual(
+            session.signed_out_at,
+            close_moment,
+        )
+        self.assertEqual(
+            session.closure_reason,
+            CoverageSession.ClosureReason.AUTOMATIC,
+        )
 
     def test_moderator_can_start_coverage(self):
         session = start_coverage_session(
@@ -124,6 +404,42 @@ class CoverageServiceTests(TestCase):
             CoverageSession.Status.ACTIVE,
         )
 
+    def test_moderator_with_outstanding_report_cannot_be_assigned(self):
+        session = start_coverage_session(
+            moderator=self.moderator_one,
+            player=self.player_one,
+            moment=self.moment,
+        )
+
+        request_replacement(
+            session=session,
+            moderator=self.moderator_one,
+            moment=self.moment + timedelta(minutes=5),
+        )
+
+        assign_replacement(
+            session=session,
+            replacement_moderator=self.moderator_two,
+            moment=self.moment + timedelta(minutes=10),
+        )
+
+        session.refresh_from_db()
+
+        with self.assertRaisesMessage(
+            ValidationError,
+            "This Moderator has an outstanding End-of-Session Report and cannot be assigned a new Player until the report is submitted.",
+        ):
+            assign_coverage_session(
+                manager=User.objects.create_user(
+                    username="assignment_manager",
+                    password="testpass123",
+                    role=User.Role.MANAGER,
+                ),
+                moderator=self.moderator_one,
+                player=self.player_two,
+                moment=self.moment + timedelta(minutes=15),
+            )
+
     def test_moderator_can_request_replacement(self):
         session = start_coverage_session(
             moderator=self.moderator_one,
@@ -156,6 +472,52 @@ class CoverageServiceTests(TestCase):
         self.assertEqual(
             [player.id for player in uncovered],
             [self.player_one.id, self.player_two.id],
+        )
+
+    def test_night_coverage_checkpoint_creates_alert_for_uncovered_player(self):
+        from datetime import datetime
+
+        from .alert_services import process_coverage_alerts
+
+        checkpoint = timezone.make_aware(
+            datetime(2026, 9, 7, 21, 0),
+            timezone.get_current_timezone(),
+        )
+
+        start_coverage_session(
+            moderator=self.moderator_one,
+            player=self.player_one,
+            moment=checkpoint,
+        )
+
+        result = process_coverage_alerts(moment=checkpoint)
+
+        self.assertEqual(result["created_count"], 1)
+        self.assertEqual(result["resolved_count"], 0)
+
+        from .models import CoverageAlert
+
+        alert = CoverageAlert.objects.get(
+            player=self.player_two,
+        )
+
+        self.assertEqual(
+            alert.alert_type,
+            CoverageAlert.AlertType.PLAYER_UNCOVERED,
+        )
+        self.assertEqual(
+            alert.severity,
+            CoverageAlert.Severity.CRITICAL,
+        )
+        self.assertEqual(
+            alert.status,
+            CoverageAlert.Status.OPEN,
+        )
+
+        self.assertFalse(
+            CoverageAlert.objects.filter(
+                player=self.player_one,
+            ).exists()
         )
 
     def test_covered_player_is_not_uncovered(self):
@@ -269,7 +631,7 @@ class CoverageServiceTests(TestCase):
 
         self.assertEqual(
             result.status,
-            CoverageSession.Status.COMPLETED,
+            CoverageSession.Status.AWAITING_REPORT,
         )
         self.assertEqual(
             result.signed_out_at,
@@ -322,6 +684,8 @@ class CoverageServiceTests(TestCase):
             moment=self.moment + timedelta(minutes=10),
         )
 
+        # Replacement assignment automatically signs out the outgoing
+        # Moderator and moves the session to AWAITING_REPORT.
         session.refresh_from_db()
         return session
 
@@ -383,6 +747,14 @@ class CoverageServiceTests(TestCase):
     def test_moderator_can_submit_end_of_session_report(self):
         session = self._create_signed_out_session()
 
+        ChatRateTier.objects.create(
+            minimum_chats=301,
+            maximum_chats=None,
+            rate_per_chat="3.00",
+            active=True,
+            effective_from=session.operating_date,
+        )
+
         self.client.force_login(self.moderator_one)
 
         response = self.client.post(
@@ -420,6 +792,21 @@ class CoverageServiceTests(TestCase):
             CoverageSession.Status.COMPLETED,
         )
 
+        payment = PaymentRecord.objects.get(coverage_session=session)
+
+        self.assertEqual(
+            payment.moderator,
+            self.moderator_one,
+        )
+        self.assertEqual(
+            payment.chats_responded,
+            725,
+        )
+        self.assertEqual(
+            payment.payroll_processed_chats,
+            0,
+        )
+
     def test_duplicate_end_of_session_report_is_blocked(self):
         session = self._create_signed_out_session()
 
@@ -448,3 +835,18 @@ class CoverageServiceTests(TestCase):
             EndOfSessionReport.objects.count(),
             1,
         )
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

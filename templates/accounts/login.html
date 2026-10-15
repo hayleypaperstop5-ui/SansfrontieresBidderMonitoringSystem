@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -137,6 +137,12 @@
             <button type="submit">
                 Sign In
             </button>
+
+            <div style="text-align: center; margin-top: 16px;">
+                <a href="{% url 'accounts:password_reset' %}">
+                    Forgot Password?
+                </a>
+            </div>
         </form>
 
     </div>
@@ -144,3 +150,4 @@
 
 </body>
 </html>
+

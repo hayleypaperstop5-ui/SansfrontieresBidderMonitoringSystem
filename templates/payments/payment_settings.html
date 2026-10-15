@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Moderator Payment Settings</title>
+    <style>
+        * { box-sizing: border-box; }
+        body { margin: 0; font-family: Arial, Helvetica, sans-serif; background: linear-gradient(135deg, #f3f7ff 0%, #eefaf7 100%); color: #172b4d; }
+        .settings-page { min-height: 100vh; padding: 45px 20px; }
+        .settings-container { max-width: 1050px; margin: 0 auto; }
+        .top-link { display: inline-block; margin-bottom: 20px; color: #2563eb; text-decoration: none; font-size: 14px; font-weight: 700; }
+        .top-link:hover { text-decoration: underline; }
+        .settings-card { background: #ffffff; border: 1px solid #e5e7eb; border-radius: 22px; overflow: hidden; box-shadow: 0 18px 50px rgba(31, 41, 55, 0.12); }
+        .settings-header { padding: 38px; background: linear-gradient(135deg, #1d4ed8, #2563eb 55%, #0f766e); color: white; }
+        .settings-header h1 { margin: 0 0 10px; font-size: 30px; font-weight: 800; }
+        .settings-header p { margin: 0; color: rgba(255, 255, 255, 0.88); line-height: 1.6; font-size: 15px; }
+        .settings-body { padding: 35px; }
+        .rule-box { padding: 22px; margin-bottom: 30px; border-radius: 16px; background: #eff6ff; border: 1px solid #bfdbfe; }
+        .rule-title { margin: 0 0 8px; color: #1d4ed8; font-size: 15px; font-weight: 800; }
+        .rule-text { margin: 0; color: #475569; line-height: 1.6; font-size: 14px; }
+        .section-title { margin: 0 0 18px; color: #172b4d; font-size: 20px; font-weight: 800; }
+        .settings-section { margin-bottom: 34px; }
+        .form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 22px; }
+        .form-group { display: flex; flex-direction: column; }
+        .form-group.full-width { grid-column: 1 / -1; }
+        .form-group label { margin-bottom: 8px; color: #334155; font-size: 13px; font-weight: 800; }
+        .form-input { width: 100%; padding: 13px 14px; border: 1px solid #cbd5e1; border-radius: 10px; background: #ffffff; color: #172b4d; font-size: 14px; outline: none; }
+        .form-input:focus { border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1); }
+        .help-text { margin-top: 7px; color: #64748b; font-size: 12px; line-height: 1.5; }
+        .error { margin-top: 7px; color: #b91c1c; font-size: 12px; font-weight: 700; }
+        .rate-methods { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin-top: 20px; }
+        .method-card { padding: 18px; border: 1px solid #e2e8f0; border-radius: 14px; background: #f8fafc; }
+        .method-card h3 { margin: 0 0 7px; color: #1e293b; font-size: 14px; font-weight: 800; }
+        .method-card p { margin: 0; color: #64748b; font-size: 12px; line-height: 1.55; }
+        .actions { display: flex; gap: 12px; align-items: center; padding-top: 10px; border-top: 1px solid #e5e7eb; }
+        .primary-button, .secondary-button { display: inline-block; padding: 13px 21px; border-radius: 11px; text-decoration: none; font-size: 14px; font-weight: 800; border: 0; cursor: pointer; }
+        .primary-button { background: linear-gradient(135deg, #2563eb, #1d4ed8); color: white; box-shadow: 0 7px 18px rgba(37, 99, 235, 0.24); }
+        .primary-button:hover { transform: translateY(-1px); }
+        .secondary-button { background: #f1f5f9; color: #475569; }
+        .secondary-button:hover { background: #e2e8f0; }
+        .form-errors { padding: 16px 18px; margin-bottom: 24px; border-radius: 12px; background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; font-size: 13px; font-weight: 700; }
+        .status-box { margin-bottom: 30px; padding: 18px 20px; border-radius: 14px; background: #ecfdf5; border: 1px solid #a7f3d0; color: #047857; font-size: 13px; line-height: 1.6; }
+        .status-box strong { color: #065f46; }
+        @media (max-width: 800px) { .form-grid, .rate-methods { grid-template-columns: 1fr; } .form-group.full-width { grid-column: auto; } }
+        @media (max-width: 700px) { .settings-page { padding: 25px 14px; } .settings-header, .settings-body { padding: 25px 20px; } .settings-header h1 { font-size: 25px; } .actions { flex-direction: column; align-items: stretch; } .primary-button, .secondary-button { text-align: center; } }
+    </style>
+</head>
+<body>
+<div class="settings-page">
+    <div class="settings-container">
+        <a class="top-link" href="/dashboard/">Director Dashboard</a>
+        <div class="settings-card">
+            <div class="settings-header">
+                <h1>Moderator Payment Settings</h1>
+                <p>Configure how qualifying Moderator chats are calculated, when Players qualify for payment, and how weekly payroll is scheduled.</p>
+            </div>
+            <div class="settings-body">
+                {% if settings %}
+                    <div class="status-box">
+                        <strong>Current configuration:</strong> These settings are active for future payroll processing. Previously processed payroll keeps its historical rate and calculation snapshots.
+                    </div>
+                {% else %}
+                    <div class="status-box">
+                        <strong>Initial configuration:</strong> No Payment Settings record exists yet. Saving this form will create the current configuration.
+                    </div>
+                {% endif %}
+                {% if form.non_field_errors %}
+                    <div class="form-errors">{{ form.non_field_errors }}</div>
+                {% endif %}
+                <form method="post">
+                    {% csrf_token %}
+            <section style="
+                margin-top: 28px;
+                padding: 22px;
+                border: 1px solid #e5e7eb;
+                border-radius: 12px;
+                background: #f9fafb;
+            ">
+                <h3 style="margin-top:0;">
+                    Rate Management
+                </h3>
+
+                <p style="color:#6b7280;">
+                    Configure the rate tables used by the selected
+                    Moderator Rate Method. Existing ChatRateTier and
+                    PlayerChatRateTier tables remain the single source
+                    of truth.
+                </p>
+
+                <div style="
+                    display:grid;
+                    grid-template-columns:repeat(
+                        auto-fit,
+                        minmax(240px, 1fr)
+                    );
+                    gap:14px;
+                    margin-top:18px;
+                ">
+
+                    <a
+                        href="{% url 'players:chat_rate_list' %}"
+                        style="
+                            display:block;
+                            padding:18px;
+                            border:1px solid #d1d5db;
+                            border-radius:10px;
+                            background:white;
+                            text-decoration:none;
+                            color:inherit;
+                        "
+                    >
+                        <strong>Global Chat Rate Management</strong>
+
+                        <div style="
+                            margin-top:7px;
+                            color:#6b7280;
+                        ">
+                            Manage global ChatRateTier ranges,
+                            KES rates, active status and effective dates.
+                        </div>
+                    </a>
+
+                    <a
+                        href="{% url 'players:player_chat_rate_list' %}"
+                        style="
+                            display:block;
+                            padding:18px;
+                            border:1px solid #d1d5db;
+                            border-radius:10px;
+                            background:white;
+                            text-decoration:none;
+                            color:inherit;
+                        "
+                    >
+                        <strong>Player Chat Rate Management</strong>
+
+                        <div style="
+                            margin-top:7px;
+                            color:#6b7280;
+                        ">
+                            Configure PlayerChatRateTier independently
+                            for each Player.
+                        </div>
+                    </a>
+
+                </div>
+            </section>
+
+                    <div class="settings-section">
+                        <h2 class="section-title">Qualification & Payroll</h2>
+                        <div class="form-grid">
+                            <div class="form-group">
+                                {{ form.minimum_chats_per_player.label_tag }}
+                                {{ form.minimum_chats_per_player }}
+                                {% if form.minimum_chats_per_player.help_text %}
+                                    <div class="help-text">{{ form.minimum_chats_per_player.help_text }}</div>
+                                {% endif %}
+                                {% for error in form.minimum_chats_per_player.errors %}
+                                    <div class="error">{{ error }}</div>
+                                {% endfor %}
+                            </div>
+                            <div class="form-group">
+                                {{ form.payment_day.label_tag }}
+                                {{ form.payment_day }}
+                                {% if form.payment_day.help_text %}
+                                    <div class="help-text">{{ form.payment_day.help_text }}</div>
+                                {% endif %}
+                                {% for error in form.payment_day.errors %}
+                                    <div class="error">{{ error }}</div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+                    <div class="settings-section">
+                        <h2 class="section-title">Moderator Rate Calculation</h2>
+                        <div class="form-grid">
+                            <div class="form-group full-width">
+                                {{ form.moderator_rate_method.label_tag }}
+                                {{ form.moderator_rate_method }}
+                                {% if form.moderator_rate_method.help_text %}
+                                    <div class="help-text">{{ form.moderator_rate_method.help_text }}</div>
+                                {% endif %}
+                                {% for error in form.moderator_rate_method.errors %}
+                                    <div class="error">{{ error }}</div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        <div class="rate-methods">
+                            <div class="method-card">
+                                <h3>Chat Tier</h3>
+                                <p>Uses the applicable global Chat Rate Tier for the Moderator's total qualifying chats.</p>
+                            </div>
+                            <div class="method-card">
+                                <h3>Player Chat Rate</h3>
+                                <p>Uses each qualified Player's configured chat rate for the Moderator's own chats with that Player.</p>
+                            </div>
+                            <div class="method-card">
+                                <h3>Both</h3>
+                                <p>Combines the applicable global Chat Tier rate with the qualified Player's chat rate for each Player.</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="settings-section">
+                        <h2 class="section-title">Moderator Payment Method</h2>
+                        <div class="form-grid">
+                            <div class="form-group">
+                                {{ form.moderator_payment_method.label_tag }}
+                                {{ form.moderator_payment_method }}
+                                {% if form.moderator_payment_method.help_text %}
+                                    <div class="help-text">{{ form.moderator_payment_method.help_text }}</div>
+                                {% endif %}
+                                {% for error in form.moderator_payment_method.errors %}
+                                    <div class="error">{{ error }}</div>
+                                {% endfor %}
+                            </div>
+                            <div class="form-group">
+                                {{ form.moderator_monthly_amount.label_tag }}
+                                {{ form.moderator_monthly_amount }}
+                                {% if form.moderator_monthly_amount.help_text %}
+                                    <div class="help-text">{{ form.moderator_monthly_amount.help_text }}</div>
+                                {% endif %}
+                                {% for error in form.moderator_monthly_amount.errors %}
+                                    <div class="error">{{ error }}</div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+                    <div class="actions">
+                        <button type="submit" class="primary-button">Save Payment Settings</button>
+                        <button type="submit" name="action" value="review" class="secondary-button">Save &amp; Review Payroll</button>
+                        <a href="/dashboard/" class="secondary-button">Cancel</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+</body>
+</html>

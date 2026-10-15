@@ -1,0 +1,265 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>End-of-Session Report - Sansfrontieres</title>
+
+    <style>
+        * { box-sizing: border-box; }
+
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+            background: #f4f7f9;
+            color: #1f2937;
+        }
+
+        .topbar {
+            background: #111827;
+            color: white;
+            padding: 18px 32px;
+            font-size: 20px;
+            font-weight: 700;
+        }
+
+        .container {
+            max-width: 850px;
+            margin: 40px auto;
+            padding: 0 20px;
+        }
+
+        .card {
+            background: white;
+            border-radius: 12px;
+            padding: 32px;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+        }
+
+        h1 {
+            margin-top: 0;
+            margin-bottom: 8px;
+            font-size: 30px;
+        }
+
+        .subtitle {
+            color: #6b7280;
+            margin-bottom: 28px;
+        }
+
+        .session-summary {
+            background: #f0fdf4;
+            border-left: 5px solid #16a34a;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 30px;
+        }
+
+        .session-summary p {
+            margin: 8px 0;
+        }
+
+        .session-summary strong {
+            color: #111827;
+        }
+
+        .form-group {
+            margin-bottom: 22px;
+        }
+
+        label {
+            display: block;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+
+        input,
+        textarea {
+            width: 100%;
+            padding: 12px 14px;
+            border: 1px solid #d1d5db;
+            border-radius: 7px;
+            font-size: 15px;
+        }
+
+        input:focus,
+        textarea:focus {
+            outline: none;
+            border-color: #16a34a;
+            box-shadow: 0 0 0 2px rgba(22, 163, 74, 0.12);
+        }
+
+        .help-text {
+            margin-top: 6px;
+            color: #6b7280;
+            font-size: 13px;
+        }
+
+        .error {
+            color: #b91c1c;
+            font-size: 13px;
+            margin-top: 6px;
+        }
+
+        .error-summary {
+            background: #fef2f2;
+            border: 1px solid #fecaca;
+            color: #991b1b;
+            padding: 14px 16px;
+            border-radius: 7px;
+            margin-bottom: 24px;
+        }
+
+        .actions {
+            display: flex;
+            gap: 12px;
+            margin-top: 30px;
+        }
+
+        .button {
+            display: inline-block;
+            padding: 12px 22px;
+            border-radius: 7px;
+            text-decoration: none;
+            border: none;
+            cursor: pointer;
+            font-weight: 700;
+            font-size: 15px;
+        }
+
+        .button-primary {
+            background: #16a34a;
+            color: white;
+        }
+
+        .button-secondary {
+            background: #6b7280;
+            color: white;
+        }
+
+        .button:hover {
+            opacity: 0.92;
+        }
+
+        .required-note {
+            color: #6b7280;
+            font-size: 13px;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="topbar">
+    Sansfrontieres
+</div>
+
+<div class="container">
+
+    <div class="card">
+
+        <h1>End-of-Session Report</h1>
+
+        <div class="subtitle">
+            Submit your completed coverage session activity and account performance.
+        </div>
+
+        <div class="session-summary">
+
+            <p>
+                <strong>Date:</strong>
+                {{ session.operating_date|date:"d M Y" }}
+            </p>
+
+            <p>
+                <strong>Player:</strong>
+                {{ session.player }}
+            </p>
+
+            <p>
+                <strong>Moderator:</strong>
+                {{ session.moderator.get_full_name|default:session.moderator.username }}
+            </p>
+
+            <p>
+                <strong>Session Type:</strong>
+                {{ session.get_session_type_display }}
+            </p>
+
+            {% if session.signed_in_at %}
+                <p>
+                    <strong>Signed In:</strong>
+                    {{ session.signed_in_at|date:"d M Y H:i" }}
+                </p>
+            {% endif %}
+
+            {% if session.signed_out_at %}
+                <p>
+                    <strong>Signed Out:</strong>
+                    {{ session.signed_out_at|date:"d M Y H:i" }}
+                </p>
+            {% endif %}
+
+        </div>
+
+        <p class="required-note">
+            Complete the session information below before submitting your report.
+        </p>
+
+        {% if form.non_field_errors %}
+            <div class="error-summary">
+                {% for error in form.non_field_errors %}
+                    <div>{{ error }}</div>
+                {% endfor %}
+            </div>
+        {% endif %}
+
+        <form method="post" enctype="multipart/form-data">
+
+            {% csrf_token %}
+
+            {% for field in form %}
+
+                <div class="form-group">
+
+                    {{ field.label_tag }}
+
+                    {{ field }}
+
+                    {% if field.help_text %}
+                        <div class="help-text">
+                            {{ field.help_text }}
+                        </div>
+                    {% endif %}
+
+                    {% for error in field.errors %}
+                        <div class="error">
+                            {{ error }}
+                        </div>
+                    {% endfor %}
+
+                </div>
+
+            {% endfor %}
+
+            <div class="actions">
+
+                <button type="submit" class="button button-primary">
+                    Submit End-of-Session Report
+                </button>
+
+                <a href="{% url 'dashboard:home' %}" class="button button-secondary">
+                    Cancel
+                </a>
+
+            </div>
+
+        </form>
+
+    </div>
+
+</div>
+
+</body>
+</html>

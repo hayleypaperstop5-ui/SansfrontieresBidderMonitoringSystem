@@ -4,6 +4,15 @@ from .models import EndOfSessionReport
 
 
 class EndOfSessionReportForm(forms.ModelForm):
+    chats_responded = forms.IntegerField(
+        required=True,
+        min_value=0,
+    )
+
+    screenshot = forms.ImageField(
+        required=True,
+    )
+
     class Meta:
         model = EndOfSessionReport
         fields = (
@@ -44,6 +53,17 @@ class EndOfSessionReportForm(forms.ModelForm):
         help_texts = {
             "chats_responded": "Enter the total number of chats you responded to during this coverage session.",
             "account_rating": "Enter the player account rating from 0 to 10.",
-            "screenshot": "Upload screenshot or other evidence from the session if required.",
+            "screenshot": "Upload the screenshot or other evidence from the session. This is required to submit the report.",
             "comments": "Provide any additional information management should know.",
         }
+
+
+class ContinuationResponseForm(forms.Form):
+    response = forms.ChoiceField(
+        choices=[
+            ("YES", "YES ? Continue covering this Player"),
+            ("NO", "NO ? End this coverage session"),
+        ],
+        widget=forms.RadioSelect,
+        required=True,
+    )

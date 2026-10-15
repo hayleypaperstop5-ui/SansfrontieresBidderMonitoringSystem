@@ -17,6 +17,21 @@ class Notification(models.Model):
             "General Notification",
         )
 
+
+    class AlertLevel(models.TextChoices):
+        NORMAL = (
+            "NORMAL",
+            "Normal",
+        )
+        IMPORTANT = (
+            "IMPORTANT",
+            "Important",
+        )
+        CRITICAL = (
+            "CRITICAL",
+            "Critical",
+        )
+
     recipient = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
@@ -27,6 +42,12 @@ class Notification(models.Model):
         max_length=40,
         choices=NotificationType.choices,
         default=NotificationType.GENERAL,
+    )
+
+    alert_level = models.CharField(
+        max_length=20,
+        choices=AlertLevel.choices,
+        default=AlertLevel.NORMAL,
     )
 
     title = models.CharField(

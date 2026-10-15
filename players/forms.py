@@ -1,6 +1,6 @@
 from django import forms
 
-from .models import ChatRateTier, Player
+from .models import ChatRateTier, Player, PlayerChatRateTier
 
 
 class PlayerCreationForm(forms.ModelForm):
@@ -89,7 +89,7 @@ class ChatRateTierForm(forms.ModelForm):
                 attrs={
                     "min": 0,
                     "step": "0.01",
-                    "placeholder": "e.g. 0.50",
+                    "placeholder": "e.g. 50.00",
                 }
             ),
             "effective_from": forms.DateInput(
@@ -102,15 +102,96 @@ class ChatRateTierForm(forms.ModelForm):
         labels = {
             "minimum_chats": "Minimum Chats",
             "maximum_chats": "Maximum Chats",
-            "rate_per_chat": "Rate Per Chat",
+            "rate_per_chat": "Rate Per Chat (KES)",
             "active": "Active Rate",
             "effective_from": "Effective From",
         }
 
         help_texts = {
             "maximum_chats": "Leave blank for an unlimited upper range.",
-            "rate_per_chat": "The amount paid for each chat under this applicable tier.",
+            "rate_per_chat": "Enter the amount paid in Kenyan Shillings (KES) for each chat under this tier.",
         }
+
+
+class PlayerChatRateTierForm(forms.ModelForm):
+
+    class Meta:
+        model = PlayerChatRateTier
+        fields = (
+            "player",
+            "minimum_chats",
+            "maximum_chats",
+            "rate_per_chat",
+            "active",
+            "effective_from",
+        )
+
+        widgets = {
+            "player": forms.Select(),
+            "minimum_chats": forms.NumberInput(
+                attrs={
+                    "min": 0,
+                    "placeholder": "e.g. 0",
+                }
+            ),
+            "maximum_chats": forms.NumberInput(
+                attrs={
+                    "min": 0,
+                    "placeholder": "Leave blank for unlimited",
+                }
+            ),
+            "rate_per_chat": forms.NumberInput(
+                attrs={
+                    "min": 0,
+                    "step": "0.01",
+                    "placeholder": "e.g. 2.00",
+                }
+            ),
+            "effective_from": forms.DateInput(
+                attrs={
+                    "type": "date",
+                }
+            ),
+        }
+
+        labels = {
+            "player": "Player",
+            "minimum_chats": "Minimum Chats",
+            "maximum_chats": "Maximum Chats",
+            "rate_per_chat": "Rate Per Chat (KES)",
+            "active": "Active Rate",
+            "effective_from": "Effective From",
+        }
+
+        help_texts = {
+            "maximum_chats": (
+                "Leave blank for an unlimited upper range."
+            ),
+            "rate_per_chat": (
+                "Enter the KES amount paid for each qualifying "
+                "chat under this Player rate tier."
+            ),
+            "effective_from": (
+                "The date from which this rate becomes applicable."
+            ),
+        }
+
+    def clean(self):
+        cleaned_data = super().clean()
+
+        minimum_chats = cleaned_data.get("minimum_chats")
+        maximum_chats = cleaned_data.get("maximum_chats")
+
+        if (
+            minimum_chats is not None
+            and maximum_chats is not None
+            and maximum_chats < minimum_chats
+        ):
+            raise forms.ValidationError(
+                "Maximum chats must be greater than or equal to minimum chats."
+            )
+
+        return cleaned_data
 
 class PlayerEditForm(forms.ModelForm):
 

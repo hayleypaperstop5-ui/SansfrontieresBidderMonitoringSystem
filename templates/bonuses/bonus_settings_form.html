@@ -1,0 +1,470 @@
+﻿<style>
+    * {
+        box-sizing: border-box;
+    }
+
+    body {
+        margin: 0;
+        font-family: Arial, Helvetica, sans-serif;
+        background: linear-gradient(135deg, #f3f7ff 0%, #eefaf7 100%);
+        color: #172b4d;
+    }
+
+    .bonus-page {
+        min-height: 100vh;
+        padding: 45px 20px;
+    }
+
+    .bonus-container {
+        max-width: 850px;
+        margin: 0 auto;
+    }
+
+    .back-link {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 20px;
+        color: #2563eb;
+        text-decoration: none;
+        font-weight: 700;
+        font-size: 14px;
+    }
+
+    .back-link:hover {
+        color: #1d4ed8;
+        text-decoration: underline;
+    }
+
+    .bonus-card {
+        background: #ffffff;
+        border-radius: 22px;
+        overflow: hidden;
+        box-shadow: 0 18px 50px rgba(31, 41, 55, 0.12);
+        border: 1px solid #e5e7eb;
+    }
+
+    .bonus-header {
+        padding: 34px 38px;
+        background: linear-gradient(135deg, #1d4ed8, #2563eb 55%, #0f766e);
+        color: #ffffff;
+        position: relative;
+    }
+
+    .bonus-header::after {
+        content: "";
+        position: absolute;
+        width: 180px;
+        height: 180px;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.08);
+        right: -50px;
+        top: -70px;
+    }
+
+    .header-icon {
+        width: 52px;
+        height: 52px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 14px;
+        background: rgba(255, 255, 255, 0.16);
+        font-size: 25px;
+        margin-bottom: 18px;
+    }
+
+    .bonus-header h1 {
+        margin: 0 0 9px;
+        font-size: 30px;
+        font-weight: 800;
+        letter-spacing: -0.5px;
+        position: relative;
+        z-index: 1;
+    }
+
+    .bonus-header p {
+        margin: 0;
+        color: rgba(255, 255, 255, 0.88);
+        font-size: 15px;
+        line-height: 1.6;
+        max-width: 620px;
+        position: relative;
+        z-index: 1;
+    }
+
+    .bonus-body {
+        padding: 38px;
+    }
+
+    .qualification-banner {
+        display: flex;
+        align-items: center;
+        gap: 15px;
+        padding: 17px 19px;
+        margin-bottom: 30px;
+        background: #ecfdf5;
+        border: 1px solid #a7f3d0;
+        border-radius: 14px;
+        color: #065f46;
+    }
+
+    .qualification-icon {
+        width: 42px;
+        height: 42px;
+        flex: 0 0 42px;
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: #10b981;
+        color: #ffffff;
+        font-weight: 800;
+        font-size: 18px;
+    }
+
+    .qualification-banner strong {
+        display: block;
+        margin-bottom: 3px;
+        font-size: 14px;
+    }
+
+    .qualification-banner span {
+        font-size: 13px;
+    }
+
+    .form-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 24px;
+    }
+
+    .form-field {
+        margin-bottom: 5px;
+    }
+
+    .form-field.full-width {
+        grid-column: 1 / -1;
+    }
+
+    .form-label {
+        display: block;
+        margin-bottom: 9px;
+        color: #1e293b;
+        font-size: 14px;
+        font-weight: 800;
+    }
+
+    .input-wrap {
+        position: relative;
+    }
+
+    .input-icon {
+        position: absolute;
+        left: 15px;
+        top: 50%;
+        transform: translateY(-50%);
+        color: #64748b;
+        font-weight: 800;
+        pointer-events: none;
+    }
+
+    .form-input {
+        width: 100%;
+        padding: 14px 15px;
+        border: 2px solid #e2e8f0;
+        border-radius: 12px;
+        background: #f8fafc;
+        color: #172b4d;
+        font-size: 15px;
+        outline: none;
+        transition: all 0.2s ease;
+    }
+
+    .has-icon .form-input {
+        padding-left: 43px;
+    }
+
+    .form-input:focus {
+        border-color: #3b82f6;
+        background: #ffffff;
+        box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.12);
+    }
+
+    .help-text {
+        margin: 8px 0 0;
+        color: #64748b;
+        font-size: 12px;
+        line-height: 1.5;
+    }
+
+    .error-list {
+        margin: 7px 0 0;
+        padding: 0;
+        list-style: none;
+        color: #dc2626;
+        font-size: 12px;
+        font-weight: 600;
+    }
+
+    .active-section {
+        grid-column: 1 / -1;
+        padding: 18px;
+        border-radius: 14px;
+        background: #fffbeb;
+        border: 1px solid #fde68a;
+    }
+
+    .active-row {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+
+    .active-row input[type="checkbox"] {
+        width: 19px;
+        height: 19px;
+        accent-color: #2563eb;
+        cursor: pointer;
+    }
+
+    .active-row label {
+        color: #92400e;
+        font-size: 14px;
+        font-weight: 800;
+        cursor: pointer;
+    }
+
+    .form-actions {
+        display: flex;
+        align-items: center;
+        gap: 13px;
+        margin-top: 34px;
+        padding-top: 28px;
+        border-top: 1px solid #e5e7eb;
+    }
+
+    .save-button {
+        border: none;
+        border-radius: 12px;
+        padding: 14px 25px;
+        background: linear-gradient(135deg, #2563eb, #1d4ed8);
+        color: #ffffff;
+        font-size: 14px;
+        font-weight: 800;
+        cursor: pointer;
+        box-shadow: 0 7px 18px rgba(37, 99, 235, 0.24);
+        transition: all 0.2s ease;
+    }
+
+    .save-button:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 10px 23px rgba(37, 99, 235, 0.3);
+    }
+
+    .cancel-button {
+        display: inline-block;
+        padding: 13px 23px;
+        border: 2px solid #e2e8f0;
+        border-radius: 12px;
+        color: #475569;
+        background: #ffffff;
+        text-decoration: none;
+        font-size: 14px;
+        font-weight: 700;
+        transition: all 0.2s ease;
+    }
+
+    .cancel-button:hover {
+        background: #f8fafc;
+        border-color: #cbd5e1;
+        color: #1e293b;
+    }
+
+    .form-errors {
+        padding: 14px 17px;
+        margin-bottom: 25px;
+        border-radius: 12px;
+        background: #fef2f2;
+        border: 1px solid #fecaca;
+        color: #991b1b;
+        font-size: 13px;
+        font-weight: 600;
+    }
+
+    @media (max-width: 700px) {
+        .bonus-page {
+            padding: 25px 14px;
+        }
+
+        .bonus-header,
+        .bonus-body {
+            padding: 26px 22px;
+        }
+
+        .form-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .form-field.full-width,
+        .active-section {
+            grid-column: auto;
+        }
+
+        .bonus-header h1 {
+            font-size: 25px;
+        }
+
+        .form-actions {
+            flex-direction: column;
+            align-items: stretch;
+        }
+
+        .save-button,
+        .cancel-button {
+            text-align: center;
+            width: 100%;
+        }
+    }
+</style>
+
+<div class="bonus-page">
+    <div class="bonus-container">
+<div class="bonus-card">
+
+            <div class="bonus-header">
+                
+
+                <h1>{{ page_title }}</h1>
+
+                <p>
+                    Set the number of chats and the bonus amount.
+                    The qualification window is fixed at 24 hours.
+                </p>
+            </div>
+
+            <div class="bonus-body">
+
+                <div class="qualification-banner">
+                    
+                    <div>
+                        <strong>24-Hour Qualification Window</strong>
+                        <span>
+                            Moderators qualify when they reach the configured
+                            chat target within 24 hours.
+                        </span>
+                    </div>
+                </div>
+
+                {% if form.non_field_errors %}
+                    <div class="form-errors">
+                        {{ form.non_field_errors }}
+                    </div>
+                {% endif %}
+
+                <form method="post">
+                    {% csrf_token %}
+
+                    <div class="form-grid">
+
+                        <div class="form-field">
+                            <label class="form-label" for="{{ form.minimum_chats.id_for_label }}">
+                                Chats Required for Bonus
+                            </label>
+
+                            <div class="input-wrap has-icon">
+                                {{ form.minimum_chats }}
+                            </div>
+
+                            {% if form.minimum_chats.help_text %}
+                                <p class="help-text">
+                                    {{ form.minimum_chats.help_text }}
+                                </p>
+                            {% endif %}
+
+                            {% if form.minimum_chats.errors %}
+                                <ul class="error-list">
+                                    {% for error in form.minimum_chats.errors %}
+                                        <li>{{ error }}</li>
+                                    {% endfor %}
+                                </ul>
+                            {% endif %}
+                        </div>
+
+                        <div class="form-field">
+                            <label class="form-label" for="{{ form.bonus_amount.id_for_label }}">
+                                Bonus Amount (KES)
+                            </label>
+
+                            <div class="input-wrap has-icon">
+                                {{ form.bonus_amount }}
+                            </div>
+
+                            {% if form.bonus_amount.help_text %}
+                                <p class="help-text">
+                                    {{ form.bonus_amount.help_text }}
+                                </p>
+                            {% endif %}
+
+                            {% if form.bonus_amount.errors %}
+                                <ul class="error-list">
+                                    {% for error in form.bonus_amount.errors %}
+                                        <li>{{ error }}</li>
+                                    {% endfor %}
+                                </ul>
+                            {% endif %}
+                        </div>
+
+                        <div class="form-field full-width">
+                            <label class="form-label" for="{{ form.effective_from.id_for_label }}">
+                                Effective From
+                            </label>
+
+                            {{ form.effective_from }}
+
+                            {% if form.effective_from.help_text %}
+                                <p class="help-text">
+                                    {{ form.effective_from.help_text }}
+                                </p>
+                            {% endif %}
+
+                            {% if form.effective_from.errors %}
+                                <ul class="error-list">
+                                    {% for error in form.effective_from.errors %}
+                                        <li>{{ error }}</li>
+                                    {% endfor %}
+                                </ul>
+                            {% endif %}
+                        </div>
+
+                        <div class="active-section">
+                            <div class="active-row">
+                                {{ form.active }}
+                                <label for="{{ form.active.id_for_label }}">
+                                    Activate this bonus configuration
+                                </label>
+                            </div>
+                        </div>
+
+                    </div>
+
+                    <div class="form-actions">
+                        <button type="submit" class="save-button">{{ submit_label }}</button>
+
+                        <a
+                            href="{% url 'bonuses:bonus_settings' %}"
+                            class="cancel-button"
+                        >
+                            Cancel
+                        </a>
+                    </div>
+
+                </form>
+
+            </div>
+        </div>
+
+    </div>
+</div>
+
+

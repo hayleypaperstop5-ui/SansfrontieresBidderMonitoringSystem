@@ -1,0 +1,694 @@
+from django.contrib import messages
+from django.contrib.auth.decorators import login_required
+from django.http import HttpResponseForbidden, HttpResponseRedirect
+from django.shortcuts import get_object_or_404, render
+from django.urls import reverse
+from django.utils import timezone
+from datetime import timedelta
+from django.db import transaction
+
+from accounts.models import User
+from accounts.permissions import MANAGER_ROLES
+
+from .forms import EndOfSessionReportForm
+from .models import CoverageAlert, CoverageSession
+from .alert_services import process_coverage_alerts
+from .session_times import get_operating_date, get_session_type
+from payments.services import create_payment_record
+from bonuses.services import award_bonus_for_report
+from .services import (
+    activate_assigned_coverage,
+    assign_coverage_session,
+    assign_replacement,
+    manager_override_end_coverage,
+    request_replacement,
+    close_expired_coverage_sessions,
+    end_coverage_session,
+)
+
+
+@login_required(login_url="/login/")
+def end_of_session_report(request, session_id):
+    if request.user.role != User.Role.MODERATOR:
+        return HttpResponseForbidden(
+            "Only Moderators can submit an End-of-Session Report."
+        )
+
+    session = get_object_or_404(
+        CoverageSession.objects.select_related(
+            "player",
+            "moderator",
+        ),
+        id=session_id,
+    )
+
+    if session.moderator != request.user:
+        messages.error(
+            request,
+            "You can only submit a report for your own coverage session.",
+        )
+        return HttpResponseRedirect(reverse("dashboard:home"))
+
+    if session.status != CoverageSession.Status.AWAITING_REPORT:
+        messages.error(
+            request,
+            "An End-of-Session Report can only be submitted after the coverage session has ended.",
+        )
+        return HttpResponseRedirect(reverse("dashboard:home"))
+
+    if not session.signed_in_at:
+        messages.error(
+            request,
+            "You cannot submit an End-of-Session Report before signing in.",
+        )
+        return HttpResponseRedirect(reverse("dashboard:home"))
+    if not session.signed_out_at:
+        messages.error(
+            request,
+            "You must sign out of the coverage session before submitting the report.",
+        )
+        return HttpResponseRedirect(reverse("dashboard:home"))
+
+    if hasattr(session, "end_of_session_report"):
+        messages.info(
+            request,
+            "An End-of-Session Report has already been submitted for this session.",
+        )
+        return HttpResponseRedirect(reverse("dashboard:home"))
+
+    if request.method == "POST":
+        form = EndOfSessionReportForm(request.POST, request.FILES)
+
+        if form.is_valid():
+            try:
+                with transaction.atomic():
+                    report = form.save(commit=False)
+                    report.coverage_session = session
+                    report.moderator = request.user
+                    report.player = session.player
+                    report.save()
+
+                    create_payment_record(
+                        coverage_session=session,
+                        chats_responded=report.chats_responded,
+                    )
+
+                    award_bonus_for_report(
+                        report=report,
+                        bonus_date=session.operating_date,
+                    )
+
+                    session.status = CoverageSession.Status.COMPLETED
+                    session.save(update_fields=["status", "updated_at"])
+
+            except Exception as exc:
+                messages.error(
+                    request,
+                    (
+                        "Your End-of-Session Report could not be completed. "
+                        f"{exc}"
+                    ),
+                )
+            else:
+                messages.success(
+                    request,
+                    (
+                        "Your End-of-Session Report has been submitted successfully "
+                        "and your payment has been calculated."
+                    ),
+                )
+                return HttpResponseRedirect(reverse("dashboard:home"))
+    else:
+        form = EndOfSessionReportForm()
+
+    return render(
+        request,
+        "coverage/end_of_session_report.html",
+        {
+            "form": form,
+            "session": session,
+        },
+    )
+
+
+@login_required(login_url="/login/")
+def moderator_coverage(request):
+    if request.user.role != User.Role.MODERATOR:
+        return HttpResponseForbidden(
+            "Only Moderators can access their coverage."
+        )
+
+    moment = timezone.localtime()
+
+    close_expired_coverage_sessions(
+        moment=moment,
+    )
+
+    assigned_session = (
+        CoverageSession.objects
+        .select_related("player")
+        .filter(
+            moderator=request.user,
+            status=CoverageSession.Status.OPEN,
+        )
+        .order_by("-created_at")
+        .first()
+    )
+
+    expired_session = (
+        CoverageSession.objects
+        .select_related("player")
+        .filter(
+            moderator=request.user,
+            status=CoverageSession.Status.EXPIRED,
+        )
+        .order_by("-updated_at", "-created_at")
+        .first()
+    )
+
+    active_session = (
+        CoverageSession.objects
+        .select_related("player")
+        .filter(
+            moderator=request.user,
+            status__in=(
+                CoverageSession.Status.ACTIVE,
+                CoverageSession.Status.REPLACEMENT_REQUESTED,
+                CoverageSession.Status.HANDOVER,
+            ),
+        )
+        .order_by("-signed_in_at", "-created_at")
+        .first()
+    )
+
+    awaiting_report_session = (
+        CoverageSession.objects
+        .select_related("player", "replacement_moderator")
+        .filter(
+            moderator=request.user,
+            status=CoverageSession.Status.AWAITING_REPORT,
+        )
+        .order_by("-updated_at", "-created_at")
+        .first()
+    )
+
+    if request.method == "POST":
+        action = request.POST.get("action")
+
+        if action == "sign_in":
+            if assigned_session is None:
+                messages.error(
+                    request,
+                    "You do not currently have an open Player coverage assignment.",
+                )
+            else:
+                try:
+                    activate_assigned_coverage(
+                        session=assigned_session,
+                        moderator=request.user,
+                        moment=timezone.localtime(),
+                    )
+                except Exception as exc:
+                    messages.error(request, str(exc))
+                else:
+                    messages.success(
+                        request,
+                        (
+                            f"You have successfully signed in to "
+                            f"{assigned_session.player}."
+                        ),
+                    )
+
+            return HttpResponseRedirect(
+                reverse("coverage:moderator_coverage")
+            )
+
+        if action == "sign_out":
+            sign_out_session_id = request.POST.get("session_id")
+
+            sign_out_session = get_object_or_404(
+                CoverageSession,
+                id=sign_out_session_id,
+                moderator=request.user,
+                status=CoverageSession.Status.AWAITING_REPORT,
+            )
+
+            try:
+                end_coverage_session(
+                    session=sign_out_session,
+                    moderator=request.user,
+                    moment=timezone.localtime(),
+                )
+            except Exception as exc:
+                messages.error(request, str(exc))
+            else:
+                messages.success(
+                    request,
+                    (
+                        f"You have successfully signed out of "
+                        f"{sign_out_session.player}. "
+                        "Please now submit your End-of-Session Report."
+                    ),
+                )
+
+            return HttpResponseRedirect(
+                reverse("coverage:moderator_coverage")
+            )
+
+        if action == "request_replacement":
+            if active_session is None:
+                messages.error(
+                    request,
+                    "You do not currently have an active Player coverage session.",
+                )
+            else:
+                try:
+                    request_replacement(
+                        session=active_session,
+                        moderator=request.user,
+                        moment=timezone.localtime(),
+                    )
+                except Exception as exc:
+                    messages.error(request, str(exc))
+                else:
+                    messages.success(
+                        request,
+                        (
+                            "Replacement requested successfully. Continue covering the Player "
+                            "until the Manager secures your replacement."
+                        ),
+                    )
+
+            return HttpResponseRedirect(
+                reverse("coverage:moderator_coverage")
+            )
+
+    return render(
+        request,
+        "coverage/moderator_coverage.html",
+        {
+            "assigned_session": assigned_session,
+            "expired_session": expired_session,
+            "active_session": active_session,
+            "awaiting_report_session": awaiting_report_session,
+        },
+    )
+
+
+@login_required(login_url="/login/")
+def manager_coverage_alerts(request):
+    if request.user.role not in MANAGER_ROLES:
+        return HttpResponseForbidden(
+            "You do not have permission to access coverage alerts."
+        )
+
+    if request.method == "POST":
+        action = request.POST.get("action")
+        session_id = request.POST.get("session_id")
+
+        if action == "delete_resolved_alerts":
+            allowed_days = {7, 30, 60, 90}
+            try:
+                retention_days = int(request.POST.get("retention_days", "30"))
+            except (TypeError, ValueError):
+                retention_days = 30
+
+            if retention_days not in allowed_days:
+                messages.error(
+                    request,
+                    "Invalid alert cleanup period.",
+                )
+                return HttpResponseRedirect(
+                    reverse("coverage:manager_coverage_alerts")
+                )
+
+            cutoff = timezone.localtime() - timedelta(days=retention_days)
+
+            deleted_count, _ = (
+                CoverageAlert.objects
+                .filter(
+                    status=CoverageAlert.Status.RESOLVED,
+                    resolved_at__isnull=False,
+                    resolved_at__lt=cutoff,
+                )
+                .delete()
+            )
+
+            messages.success(
+                request,
+                f"{deleted_count} resolved coverage alert(s) older than "
+                f"{retention_days} days were permanently deleted.",
+            )
+
+            return HttpResponseRedirect(
+                reverse("coverage:manager_coverage_alerts")
+            )
+        if action == "assign_replacement":
+            replacement_moderator_id = request.POST.get(
+                "replacement_moderator_id"
+            )
+
+            session = get_object_or_404(
+                CoverageSession,
+                id=session_id,
+                status=CoverageSession.Status.REPLACEMENT_REQUESTED,
+            )
+
+            replacement_moderator = get_object_or_404(
+                User,
+                id=replacement_moderator_id,
+                role=User.Role.MODERATOR,
+                is_active=True,
+            )
+
+            try:
+                new_session = assign_replacement(
+                    session=session,
+                    replacement_moderator=replacement_moderator,
+                )
+            except Exception as exc:
+                messages.error(request, str(exc))
+            else:
+                messages.success(
+                    request,
+                    f"{replacement_moderator.get_full_name() or replacement_moderator.username} "
+                    f"has been assigned as replacement for {session.player}. "
+                    "The replacement coverage is now active.",
+                )
+
+            return HttpResponseRedirect(
+                reverse("coverage:manager_coverage_alerts")
+            )
+
+        if action == "manager_override_end":
+            session = get_object_or_404(
+                CoverageSession,
+                id=session_id,
+            )
+
+            try:
+                manager_override_end_coverage(
+                    session=session,
+                    manager=request.user,
+                )
+            except Exception as exc:
+                messages.error(request, str(exc))
+            else:
+                messages.success(
+                    request,
+                    f"Manager override completed for {session.player}.",
+                )
+
+            return HttpResponseRedirect(
+                reverse("coverage:manager_coverage_alerts")
+            )
+
+        if action == "assign_coverage":
+            moderator_id = request.POST.get("moderator_id")
+            player_id = request.POST.get("player_id")
+
+            moderator = get_object_or_404(
+                User,
+                id=moderator_id,
+            )
+
+            from players.models import Player
+
+            player = get_object_or_404(
+                Player,
+                id=player_id,
+            )
+
+            try:
+                session = assign_coverage_session(
+                    manager=request.user,
+                    moderator=moderator,
+                    player=player,
+                )
+            except Exception as exc:
+                messages.error(request, str(exc))
+            else:
+                messages.success(
+                    request,
+                    f"{moderator.get_full_name() or moderator.username} "
+                    f"has been assigned to {player}. "
+                    "The Moderator must sign in before coverage becomes active.",
+                )
+
+            return HttpResponseRedirect(
+                reverse("coverage:manager_coverage_alerts")
+            )
+
+    from players.models import Player
+
+    moment = timezone.localtime()
+
+    # Expire missed 15-minute sign-in assignments before checking
+    # for uncovered Players. This ensures the Manager immediately
+    # receives a critical coverage alert when a Moderator misses
+    # the sign-in window.
+    close_expired_coverage_sessions(
+        moment=moment,
+    )
+
+    process_coverage_alerts(
+        moment=moment,
+    )
+
+    open_assignments = (
+        CoverageSession.objects
+        .select_related(
+            "player",
+            "moderator",
+        )
+        .filter(
+            status=CoverageSession.Status.OPEN,
+            sign_in_deadline_at__gt=moment,
+        )
+        .order_by("player__player_number", "-created_at")
+    )
+
+    assigned_player_ids = set(
+        open_assignments.values_list("player_id", flat=True)
+    )
+
+    # A current coverage assignment creates a one-to-one
+    # Moderator <-> Player relationship.
+    #
+    # These are the only statuses that represent a current/open
+    # assignment. Both Moderator and Player availability below
+    # are derived from this same queryset so the two lists cannot
+    # disagree.
+    current_coverage_statuses = (
+        CoverageSession.Status.OPEN,
+        CoverageSession.Status.ACTIVE,
+        CoverageSession.Status.REPLACEMENT_REQUESTED,
+        CoverageSession.Status.HANDOVER,
+    )
+
+    current_coverage_sessions = CoverageSession.objects.filter(
+        status__in=current_coverage_statuses,
+    )
+
+    unavailable_moderator_ids = set(
+        current_coverage_sessions.values_list(
+            "moderator_id",
+            flat=True,
+        )
+    )
+
+    # A Moderator with an outstanding End-of-Session Report
+    # remains unavailable until that report is submitted.
+    #
+    # This intentionally is NOT limited to the current operating
+    # date/session type.
+    outstanding_report_moderator_ids = set(
+        CoverageSession.objects.filter(
+            status=CoverageSession.Status.AWAITING_REPORT,
+        ).values_list("moderator_id", flat=True)
+    )
+
+    unavailable_moderator_ids.update(
+        outstanding_report_moderator_ids
+    )
+
+    active_players = (
+        Player.objects
+        .filter(status=Player.Status.ACTIVE)
+        .order_by("player_number")
+    )
+
+    available_eligible_moderators = (
+        User.objects
+        .filter(
+            role=User.Role.MODERATOR,
+            is_active=True,
+            staff_profile__status="ACTIVE",
+        )
+        .exclude(id__in=unavailable_moderator_ids)
+        .order_by("first_name", "last_name", "username")
+    )
+
+    # A player that is currently assigned/covered is not available
+    # for another Moderator. This deliberately uses the exact same
+    # current coverage queryset as the Moderator eligibility logic.
+    assigned_coverage_player_ids = set(
+        current_coverage_sessions.values_list(
+            "player_id",
+            flat=True,
+        )
+    )
+
+    available_players = active_players.exclude(
+        id__in=assigned_coverage_player_ids,
+    )
+
+    alerts = (
+        CoverageAlert.objects
+        .select_related("player", "acknowledged_by", "resolved_by")
+        .filter(
+            status__in=(
+                CoverageAlert.Status.OPEN,
+                CoverageAlert.Status.ACKNOWLEDGED,
+                CoverageAlert.Status.ESCALATED,
+            )
+        )
+        .order_by("-created_at")
+    )
+
+    resolved_alert_count = CoverageAlert.objects.filter(
+        status=CoverageAlert.Status.RESOLVED,
+    ).count()
+
+    old_resolved_alert_counts = {
+        days: CoverageAlert.objects.filter(
+            status=CoverageAlert.Status.RESOLVED,
+            resolved_at__isnull=False,
+            resolved_at__lt=moment - timedelta(days=days),
+        ).count()
+        for days in (7, 30, 60, 90)
+    }
+    active_sessions = (
+        CoverageSession.objects
+        .select_related(
+            "player",
+            "moderator",
+            "replacement_moderator",
+        )
+        .filter(
+            status__in=(
+                CoverageSession.Status.ACTIVE,
+                CoverageSession.Status.REPLACEMENT_REQUESTED,
+                CoverageSession.Status.HANDOVER,
+            )
+        )
+        .order_by("player__player_number", "-signed_in_at")
+    )
+
+    coverage_history = (
+        CoverageSession.objects
+        .select_related(
+            "player",
+            "moderator",
+            "replacement_moderator",
+        )
+        .filter(
+            status__in=(
+                CoverageSession.Status.OPEN,
+                CoverageSession.Status.ACTIVE,
+                CoverageSession.Status.REPLACEMENT_REQUESTED,
+                CoverageSession.Status.HANDOVER,
+                CoverageSession.Status.AWAITING_REPORT,
+                CoverageSession.Status.EXPIRED,
+                CoverageSession.Status.COMPLETED,
+                CoverageSession.Status.MISSED,
+                CoverageSession.Status.CANCELLED,
+            )
+        )
+        .order_by(
+            "-operating_date",
+            "-signed_out_at",
+            "-created_at",
+        )[:20]
+    )
+
+    assigned_moderator_coverage = {}
+
+    for session in open_assignments:
+        assigned_moderator_coverage[session.moderator_id] = {
+            "moderator": session.moderator,
+            "player": session.player,
+            "status": "Awaiting Sign-in",
+        }
+
+    for session in active_sessions:
+        assigned_moderator_coverage[session.moderator_id] = {
+            "moderator": session.moderator,
+            "player": session.player,
+            "status": session.get_status_display(),
+        }
+
+    eligible_moderators = (
+        User.objects
+        .filter(
+            role=User.Role.MODERATOR,
+            is_active=True,
+            staff_profile__status="ACTIVE",
+        )
+        .exclude(id__in=unavailable_moderator_ids)
+        .select_related("staff_profile")
+        .order_by("first_name", "last_name", "username")
+    )
+
+    available_moderators = []
+    assigned_moderators = []
+
+    for moderator in eligible_moderators:
+        coverage = assigned_moderator_coverage.get(moderator.id)
+
+        if coverage is not None:
+            assigned_moderators.append(
+                {
+                    "moderator": moderator,
+                    "player": coverage["player"],
+                    "coverage_status": coverage["status"],
+                }
+            )
+        else:
+            available_moderators.append(
+                {
+                    "moderator": moderator,
+                    "coverage_status": "Available",
+                }
+            )
+
+    return render(
+        request,
+        "coverage/manager_alerts.html",
+        {
+            "alerts": alerts,
+            "resolved_alert_count": resolved_alert_count,
+            "old_resolved_alert_counts": old_resolved_alert_counts,
+            "active_sessions": active_sessions,
+            "coverage_history": coverage_history,
+            "open_assignments": open_assignments,
+            "available_players": available_players,
+            "available_eligible_moderators": available_eligible_moderators,
+            "available_moderators": available_moderators,
+            "assigned_moderators": assigned_moderators,
+        },
+    )
+
+
+
+
+
+
+
+
+
+
+
+
+
+

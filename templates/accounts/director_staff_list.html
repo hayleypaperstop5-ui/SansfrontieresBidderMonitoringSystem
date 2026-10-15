@@ -1,0 +1,553 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Staff Management | Sansfrontieres</title>
+
+    <style>
+        * { box-sizing: border-box; }
+
+        body {
+            margin: 0;
+            font-family: Arial, Helvetica, sans-serif;
+            background: #f4f6f8;
+            color: #172033;
+        }
+
+        .layout {
+            display: flex;
+            min-height: 100vh;
+        }
+
+        .sidebar {
+            width: 245px;
+            background: #111827;
+            color: white;
+            padding: 28px 20px;
+        }
+
+        .brand {
+            font-size: 20px;
+            font-weight: 800;
+            letter-spacing: 1px;
+            margin-bottom: 8px;
+        }
+
+        .subtitle {
+            color: #9ca3af;
+            font-size: 12px;
+            margin-bottom: 35px;
+        }
+
+        .section-title {
+            color: #6b7280;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin: 24px 10px 8px;
+        }
+
+        .nav a {
+            display: block;
+            color: #d1d5db;
+            text-decoration: none;
+            padding: 11px 12px;
+            border-radius: 8px;
+            margin-bottom: 4px;
+            font-size: 14px;
+        }
+
+        .nav a:hover,
+        .nav a.active {
+            background: #1f2937;
+            color: white;
+        }
+
+        .main {
+            flex: 1;
+            padding: 30px 38px;
+            min-width: 0;
+        }
+
+        .topbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+        }
+
+        .topbar h1 {
+            margin: 0;
+            font-size: 28px;
+        }
+
+        .user-box {
+            text-align: right;
+            font-size: 13px;
+        }
+
+        .user-name {
+            font-weight: 700;
+        }
+
+        .user-role {
+            color: #6b7280;
+        }
+
+        .header-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 22px;
+        }
+
+        .header-row h2 {
+            margin: 0;
+            font-size: 22px;
+        }
+
+        .header-row p {
+            margin: 6px 0 0;
+            color: #6b7280;
+            font-size: 14px;
+        }
+
+        .actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        .button {
+            display: inline-block;
+            text-decoration: none;
+            border: 0;
+            cursor: pointer;
+            padding: 9px 13px;
+            border-radius: 7px;
+            font-weight: 700;
+            font-size: 12px;
+        }
+
+        .button-primary {
+            background: #111827;
+            color: white;
+        }
+
+        .button-secondary {
+            background: #e5e7eb;
+            color: #111827;
+        }
+
+        .button-success {
+            background: #166534;
+            color: white;
+        }
+
+        .button-warning {
+            background: #92400e;
+            color: white;
+        }
+
+        .button-danger {
+            background: #991b1b;
+            color: white;
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 16px;
+            margin-bottom: 25px;
+        }
+
+        .stat {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            border: 1px solid #e5e7eb;
+        }
+
+        .stat-label {
+            color: #6b7280;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: .5px;
+        }
+
+        .stat-value {
+            margin-top: 8px;
+            font-size: 28px;
+            font-weight: 800;
+        }
+
+        .card {
+            background: white;
+            border: 1px solid #e5e7eb;
+            border-radius: 12px;
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            min-width: 1100px;
+        }
+
+        th {
+            background: #f9fafb;
+            color: #6b7280;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: .5px;
+            text-align: left;
+            padding: 14px 16px;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        td {
+            padding: 15px 16px;
+            border-bottom: 1px solid #eef0f2;
+            font-size: 13px;
+            vertical-align: middle;
+        }
+
+        tr:last-child td {
+            border-bottom: 0;
+        }
+
+        .name {
+            font-weight: 700;
+        }
+
+        .username {
+            color: #6b7280;
+            margin-top: 3px;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 5px 9px;
+            border-radius: 999px;
+            font-size: 11px;
+            font-weight: 700;
+        }
+
+        .active {
+            background: #dcfce7;
+            color: #166534;
+        }
+
+        .inactive {
+            background: #f3f4f6;
+            color: #4b5563;
+        }
+
+        .suspended {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
+        .terminated {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        .role {
+            font-weight: 700;
+        }
+
+        .actions-cell {
+            white-space: nowrap;
+        }
+
+        .actions-cell form {
+            display: inline;
+        }
+
+        .message {
+            padding: 12px 15px;
+            background: #ecfdf5;
+            color: #166534;
+            border: 1px solid #bbf7d0;
+            border-radius: 8px;
+            margin-bottom: 18px;
+            font-size: 13px;
+        }
+
+        .empty {
+            padding: 45px;
+            text-align: center;
+            color: #6b7280;
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="layout">
+
+    <aside class="sidebar">
+        <div class="brand">SANSFRONTIERES</div>
+        <div class="subtitle">Chat Moderation Management</div>
+
+        <div class="section-title">Executive</div>
+
+        <div class="nav">
+            <a href="{% url 'dashboard:home' %}">Dashboard</a>
+            <a href="{% url 'accounts:staff_list' %}" class="active">Staff Management</a>
+            <a href="{% url 'players:player_list' %}">Player Management</a>
+            <a href="{% url 'shifts:shift_list' %}">Shifts &amp; Coverage</a>
+        </div>
+
+        <div class="section-title">Finance</div>
+
+        <div class="nav">
+            <a href="{% url 'players:chat_rate_list' %}">Chat Rates</a>
+            <a href="{% url 'players:chat_rate_create' %}">Update Chat Rate</a>
+        </div>
+
+        <div class="section-title">Administration</div>
+
+        <div class="nav">
+            <a href="{% url 'accounts:role_list' %}">Role Management</a>
+        </div>
+    </aside>
+
+    <main class="main">
+
+        <div class="topbar">
+            <h1>Staff Management</h1>
+
+            <div class="user-box">
+                <div class="user-name">
+                    {{ request.user.get_full_name|default:request.user.username }}
+                </div>
+                <div class="user-role">
+                    {{ request.user.get_role_display }}
+                </div>
+            </div>
+        </div>
+
+        {% if messages %}
+            {% for message in messages %}
+                <div class="message">{{ message }}</div>
+            {% endfor %}
+        {% endif %}
+
+        <div class="header-row">
+            <div>
+
+                <p>
+                    Manage staff accounts, system access, organizational
+                    designations and employment status.
+                </p>
+            </div>
+
+            <div class="actions">
+                <a href="{% url 'accounts:role_list' %}"
+                   class="button button-secondary">
+                    Manage Roles
+                </a>
+
+                <a href="{% url 'accounts:staff_create' %}"
+                   class="button button-primary">
+                    + Add Moderator
+                </a>
+            </div>
+        </div>
+
+        <div class="stats">
+
+            <div class="stat">
+                <div class="stat-label">Total Staff</div>
+                <div class="stat-value">{{ total_staff }}</div>
+            </div>
+
+            <div class="stat">
+                <div class="stat-label">Active Staff</div>
+                <div class="stat-value">{{ active_staff }}</div>
+            </div>
+
+            <div class="stat">
+                <div class="stat-label">Moderators</div>
+                <div class="stat-value">{{ moderator_count }}</div>
+            </div>
+
+            <div class="stat">
+                <div class="stat-label">Managers</div>
+                <div class="stat-value">{{ manager_count }}</div>
+            </div>
+
+        </div>
+
+        <div class="card">
+
+            {% if staff_members %}
+
+                <table>
+
+                    <thead>
+                        <tr>
+                            <th>Staff</th>
+                            <th>Employee No.</th>
+                            <th>System Role</th>
+                            <th>Designation</th>
+                            <th>Status</th>
+                            <th>Phone</th>
+                            <th>Joined</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+
+                        {% for staff in staff_members %}
+
+                            <tr>
+
+                                <td>
+                                    <div class="name">
+                                        {{ staff.user.get_full_name|default:staff.user.username }}
+                                    </div>
+                                    <div class="username">
+                                        @{{ staff.user.username }}
+                                    </div>
+                                </td>
+
+                                <td>
+                                    {{ staff.employee_number|default:"Not assigned" }}
+                                </td>
+
+                                <td class="role">
+                                    {{ staff.user.get_role_display }}
+                                </td>
+
+                                <td>
+                                    {% if staff.designation %}
+                                        {{ staff.designation.name }}
+                                    {% else %}
+                                        Not assigned
+                                    {% endif %}
+                                </td>
+
+                                <td>
+                                    {% if staff.status == "ACTIVE" %}
+                                        <span class="badge active">Active</span>
+                                    {% elif staff.status == "SUSPENDED" %}
+                                        <span class="badge suspended">Suspended</span>
+                                    {% elif staff.status == "TERMINATED" %}
+                                        <span class="badge terminated">Terminated</span>
+                                    {% else %}
+                                        <span class="badge inactive">
+                                            {{ staff.get_status_display }}
+                                        </span>
+                                    {% endif %}
+                                </td>
+
+                                <td>
+                                    {{ staff.phone_number|default:"Not recorded" }}
+                                </td>
+
+                                <td>
+                                    {{ staff.joined_date|date:"d M Y"|default:"Not recorded" }}
+                                </td>
+
+                                <td class="actions-cell">
+
+                                    <a href="{% url 'accounts:staff_edit' staff.user.id %}"
+                                       class="button button-secondary">
+                                        Edit
+                                    </a>
+
+                                    {% if staff.status == "ACTIVE" %}
+
+                                        <a href="{% url 'accounts:staff_suspend' staff.user.id %}"
+                                           class="button button-warning">
+                                            Suspend
+                                        </a>
+
+                                        <form method="post"
+                                              action="{% url 'accounts:staff_terminate' staff.user.id %}">
+                                            {% csrf_token %}
+                                            <button type="submit"
+                                                    class="button button-danger"
+                                                    onclick="return confirm('Are you sure you want to terminate this staff member?');">
+                                                Terminate
+                                            </button>
+                                        </form>
+
+                                    {% elif staff.status == "TERMINATED" %}
+
+                                        <form method="post"
+                                              action="{% url 'accounts:staff_activate' staff.user.id %}">
+                                            {% csrf_token %}
+                                            <button type="submit"
+                                                    class="button button-success">
+                                                Activate
+                                            </button>
+                                        </form>
+
+                                    {% elif staff.status == "INVITED" %}
+
+                                        <form method="post"
+                                              action="{% url 'accounts:staff_resend_invitation' staff.user.id %}">
+                                            {% csrf_token %}
+                                            <button type="submit"
+                                                    class="button button-secondary"
+                                                    onclick="return confirm('Resend a new invitation to this staff member? The current invitation link will be invalidated.');">
+                                                Resend Invitation
+                                            </button>
+                                        </form>
+
+                                        {% if staff.has_active_invitation %}
+                                        <form method="post"
+                                              action="{% url 'accounts:staff_revoke_invitation' staff.user.id %}">
+                                            {% csrf_token %}
+                                            <button type="submit"
+                                                    class="button button-danger"
+                                                    onclick="return confirm('Are you sure you want to revoke this invitation? The staff member will remain pending and the current setup link will stop working.');">
+                                                Revoke Invitation
+                                            </button>
+                                        </form>
+                                        {% endif %}
+
+                                    {% else %}
+
+                                        <form method="post"
+                                              action="{% url 'accounts:staff_activate' staff.user.id %}">
+                                            {% csrf_token %}
+                                            <button type="submit"
+                                                    class="button button-success">
+                                                Activate
+                                            </button>
+                                        </form>
+
+                                    {% endif %}
+
+                                </td>
+
+                            </tr>
+
+                        {% endfor %}
+
+                    </tbody>
+
+                </table>
+
+            {% else %}
+
+                <div class="empty">
+                    No staff members found.
+                </div>
+
+            {% endif %}
+
+        </div>
+
+    </main>
+
+</div>
+
+</body>
+</html>

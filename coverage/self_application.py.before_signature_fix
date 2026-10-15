@@ -1,0 +1,493 @@
+
+from datetime import timedelta
+from django.conf import settings
+from django.core.mail import send_mass_mail
+from django.db import transaction
+from django.db.models import Sum
+from django.utils import timezone
+
+from accounts.models import StaffProfile, User
+from coverage.models import CoverageApplication, CoverageSession, EndOfSessionReport
+from players.models import Player
+from notifications.models import Notification
+
+ACTIVE_COVERAGE_STATUSES = (
+    CoverageSession.Status.OPEN,
+    CoverageSession.Status.ACTIVE,
+    CoverageSession.Status.CONTINUATION_PENDING,
+    CoverageSession.Status.REPLACEMENT_REQUESTED,
+    CoverageSession.Status.HANDOVER,
+    CoverageSession.Status.AWAITING_REPORT,
+)
+
+def _week_start(moment):
+    local = timezone.localtime(moment)
+    return (local - timedelta(days=local.weekday())).replace(
+        hour=0, minute=0, second=0, microsecond=0
+    )
+
+def get_chats_this_week(moderator, moment=None):
+    moment = moment or timezone.localtime()
+    start = _week_start(moment)
+    from coverage.models import EndOfSessionReport
+    total = (
+        EndOfSessionReport.objects.filter(
+            moderator=moderator,
+            submitted_at__gte=start,
+            submitted_at__lte=moment,
+        ).aggregate(total=Sum("chats_responded"))["total"]
+        or 0
+    )
+    return int(total)
+
+def moderator_is_eligible(moderator, moment=None):
+    if moderator is None or getattr(moderator, "role", None) != "MODERATOR" or not moderator.is_active:
+        return False
+    try:
+        profile = moderator.staff_profile
+    except StaffProfile.DoesNotExist:
+        return False
+
+    if profile.status != StaffProfile.Status.ACTIVE:
+        return False
+
+    return not CoverageSession.objects.filter(
+        moderator=moderator, status__in=ACTIVE_COVERAGE_STATUSES
+    ).exists()
+
+def _new_coverage_players(moment):
+    from coverage.services import get_session_type, get_operating_date
+    session_type = get_session_type(moment)
+    operating_date = get_operating_date(moment, session_type)
+
+    covered_ids = set(
+        CoverageSession.objects.filter(
+            operating_date=operating_date,
+            session_type=session_type,
+            status__in=ACTIVE_COVERAGE_STATUSES,
+        ).values_list("player_id", flat=True)
+    )
+    return Player.objects.filter(status=Player.Status.ACTIVE).exclude(id__in=covered_ids).order_by("player_number")
+
+def _replacement_players(moment):
+    return CoverageSession.objects.filter(
+        status=CoverageSession.Status.REPLACEMENT_REQUESTED,
+        player__status=Player.Status.ACTIVE,
+    ).select_related("player", "moderator").order_by("player__player_number", "id")
+
+def get_coverage_opportunities(moderator, moment=None):
+    moment = moment or timezone.localtime()
+    if not moderator_is_eligible(moderator, moment):
+        return {
+            "eligible": False,
+            "weekly_chats": 0,
+            "new_players": Player.objects.none(),
+            "replacement_sessions": CoverageSession.objects.none(),
+        }
+    return {
+        "eligible": True,
+        "weekly_chats": get_chats_this_week(moderator, moment),
+        "new_players": _new_coverage_players(moment),
+        "replacement_sessions": _replacement_players(moment),
+    }
+
+def _notify(recipient, title, message, alert_level="INFO"):
+    Notification.objects.create(
+        recipient=recipient, title=title, message=message, alert_level=alert_level
+    )
+
+def _management_users():
+    return User.objects.filter(
+        role__in=("ADMIN", "DIRECTOR", "MANAGER"), is_active=True
+    ).exclude(email="")
+
+def _email_users(users, subject, message):
+    recipients = [user.email for user in users if getattr(user, "email", None)]
+    if not recipients:
+        return
+    send_mass_mail(
+        ((subject, message, getattr(settings, "DEFAULT_FROM_EMAIL", None), [email]) for email in recipients),
+        fail_silently=True,
+    )
+
+def _assign_new_coverage_locked(application, moment):
+    from coverage.services import get_session_type, get_operating_date
+    moderator, player = application.moderator, application.player
+    session_type = get_session_type(moment)
+    operating_date = get_operating_date(moment, session_type)
+
+    if CoverageSession.objects.filter(
+        player=player, operating_date=operating_date, session_type=session_type, status__in=ACTIVE_COVERAGE_STATUSES
+    ).exists():
+        return None
+
+    return CoverageSession.objects.create(
+        moderator=moderator,
+        player=player,
+        operating_date=operating_date,
+        session_type=session_type,
+        status=CoverageSession.Status.OPEN,
+    )
+
+def _assign_replacement_locked(application, replacement_session, moment):
+    replacement_moderator = application.moderator
+    outgoing_moderator = replacement_session.moderator
+    player = replacement_session.player
+
+    if getattr(outgoing_moderator, "id", None) == replacement_moderator.id:
+        return None
+
+    session = CoverageSession.objects.create(
+        moderator=replacement_moderator,
+        player=player,
+        operating_date=replacement_session.operating_date,
+        session_type=replacement_session.session_type,
+        status=CoverageSession.Status.OPEN,
+    )
+
+    replacement_session.replacement_moderator = replacement_moderator
+    replacement_session.replacement_session = session
+    replacement_session.status = CoverageSession.Status.HANDOVER
+    replacement_session.save(update_fields=["replacement_moderator", "replacement_session", "status"])
+    return session
+
+def _competition_seconds():
+    """
+    Length of the small competition window used to handle applicants
+    arriving at approximately the same time.
+
+    Default: 3 seconds.
+    """
+    import os
+
+    raw = os.environ.get("SELF_APPLICATION_COMPETITION_SECONDS", "3")
+
+    try:
+        value = float(raw)
+    except (TypeError, ValueError):
+        value = 3.0
+
+    return max(0.0, min(value, 30.0))
+
+
+def _select_winning_application(player, opportunity_type):
+    """
+    Select the highest-ranked pending application.
+
+    Ranking:
+        1. Highest chats_this_week
+        2. Earliest applied_at
+        3. Lowest id
+    """
+    return (
+        CoverageApplication.objects
+        .select_related("moderator", "player")
+        .filter(
+            player=player,
+            opportunity_type=opportunity_type,
+            status=CoverageApplication.Status.PENDING,
+        )
+        .order_by(
+            "-chats_this_week",
+            "applied_at",
+            "id",
+        )
+        .first()
+    )
+
+
+def _mark_losing_applications(player, opportunity_type, winner):
+    """
+    Mark all remaining pending applications as LOST.
+    """
+    losing = (
+        CoverageApplication.objects
+        .filter(
+            player=player,
+            opportunity_type=opportunity_type,
+            status=CoverageApplication.Status.PENDING,
+        )
+        .exclude(pk=winner.pk)
+    )
+
+    losing.update(status=CoverageApplication.Status.LOST)
+
+
+def apply_for_player(moderator, player, opportunity_type=None):
+    """
+    Submit an application for a coverage opportunity.
+    """
+    from django.conf import settings
+    from django.contrib.auth import get_user_model
+    from django.db import transaction
+    from django.utils import timezone
+    import time
+
+    User = get_user_model()
+
+    if opportunity_type is None:
+        opportunity_type = CoverageApplication.OpportunityType.NEW
+
+    valid_types = {
+        CoverageApplication.OpportunityType.NEW,
+        CoverageApplication.OpportunityType.REPLACEMENT,
+    }
+
+    if opportunity_type not in valid_types:
+        raise ValueError(f"Unsupported opportunity type: {opportunity_type}")
+
+    with transaction.atomic():
+        locked_moderator = (
+            User.objects
+            .select_for_update()
+            .get(pk=moderator.pk)
+        )
+
+        locked_player = (
+            player.__class__.objects
+            .select_for_update()
+            .get(pk=player.pk)
+        )
+
+        eligible, reason = moderator_is_eligible(locked_moderator)
+
+        if not eligible:
+            raise ValueError(reason)
+
+        existing = (
+            CoverageApplication.objects
+            .select_for_update()
+            .filter(
+                moderator=locked_moderator,
+                player=locked_player,
+                opportunity_type=opportunity_type,
+                status=CoverageApplication.Status.PENDING,
+            )
+            .order_by("-applied_at", "-id")
+            .first()
+        )
+
+        if existing:
+            application = existing
+        else:
+            weekly_chats = get_chats_this_week(locked_moderator)
+
+            application = CoverageApplication.objects.create(
+                player=locked_player,
+                moderator=locked_moderator,
+                opportunity_type=opportunity_type,
+                chats_this_week=weekly_chats,
+                status=CoverageApplication.Status.PENDING,
+            )
+
+    delay = _competition_seconds()
+
+    if delay > 0:
+        time.sleep(delay)
+
+    with transaction.atomic():
+        locked_player = (
+            player.__class__.objects
+            .select_for_update()
+            .get(pk=player.pk)
+        )
+
+        locked_application = (
+            CoverageApplication.objects
+            .select_for_update()
+            .get(pk=application.pk)
+        )
+
+        if locked_application.status != CoverageApplication.Status.PENDING:
+            return locked_application
+
+        now = timezone.now()
+
+        if opportunity_type == CoverageApplication.OpportunityType.NEW:
+            active_session = (
+                CoverageSession.objects
+                .filter(
+                    player=locked_player,
+                    status__in=ACTIVE_COVERAGE_STATUSES,
+                )
+                .order_by("-created_at", "-id")
+                .first()
+            )
+
+            if active_session:
+                locked_application.status = CoverageApplication.Status.LOST
+                locked_application.save(update_fields=["status"])
+                return locked_application
+
+            winner = _select_winning_application(
+                locked_player,
+                CoverageApplication.OpportunityType.NEW,
+            )
+
+            if winner is None:
+                return locked_application
+
+            winner_eligible, _ = moderator_is_eligible(winner.moderator)
+
+            if not winner_eligible:
+                winner.status = CoverageApplication.Status.LOST
+                winner.save(update_fields=["status"])
+
+                candidates = (
+                    CoverageApplication.objects
+                    .select_related("moderator")
+                    .filter(
+                        player=locked_player,
+                        opportunity_type=CoverageApplication.OpportunityType.NEW,
+                        status=CoverageApplication.Status.PENDING,
+                    )
+                    .order_by("-chats_this_week", "applied_at", "id")
+                )
+
+                winner = None
+
+                for candidate in candidates:
+                    candidate_eligible, _ = moderator_is_eligible(candidate.moderator)
+
+                    if candidate_eligible:
+                        winner = candidate
+                        break
+
+                    candidate.status = CoverageApplication.Status.LOST
+                    candidate.save(update_fields=["status"])
+
+                if winner is None:
+                    return locked_application
+
+            winner_has_session = (
+                CoverageSession.objects
+                .filter(
+                    moderator=winner.moderator,
+                    status__in=ACTIVE_COVERAGE_STATUSES,
+                )
+                .exists()
+            )
+
+            if winner_has_session:
+                winner.status = CoverageApplication.Status.LOST
+                winner.save(update_fields=["status"])
+                return locked_application
+
+            session = CoverageSession.objects.create(
+                player=locked_player,
+                moderator=winner.moderator,
+                status=CoverageSession.Status.ASSIGNED,
+                start_time=now,
+                assigned_by=winner.moderator,
+                updated_by=winner.moderator,
+            )
+
+            winner.status = CoverageApplication.Status.WON
+            winner.resulting_session = session
+            winner.save(update_fields=["status", "resulting_session"])
+
+            _mark_losing_applications(
+                locked_player,
+                CoverageApplication.OpportunityType.NEW,
+                winner,
+            )
+
+            return winner
+
+        if opportunity_type == CoverageApplication.OpportunityType.REPLACEMENT:
+            replacement_session = (
+                CoverageSession.objects
+                .select_for_update()
+                .filter(
+                    player=locked_player,
+                    status=CoverageSession.Status.REPLACEMENT_REQUESTED,
+                )
+                .order_by("-created_at", "-id")
+                .first()
+            )
+
+            if replacement_session is None:
+                locked_application.status = CoverageApplication.Status.LOST
+                locked_application.save(update_fields=["status"])
+                return locked_application
+
+            winner = _select_winning_application(
+                locked_player,
+                CoverageApplication.OpportunityType.REPLACEMENT,
+            )
+
+            if winner is None:
+                return locked_application
+
+            winner_eligible, _ = moderator_is_eligible(winner.moderator)
+
+            if not winner_eligible:
+                winner.status = CoverageApplication.Status.LOST
+                winner.save(update_fields=["status"])
+
+                candidates = (
+                    CoverageApplication.objects
+                    .select_related("moderator")
+                    .filter(
+                        player=locked_player,
+                        opportunity_type=CoverageApplication.OpportunityType.REPLACEMENT,
+                        status=CoverageApplication.Status.PENDING,
+                    )
+                    .order_by("-chats_this_week", "applied_at", "id")
+                )
+
+                winner = None
+
+                for candidate in candidates:
+                    candidate_eligible, _ = moderator_is_eligible(candidate.moderator)
+
+                    if candidate_eligible:
+                        winner = candidate
+                        break
+
+                    candidate.status = CoverageApplication.Status.LOST
+                    candidate.save(update_fields=["status"])
+
+                if winner is None:
+                    return locked_application
+
+            winner_has_session = (
+                CoverageSession.objects
+                .filter(
+                    moderator=winner.moderator,
+                    status__in=ACTIVE_COVERAGE_STATUSES,
+                )
+                .exists()
+            )
+
+            if winner_has_session:
+                winner.status = CoverageApplication.Status.LOST
+                winner.save(update_fields=["status"])
+                return locked_application
+
+            new_session = CoverageSession.objects.create(
+                player=locked_player,
+                moderator=winner.moderator,
+                status=CoverageSession.Status.ASSIGNED,
+                start_time=now,
+                assigned_by=winner.moderator,
+                updated_by=winner.moderator,
+            )
+
+            replacement_session.status = CoverageSession.Status.HANDOVER
+            replacement_session.replacement_moderator = winner.moderator
+            replacement_session.save(update_fields=["status", "replacement_moderator"])
+
+            winner.status = CoverageApplication.Status.WON
+            winner.resulting_session = new_session
+            winner.save(update_fields=["status", "resulting_session"])
+
+            _mark_losing_applications(
+                locked_player,
+                CoverageApplication.OpportunityType.REPLACEMENT,
+                winner,
+            )
+
+            return winner
+
+    return application

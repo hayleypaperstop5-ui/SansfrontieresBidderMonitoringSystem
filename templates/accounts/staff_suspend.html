@@ -307,17 +307,17 @@
             <div class="staff-summary">
 
                 <div class="avatar">
-                    {{ staff_user.first_name|first|upper }}{{ staff_user.last_name|first|upper }}
+                    {{ user.first_name|first|upper }}{{ user.last_name|first|upper }}
                 </div>
 
                 <div>
 
                     <div class="staff-name">
-                        {{ staff_user.get_full_name|default:staff_user.username }}
+                        {{ user.get_full_name|default:user.username }}
                     </div>
 
                     <div class="staff-username">
-                        @{{ staff_user.username }}
+                        @{{ user.username }}
                     </div>
 
                 </div>

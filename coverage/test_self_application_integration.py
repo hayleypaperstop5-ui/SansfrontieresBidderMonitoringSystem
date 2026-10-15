@@ -1,0 +1,558 @@
+﻿import os
+from unittest.mock import patch
+
+from django.contrib.messages import get_messages
+from django.test import Client, TestCase
+from django.urls import reverse
+from django.utils import timezone
+
+from accounts.models import User
+from coverage.models import CoverageApplication, CoverageSession
+from coverage.self_application import apply_for_player
+from notifications.models import Notification
+
+from coverage.test_self_application import SelfApplicationTestDataMixin
+
+
+class CoverageUIIntegrationTests(SelfApplicationTestDataMixin, TestCase):
+    """
+    Safe integration coverage for:
+
+    1. Moderator dashboard -> opportunities
+    2. Eligible moderator sees available players
+    3. Ineligible moderator is blocked
+    4. New application success message
+    5. Winning moderator receives CoverageSession
+    6. Losing moderator is marked LOST
+    7. Replacement opportunity shows outgoing moderator
+    8. Replacement creates replacement CoverageSession
+    9. Management receives notification
+    10. Outgoing/incoming moderators receive notifications
+    11. Email notification mechanism is invoked
+
+    Production code is not modified by these tests.
+    """
+
+    def setUp(self):
+        super().setUp()
+
+        self.client = Client()
+
+        self.moderator = self.make_user("ui_moderator")
+        self.moderator.email = "ui_moderator@example.test"
+        self.moderator.save(update_fields=["email"])
+
+        self.other_moderator = self.make_user("ui_other_moderator")
+        self.other_moderator.email = "ui_other_moderator@example.test"
+        self.other_moderator.save(update_fields=["email"])
+
+        self.manager = self.make_user("ui_manager")
+        self.manager.role = "MANAGER"
+        self.manager.email = "ui_manager@example.test"
+        self.manager.is_active = True
+        self.manager.save(update_fields=["role", "email", "is_active"])
+
+        self.director = self.make_user("ui_director")
+        self.director.role = "DIRECTOR"
+        self.director.email = "ui_director@example.test"
+        self.director.is_active = True
+        self.director.save(update_fields=["role", "email", "is_active"])
+
+    def login(self, user):
+        self.client.force_login(user)
+
+    def message_text(self, response):
+        return [
+            str(message)
+            for message in get_messages(response.wsgi_request)
+        ]
+
+    def competition_window_zero(self):
+        return patch.dict(
+            os.environ,
+            {"SELF_APPLICATION_COMPETITION_SECONDS": "0"},
+            clear=False,
+        )
+
+    def test_01_moderator_dashboard_links_to_opportunities(self):
+        self.login(self.moderator)
+
+        response = self.client.get(reverse("dashboard:home"))
+
+        self.assertEqual(response.status_code, 200)
+
+        expected_url = reverse("coverage:opportunities")
+        self.assertContains(response, expected_url)
+
+    def test_02_eligible_moderator_sees_available_player(self):
+        player = self.make_player(9201)
+
+        self.login(self.moderator)
+
+        response = self.client.get(reverse("coverage:opportunities"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, f"Player {player.player_number}")
+        self.assertContains(response, "Apply to cover")
+        self.assertNotContains(
+            response,
+            "You are not currently eligible to apply for coverage.",
+        )
+
+    def test_03_ineligible_moderator_is_blocked(self):
+        player = self.make_player(9202)
+        now = timezone.localtime()
+
+        CoverageSession.objects.create(
+            player=player,
+            moderator=self.moderator,
+            operating_date=now.date(),
+            session_type=CoverageSession.SessionType.DAY,
+            signed_in_at=now,
+            sign_in_deadline_at=now,
+            scheduled_close_at=now,
+            status=CoverageSession.Status.OPEN,
+        )
+
+        self.login(self.moderator)
+
+        response = self.client.get(reverse("coverage:opportunities"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(
+            response,
+            "You are not currently eligible to apply for coverage.",
+        )
+
+    def test_04_new_application_success_message(self):
+        player = self.make_player(9203)
+
+        self.login(self.moderator)
+
+        with self.competition_window_zero():
+            response = self.client.post(
+                reverse(
+                    "coverage:apply_for_coverage",
+                    args=[player.id],
+                ),
+                {
+                    "opportunity_type": CoverageApplication.OpportunityType.NEW,
+                },
+                follow=True,
+            )
+
+        self.assertEqual(response.status_code, 200)
+
+        messages = self.message_text(response)
+
+        self.assertTrue(
+            any(
+                "Coverage assignment successful." in message
+                for message in messages
+            ),
+            messages,
+        )
+
+    def test_05_winner_gets_new_coverage_session(self):
+        player = self.make_player(9204)
+
+        self.login(self.moderator)
+
+        with self.competition_window_zero():
+            response = self.client.post(
+                reverse(
+                    "coverage:apply_for_coverage",
+                    args=[player.id],
+                ),
+                {
+                    "opportunity_type": CoverageApplication.OpportunityType.NEW,
+                },
+                follow=True,
+            )
+
+        self.assertEqual(response.status_code, 200)
+
+        session = CoverageSession.objects.get(
+            player=player,
+            moderator=self.moderator,
+            status=CoverageSession.Status.ACTIVE,
+        )
+
+        self.assertIsNotNone(session.signed_in_at)
+        self.assertIsNone(session.sign_in_deadline_at)
+
+        application = CoverageApplication.objects.get(
+            player=player,
+            moderator=self.moderator,
+        )
+
+        self.assertEqual(application.status, CoverageApplication.Status.WON)
+        self.assertEqual(application.resulting_session_id, session.id)
+
+    def test_06_losing_moderator_is_marked_lost(self):
+        player = self.make_player(9205)
+        now = timezone.localtime()
+
+        # Create two pending applications with explicit snapshots.
+        losing_application = CoverageApplication.objects.create(
+            player=player,
+            moderator=self.moderator,
+            opportunity_type=CoverageApplication.OpportunityType.NEW,
+            chats_this_week=80,
+            status=CoverageApplication.Status.PENDING,
+        )
+
+        winning_application = CoverageApplication.objects.create(
+            player=player,
+            moderator=self.other_moderator,
+            opportunity_type=CoverageApplication.OpportunityType.NEW,
+            chats_this_week=150,
+            status=CoverageApplication.Status.PENDING,
+        )
+
+        # Make the winning application the one currently being resolved.
+        with patch(
+            "coverage.self_application.get_chats_this_week",
+            return_value=150,
+        ):
+            with self.competition_window_zero():
+                winner, session, awarded = apply_for_player(
+                    self.other_moderator,
+                    player.id,
+                    CoverageApplication.OpportunityType.NEW,
+                    now,
+                )
+
+        self.assertTrue(awarded)
+        self.assertEqual(
+            winner.moderator_id,
+            self.other_moderator.id,
+        )
+        self.assertEqual(
+            session.moderator_id,
+            self.other_moderator.id,
+        )
+
+        losing_application.refresh_from_db()
+
+        self.assertEqual(
+            losing_application.status,
+            CoverageApplication.Status.LOST,
+        )
+
+        winning_application.refresh_from_db()
+
+        self.assertEqual(
+            winning_application.status,
+            CoverageApplication.Status.WON,
+        )
+
+    def test_07_replacement_opportunity_shows_outgoing_moderator(self):
+        player = self.make_player(9206)
+        now = timezone.localtime()
+
+        outgoing = self.other_moderator
+
+        CoverageSession.objects.create(
+            player=player,
+            moderator=outgoing,
+            operating_date=now.date(),
+            session_type=CoverageSession.SessionType.DAY,
+            signed_in_at=now,
+            sign_in_deadline_at=now,
+            scheduled_close_at=now,
+            status=CoverageSession.Status.REPLACEMENT_REQUESTED,
+            replacement_requested_at=now,
+        )
+
+        self.login(self.moderator)
+
+        response = self.client.get(reverse("coverage:opportunities"))
+
+        self.assertEqual(response.status_code, 200)
+
+        self.assertContains(
+            response,
+            f"Player {player.player_number}",
+        )
+        self.assertContains(
+            response,
+            f"Replacing: {outgoing.username}",
+        )
+        self.assertContains(response, "Apply to replace")
+
+    def test_08_replacement_application_creates_replacement_session(self):
+        player = self.make_player(9207)
+        now = timezone.localtime()
+
+        old_session = CoverageSession.objects.create(
+            player=player,
+            moderator=self.other_moderator,
+            operating_date=now.date(),
+            session_type=CoverageSession.SessionType.DAY,
+            signed_in_at=now,
+            sign_in_deadline_at=now,
+            scheduled_close_at=now,
+            status=CoverageSession.Status.REPLACEMENT_REQUESTED,
+            replacement_requested_at=now,
+        )
+
+        self.login(self.moderator)
+
+        with self.competition_window_zero():
+            response = self.client.post(
+                reverse(
+                    "coverage:apply_for_coverage",
+                    args=[player.id],
+                ),
+                {
+                    "opportunity_type":
+                        CoverageApplication.OpportunityType.REPLACEMENT,
+                },
+                follow=True,
+            )
+
+        self.assertEqual(response.status_code, 200)
+
+        old_session.refresh_from_db()
+
+        self.assertEqual(
+            old_session.status,
+            CoverageSession.Status.HANDOVER,
+        )
+
+        self.assertEqual(
+            old_session.replacement_moderator_id,
+            self.moderator.id,
+        )
+
+        self.assertIsNotNone(
+            old_session.replacement_session_id
+        )
+
+        new_session = CoverageSession.objects.get(
+            id=old_session.replacement_session_id
+        )
+
+        self.assertEqual(
+            new_session.player_id,
+            player.id,
+        )
+
+        self.assertEqual(
+            new_session.moderator_id,
+            self.moderator.id,
+        )
+
+        self.assertEqual(
+            new_session.status,
+            CoverageSession.Status.ACTIVE,
+        )
+
+        self.assertIsNotNone(new_session.signed_in_at)
+        self.assertIsNone(new_session.sign_in_deadline_at)
+
+        application = CoverageApplication.objects.get(
+            player=player,
+            moderator=self.moderator,
+            opportunity_type=CoverageApplication.OpportunityType.REPLACEMENT,
+        )
+
+        self.assertEqual(
+            application.status,
+            CoverageApplication.Status.WON,
+        )
+
+        self.assertEqual(
+            application.resulting_session_id,
+            new_session.id,
+        )
+
+    def test_09_management_receives_in_system_notification(self):
+        player = self.make_player(9208)
+
+        before_ids = set(
+            Notification.objects.values_list("id", flat=True)
+        )
+
+        self.login(self.moderator)
+
+        with self.competition_window_zero():
+            self.client.post(
+                reverse(
+                    "coverage:apply_for_coverage",
+                    args=[player.id],
+                ),
+                {
+                    "opportunity_type":
+                        CoverageApplication.OpportunityType.NEW,
+                },
+                follow=True,
+            )
+
+        new_notifications = Notification.objects.exclude(
+            id__in=before_ids
+        )
+
+        management_notifications = new_notifications.filter(
+            recipient__in=[self.manager, self.director]
+        )
+
+        self.assertGreaterEqual(
+            management_notifications.count(),
+            1,
+        )
+
+        text = " ".join(
+            f"{notification.title} {notification.message}"
+            for notification in management_notifications
+        ).lower()
+
+        self.assertIn(
+            str(player.player_number).lower(),
+            text,
+        )
+
+    def test_10_replacement_notifies_outgoing_and_incoming_moderators(self):
+        player = self.make_player(9209)
+        now = timezone.localtime()
+
+        CoverageSession.objects.create(
+            player=player,
+            moderator=self.other_moderator,
+            operating_date=now.date(),
+            session_type=CoverageSession.SessionType.DAY,
+            signed_in_at=now,
+            sign_in_deadline_at=now,
+            scheduled_close_at=now,
+            status=CoverageSession.Status.REPLACEMENT_REQUESTED,
+            replacement_requested_at=now,
+        )
+
+        before_ids = set(
+            Notification.objects.values_list("id", flat=True)
+        )
+
+        self.login(self.moderator)
+
+        with self.competition_window_zero():
+            self.client.post(
+                reverse(
+                    "coverage:apply_for_coverage",
+                    args=[player.id],
+                ),
+                {
+                    "opportunity_type":
+                        CoverageApplication.OpportunityType.REPLACEMENT,
+                },
+                follow=True,
+            )
+
+        new_notifications = Notification.objects.exclude(
+            id__in=before_ids
+        )
+
+        outgoing_notifications = new_notifications.filter(
+            recipient=self.other_moderator
+        )
+
+        incoming_notifications = new_notifications.filter(
+            recipient=self.moderator
+        )
+
+        self.assertGreaterEqual(
+            outgoing_notifications.count(),
+            1,
+            "Outgoing moderator did not receive an in-system notification.",
+        )
+
+        self.assertGreaterEqual(
+            incoming_notifications.count(),
+            1,
+            "Incoming moderator did not receive an in-system notification.",
+        )
+
+        outgoing_text = " ".join(
+            f"{notification.title} {notification.message}"
+            for notification in outgoing_notifications
+        ).lower()
+
+        incoming_text = " ".join(
+            f"{notification.title} {notification.message}"
+            for notification in incoming_notifications
+        ).lower()
+
+        self.assertIn(
+            str(player.player_number).lower(),
+            outgoing_text,
+        )
+
+        self.assertIn(
+            str(player.player_number).lower(),
+            incoming_text,
+        )
+
+    def test_11_email_notification_mechanism_is_invoked(self):
+        player = self.make_player(9210)
+
+        self.login(self.moderator)
+
+        with patch(
+            "coverage.self_application.send_mass_mail"
+        ) as mock_send_mass_mail:
+
+            with self.competition_window_zero():
+                self.client.post(
+                    reverse(
+                        "coverage:apply_for_coverage",
+                        args=[player.id],
+                    ),
+                    {
+                        "opportunity_type":
+                            CoverageApplication.OpportunityType.NEW,
+                    },
+                    follow=True,
+                )
+
+        self.assertTrue(
+            mock_send_mass_mail.called,
+            "Expected send_mass_mail to be called.",
+        )
+
+        recipients = []
+
+        for call in mock_send_mass_mail.call_args_list:
+            if not call.args:
+                continue
+
+            message_batch = call.args[0]
+
+            for message in message_batch:
+                if len(message) >= 4:
+                    recipients.extend(message[3])
+
+        self.assertIn(
+            self.manager.email,
+            recipients,
+        )
+
+        self.assertIn(
+            self.director.email,
+            recipients,
+        )
+
+
+class CoverageIntegrationSummaryTests(
+    SelfApplicationTestDataMixin,
+    TestCase,
+):
+
+    def test_required_urls_resolve(self):
+        self.assertTrue(
+            reverse("dashboard:home")
+        )
+
+        self.assertTrue(
+            reverse("coverage:opportunities")
+        )
+

@@ -1,9 +1,11 @@
+﻿{% load static %}
 <!DOCTYPE html>
+{% load coverage_tags %}
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Coverage Notifications | Sansfrontieres</title>
+    <title>Shift &amp; Coverage Management | Sansfrontieres</title>
     <style>
         body {
             margin: 0;
@@ -340,7 +342,7 @@
 <body>
     <div class="container">
         <div class="header">
-            <h1>Coverage Notifications</h1>
+            <h1>Shift &amp; Coverage Management</h1>
             <p>Monitor Player coverage, coverage issues and active coverage sessions.</p>
         </div>
 
@@ -358,13 +360,18 @@
             <h2 class="section-title">Assign Player Coverage</h2>
             <p class="section-description">
                 Assign an eligible Moderator to an available Player. The assignment
-                creates an open coverage session and does not sign the Moderator in.
-                The Moderator must report and sign in before beginning work.
+                immediately activates the coverage session, so the selected Moderator
+                is assigned and recorded as covering the Player.
             </p>
 
             <div class="assignment-card">
                 {% if available_eligible_moderators and available_players %}
-                    <form method="post" class="assignment-form">
+                    <p class="replacement-description">
+    This will assign the selected Moderator as the new active Moderator
+    for this Player. The outgoing Moderator will be required to sign out
+    and submit an End-of-Session Report.
+</p>
+<form method="post" class="assignment-form">
                         {% csrf_token %}
                         <input type="hidden" name="action" value="assign_coverage">
 
@@ -675,10 +682,58 @@
                             </div>
                         </div>
 
+                        {% if session.status == "REPLACEMENT_REQUESTED" %}
                         <div class="override-form">
                             <p class="warning-text">
-                                This will immediately end the coverage session and record
-                                the closure as a Manager Override.
+                                This Moderator has requested replacement coverage.
+                                Select an eligible Moderator to take over this Player.
+                            </p>
+
+                            <form method="post">
+                                {% csrf_token %}
+                                <input type="hidden" name="action" value="assign_replacement">
+                                <input type="hidden" name="session_id" value="{{ session.id }}">
+
+                                <div class="form-group">
+                                    <label for="replacement_moderator_{{ session.id }}">
+                                        Replacement Moderator
+                                    </label>
+
+                                    <select
+                                        name="replacement_moderator_id"
+                                        id="replacement_moderator_{{ session.id }}"
+                                        required
+                                    >
+                                        <option value="">
+                                            Select a Moderator
+                                        </option>
+
+                                        {% for moderator in available_eligible_moderators %}
+                                            <option value="{{ moderator.id }}">
+                                                {{ moderator.get_full_name|default:moderator.username }}
+                                            </option>
+                                        {% empty %}
+                                            <option value="" disabled>
+                                                No eligible Moderators available
+                                            </option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+
+                                <button
+                                    type="submit"
+                                    class="assign-button"
+                                    onclick="return confirm('Assign the selected Moderator as replacement for this Player?');"
+                                >
+                                    Implement Replacement
+                                </button>
+                            </form>
+                        </div>
+                        {% endif %}
+
+                        <div class="override-form">
+                            <p class="warning-text">
+                                This will assign the selected Moderator as the new active Moderator for this Player. The outgoing Moderator will be required to sign out and submit an End-of-Session Report.
                             </p>
 
                             <form method="post">
@@ -709,6 +764,79 @@
             <p class="section-description">
                 Monitor Players that currently require coverage or require management attention.
             </p>
+
+        <div style="margin-top: 18px; position: sticky; top: 12px; z-index: 20; background: inherit;">
+            <p class="section-description" style="margin-bottom: 16px;">
+                Select resolved coverage notifications you want to permanently delete. Active notifications are never deleted.
+            </p>
+
+        <form method="post" onsubmit="return confirm('Are you sure you want to permanently delete the selected resolved alerts? This action cannot be undone.');">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="delete_resolved_alerts">
+
+            <div style="display: flex; justify-content: space-between; align-items: center; gap: 15px; flex-wrap: wrap; margin-bottom: 16px;">
+                <div>
+                    <div style="font-weight: 700; margin-bottom: 5px;">
+                        Resolved Coverage Alerts
+                    </div>
+                    <div style="opacity: 0.75;">
+                        {{ resolved_alert_count }} resolved alert{{ resolved_alert_count|pluralize }} currently stored.
+                    </div>
+                </div>
+
+                <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                    <button type="button" onclick="toggleResolvedAlerts(true)" style="padding: 8px 12px; border: 1px solid rgba(148, 163, 184, 0.4); border-radius: 8px; cursor: pointer; font-weight: 600;">
+                        Select All
+                    </button>
+                    <button type="button" onclick="toggleResolvedAlerts(false)" style="padding: 8px 12px; border: 1px solid rgba(148, 163, 184, 0.4); border-radius: 8px; cursor: pointer; font-weight: 600;">
+                        Deselect All
+                    </button>
+                    <button type="submit" style="padding: 8px 14px; border: none; border-radius: 8px; cursor: pointer; font-weight: 700;">
+                        Delete Selected Alerts
+                    </button>
+                </div>
+            </div>
+
+            {% if resolved_alerts %}
+                <div style="display: flex; flex-direction: column; gap: 8px;">
+                    {% for alert in resolved_alerts %}
+                        <label style="display: flex; align-items: flex-start; gap: 12px; padding: 12px; border: 1px solid rgba(148, 163, 184, 0.2); border-radius: 8px; cursor: pointer;">
+                            <input type="checkbox" name="selected_alerts" value="{{ alert.id }}" class="resolved-alert-checkbox" style="margin-top: 4px;">
+                            <span style="display: flex; flex-direction: column; gap: 3px;">
+                                <strong>{{ alert.player }}</strong>
+                                <span style="opacity: 0.75; font-size: 0.9rem;">
+                                    {{ alert.get_alert_type_display }}
+                                    {% if alert.resolved_at %}
+                                        &middot; Resolved {{ alert.resolved_at|date:"d M Y H:i" }}
+                                    {% endif %}
+                                </span>
+                            </span>
+                        </label>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <div style="padding: 18px; border: 1px solid rgba(148, 163, 184, 0.2); border-radius: 8px; opacity: 0.75;">
+                    No resolved coverage alerts are currently stored.
+                </div>
+            {% endif %}
+
+            <div style="margin-top: 14px; font-size: 0.9rem; opacity: 0.7; line-height: 1.5;">
+                Only <strong>Resolved</strong> alerts can be selected for permanent deletion.
+                Open, acknowledged, and escalated alerts are protected.
+            </div>
+        </form>
+
+        <script>
+            function toggleResolvedAlerts(checked) {
+                document.querySelectorAll(".resolved-alert-checkbox").forEach(function (checkbox) {
+                    checkbox.checked = checked;
+                });
+            }
+        </script>
+        </div>
+
+
+        <h2 class="section-title">Active Coverage Notifications</h2>
 
             {% if alerts %}
                 {% for alert in alerts %}
@@ -777,8 +905,196 @@
                     <p>All Players currently have the required coverage.</p>
                 </div>
             {% endif %}
+
         </div>
+
+
+        <h2 class="section-title">Coverage History</h2>
+        <p class="section-description">
+            View the latest Player coverage sessions, including completed, missed, cancelled and awaiting-report sessions.
+        </p>
+
+        <form method="get" style="margin: 20px 0 24px 0; padding: 18px; border: 1px solid #e5e7eb; border-radius: 12px; background: rgba(0, 0, 0, 0.02);">
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 14px; align-items: end;">
+
+                <div>
+                    <label for="history_date" style="display: block; font-weight: 600; margin-bottom: 6px;">
+                        Date
+                    </label>
+                    <input
+                        type="date"
+                        id="history_date"
+                        name="history_date"
+                        value="{{ history_date }}"
+                        style="width: 100%; padding: 10px 11px; border: 1px solid #d1d5db; border-radius: 8px; box-sizing: border-box;"
+                    >
+                </div>
+
+                <div>
+                    <label for="history_player" style="display: block; font-weight: 600; margin-bottom: 6px;">
+                        Player
+                    </label>
+                    <select
+                        id="history_player"
+                        name="history_player"
+                        style="width: 100%; padding: 10px 11px; border: 1px solid #d1d5db; border-radius: 8px; box-sizing: border-box;"
+                    >
+                        <option value="">All Players</option>
+                        {% for player in history_players %}
+                            <option value="{{ player.id }}" {% if history_player == player.id|stringformat:"s" %}selected{% endif %}>
+                                {{ player }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div>
+                    <label for="history_moderator" style="display: block; font-weight: 600; margin-bottom: 6px;">
+                        Moderator
+                    </label>
+                    <select
+                        id="history_moderator"
+                        name="history_moderator"
+                        style="width: 100%; padding: 10px 11px; border: 1px solid #d1d5db; border-radius: 8px; box-sizing: border-box;"
+                    >
+                        <option value="">All Moderators</option>
+                        {% for moderator in history_moderators %}
+                            <option value="{{ moderator.id }}" {% if history_moderator == moderator.id|stringformat:"s" %}selected{% endif %}>
+                                {{ moderator.get_full_name|default:moderator.username }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div>
+                    <label for="history_session" style="display: block; font-weight: 600; margin-bottom: 6px;">
+                        Session
+                    </label>
+                    <select
+                        id="history_session"
+                        name="history_session"
+                        style="width: 100%; padding: 10px 11px; border: 1px solid #d1d5db; border-radius: 8px; box-sizing: border-box;"
+                    >
+                        <option value="">All Sessions</option>
+                        {% for value, label in history_session_types %}
+                            <option value="{{ value }}" {% if history_session == value %}selected{% endif %}>
+                                {{ label }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div>
+                    <label for="history_status" style="display: block; font-weight: 600; margin-bottom: 6px;">
+                        Status
+                    </label>
+                    <select
+                        id="history_status"
+                        name="history_status"
+                        style="width: 100%; padding: 10px 11px; border: 1px solid #d1d5db; border-radius: 8px; box-sizing: border-box;"
+                    >
+                        <option value="">All Statuses</option>
+                        {% for value, label in history_statuses %}
+                            <option value="{{ value }}" {% if history_status == value %}selected{% endif %}>
+                                {% if value == "EXPIRED" %}
+                                    Missed (Expired)
+                                {% else %}
+                                    {{ label }}
+                                {% endif %}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                    <button
+                        type="submit"
+                        class="dashboard-button"
+                        style="border: none; cursor: pointer;"
+                    >
+                        Filter History
+                    </button>
+
+                    <a
+                        href="{% url 'coverage:manager_coverage_alerts' %}"
+                        class="dashboard-button"
+                        style="text-decoration: none;"
+                    >
+                        Clear Filters
+                    </a>
+                </div>
+
+            </div>
+        </form>
+        {% if coverage_history %}
+            <div style="overflow-x: auto; width: 100%;">
+                <table style="width: 100%; border-collapse: collapse; min-width: 1000px;">
+                    <thead>
+                        <tr>
+                            <th style="text-align: left; padding: 14px 12px;">Date</th>
+                            <th style="text-align: left; padding: 14px 12px;">Player</th>
+                            <th style="text-align: left; padding: 14px 12px;">Moderator</th>
+                            <th style="text-align: left; padding: 14px 12px;">Session</th>
+                            <th style="text-align: left; padding: 14px 12px;">Sign In</th>
+                            <th style="text-align: left; padding: 14px 12px;">Sign Out</th>
+                            <th style="text-align: left; padding: 14px 12px;">Duration</th>
+                            <th style="text-align: left; padding: 14px 12px;">Closure</th>
+                            <th style="text-align: left; padding: 14px 12px;">Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for session in coverage_history %}
+                            <tr style="border-top: 1px solid #e5e7eb;">
+                                <td style="padding: 14px 12px; white-space: nowrap;">
+                                    {{ session.operating_date|date:"d M Y" }}
+                                </td>
+                                <td style="padding: 14px 12px; font-weight: 600;">
+                                    {{ session.player }}
+                                </td>
+                                <td style="padding: 14px 12px;">
+                                    {{ session.moderator.get_full_name|default:session.moderator.username }}
+                                </td>
+                                <td style="padding: 14px 12px;">
+                                    {{ session.get_session_type_display }}
+                                </td>
+                                <td style="padding: 14px 12px; white-space: nowrap;">
+                                    {{ session.signed_in_at|date:"d M Y, H:i"|default:"Not signed in" }}
+                                </td>
+                                <td style="padding: 14px 12px; white-space: nowrap;">
+                                    {{ session.signed_out_at|date:"d M Y, H:i"|default:"Not recorded" }}
+                                </td>
+                                <td style="padding: 14px 12px; white-space: nowrap;">
+                                    {% if session.signed_in_at and session.signed_out_at %}
+                                        {{ session.signed_in_at|coverage_duration:session.signed_out_at }}
+                                    {% else %}
+                                        -
+                                    {% endif %}
+                                </td>
+                                <td style="padding: 14px 12px;">
+                                    {{ session.get_closure_reason_display|default:"Not specified" }}
+                                </td>
+                                <td style="padding: 14px 12px;">
+                                    <span class="status-badge {{ session.status|lower }}">
+                                        {% if session.status == "EXPIRED" %}
+    Missed
+{% else %}
+    {{ session.get_status_display }}
+{% endif %}
+                                    </span>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <div class="empty">
+                <h3>No Coverage History</h3>
+                <p>Completed, missed or cancelled coverage sessions will appear here.</p>
+            </div>
+        {% endif %}
     </div>
+
 
     <div style="text-align: center; margin-top: 30px;">
         <a href="{% url 'dashboard:home' %}" class="dashboard-button">
@@ -788,3 +1104,11 @@
 
 </body>
 </html>
+
+
+
+<script src="{% static 'js/notification_alerts.js' %}"></script>
+
+
+
+

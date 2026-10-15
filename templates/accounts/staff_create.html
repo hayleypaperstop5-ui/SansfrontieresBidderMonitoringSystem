@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Add Staff | Sansfrontieres</title>
+    <title>Invite Moderator | Sansfrontieres</title>
 
     <style>
         * {
@@ -56,6 +56,7 @@
             margin-bottom: 25px;
             border-radius: 6px;
             color: #14532d;
+            line-height: 1.5;
         }
 
         .field {
@@ -122,17 +123,6 @@
         .btn-secondary:hover {
             background: #d1d5db;
         }
-
-        .role-info {
-            display: inline-block;
-            background: #dbeafe;
-            color: #1e40af;
-            padding: 6px 12px;
-            border-radius: 20px;
-            font-size: 14px;
-            font-weight: 600;
-            margin-top: 5px;
-        }
     </style>
 </head>
 
@@ -146,18 +136,16 @@
 
         <div class="card">
 
-            <h1>Add Staff Member</h1>
+            <h1>Invite Moderator</h1>
 
             <p class="description">
-                Create a new staff account for the Sansfrontieres chat moderation workforce.
+                Register the moderator's basic details and send a secure account setup invitation.
             </p>
 
             <div class="notice">
-                <strong>Automatic staff setup:</strong><br>
-                New staff members are automatically assigned the
-                <span class="role-info">Moderator</span>
-                role and an employee number such as <strong>SF0002</strong>.
-                The account will also be activated automatically.
+                The moderator will receive an invitation by email and will complete their own
+                username, password, phone, WhatsApp, and M-Pesa details during account setup.
+                The invitation is valid for 24 hours.
             </div>
 
             <form method="post">
@@ -183,14 +171,6 @@
                 </div>
 
                 <div class="field">
-                    {{ form.username.label_tag }}
-                    {{ form.username }}
-                    {% if form.username.errors %}
-                        <div class="errors">{{ form.username.errors }}</div>
-                    {% endif %}
-                </div>
-
-                <div class="field">
                     {{ form.email.label_tag }}
                     {{ form.email }}
                     {% if form.email.errors %}
@@ -198,26 +178,10 @@
                     {% endif %}
                 </div>
 
-                <div class="field">
-                    {{ form.phone_number.label_tag }}
-                    {{ form.phone_number }}
-                    {% if form.phone_number.errors %}
-                        <div class="errors">{{ form.phone_number.errors }}</div>
-                    {% endif %}
-                </div>
-
-                <div class="field">
-                    {{ form.password.label_tag }}
-                    {{ form.password }}
-                    {% if form.password.errors %}
-                        <div class="errors">{{ form.password.errors }}</div>
-                    {% endif %}
-                </div>
-
                 <div class="actions">
 
                     <button type="submit" class="btn btn-primary">
-                        Create Staff Member
+                        Send Invitation
                     </button>
 
                     <a href="{% url 'accounts:staff_list' %}"

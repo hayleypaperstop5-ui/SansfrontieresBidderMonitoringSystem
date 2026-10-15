@@ -5,8 +5,8 @@ from accounts.decorators import role_required
 from accounts.permissions import MANAGER_ROLES, RATE_MANAGEMENT_ROLES
 from coverage.models import CoverageSession
 
-from .forms import ChatRateTierForm, PlayerCreationForm, PlayerEditForm
-from .models import ChatRateTier, Player
+from .forms import ChatRateTierForm, PlayerCreationForm, PlayerEditForm, PlayerChatRateTierForm
+from .models import ChatRateTier, Player, PlayerChatRateTier
 
 
 @role_required(*MANAGER_ROLES)
@@ -60,9 +60,105 @@ def player_create(request):
 
 
 @role_required(*RATE_MANAGEMENT_ROLES)
+def player_chat_rate_list(request):
+    """
+    Director-only management page for Player-specific chat rates.
+    """
+    rate_tiers = (
+        PlayerChatRateTier.objects
+        .select_related("player")
+        .order_by(
+            "player__player_number",
+            "minimum_chats",
+            "-effective_from",
+            "-id",
+        )
+    )
+
+    players = Player.objects.all().order_by("player_number")
+
+    return render(
+        request,
+        "players/player_chat_rate_list.html",
+        {
+            "rate_tiers": rate_tiers,
+            "players": players,
+        },
+    )
+
+
+@role_required(*RATE_MANAGEMENT_ROLES)
+def player_chat_rate_create(request):
+    """
+    Director-only creation of a Player-specific chat rate tier.
+    """
+    if request.method == "POST":
+        form = PlayerChatRateTierForm(request.POST)
+
+        if form.is_valid():
+            rate_tier = form.save()
+            messages.success(
+                request,
+                (
+                    f"Player {rate_tier.player.player_number} "
+                    "chat rate tier created successfully."
+                ),
+            )
+            return redirect("players:player_chat_rate_list")
+    else:
+        form = PlayerChatRateTierForm()
+
+    return render(
+        request,
+        "players/player_chat_rate_form.html",
+        {
+            "form": form,
+            "is_edit": False,
+        },
+    )
+
+
+@role_required(*RATE_MANAGEMENT_ROLES)
+def player_chat_rate_edit(request, rate_id):
+    """
+    Director-only editing of a Player-specific chat rate tier.
+    """
+    rate_tier = PlayerChatRateTier.objects.get(pk=rate_id)
+
+    if request.method == "POST":
+        form = PlayerChatRateTierForm(
+            request.POST,
+            instance=rate_tier,
+        )
+
+        if form.is_valid():
+            rate_tier = form.save()
+            messages.success(
+                request,
+                (
+                    f"Player {rate_tier.player.player_number} "
+                    "chat rate tier updated successfully."
+                ),
+            )
+            return redirect("players:player_chat_rate_list")
+    else:
+        form = PlayerChatRateTierForm(instance=rate_tier)
+
+    return render(
+        request,
+        "players/player_chat_rate_form.html",
+        {
+            "form": form,
+            "rate_tier": rate_tier,
+            "is_edit": True,
+        },
+    )
+
+@role_required(*RATE_MANAGEMENT_ROLES)
 def chat_rate_list(request):
 
     rate_tiers = ChatRateTier.objects.all()
+    active_tiers = rate_tiers.filter(active=True).count()
 
     return render(
         request,
@@ -108,6 +204,48 @@ def chat_rate_create(request):
         },
     )
 
+
+@role_required(*RATE_MANAGEMENT_ROLES)
+def chat_rate_edit(request, rate_id):
+
+    rate_tier = ChatRateTier.objects.get(pk=rate_id)
+
+    if request.method == "POST":
+
+        form = ChatRateTierForm(
+            request.POST,
+            instance=rate_tier,
+        )
+
+        if form.is_valid():
+
+            rate_tier = form.save()
+
+            messages.success(
+                request,
+                (
+                    f"Chat rate tier "
+                    f"{rate_tier.minimum_chats}-"
+                    f"{rate_tier.maximum_chats or 'plus'} chats "
+                    "was updated successfully."
+                ),
+            )
+
+            return redirect("players:chat_rate_list")
+
+    else:
+
+        form = ChatRateTierForm(instance=rate_tier)
+
+    return render(
+        request,
+        "players/chat_rate_form.html",
+        {
+            "form": form,
+            "rate_tier": rate_tier,
+            "is_edit": True,
+        },
+    )
 
 @role_required(*MANAGER_ROLES)
 def player_edit(request, player_id):
@@ -199,3 +337,4 @@ def player_deactivate(request, player_id):
     )
 
     return redirect("players:player_list")
+

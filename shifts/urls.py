@@ -18,6 +18,11 @@ urlpatterns = [
         name="shift_sign_in",
     ),
     path(
+        "<int:shift_id>/request-replacement/",
+        views.shift_request_replacement,
+        name="shift_request_replacement",
+    ),
+    path(
         "<int:shift_id>/sign-out/",
         views.shift_sign_out,
         name="shift_sign_out",

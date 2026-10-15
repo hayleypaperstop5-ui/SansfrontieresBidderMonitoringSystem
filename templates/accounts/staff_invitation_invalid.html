@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Invitation Not Available | Sansfrontieres</title>
+
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+            background: #f4f7fb;
+            color: #1f2937;
+        }
+
+        .topbar {
+            background: #12372a;
+            color: white;
+            padding: 18px 40px;
+            font-size: 20px;
+            font-weight: 700;
+        }
+
+        .container {
+            max-width: 700px;
+            margin: 70px auto;
+            padding: 0 20px;
+        }
+
+        .card {
+            background: white;
+            border-radius: 12px;
+            padding: 40px;
+            box-shadow: 0 4px 18px rgba(0, 0, 0, 0.08);
+            text-align: center;
+        }
+
+        h1 {
+            margin-top: 0;
+            color: #12372a;
+        }
+
+        .message {
+            color: #4b5563;
+            line-height: 1.6;
+            margin: 20px 0 0;
+        }
+
+        .notice {
+            margin-top: 25px;
+            padding: 14px 16px;
+            background: #fff7ed;
+            border-left: 4px solid #f59e0b;
+            border-radius: 6px;
+            color: #92400e;
+            text-align: left;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="topbar">
+        Sansfrontieres
+    </div>
+
+    <div class="container">
+
+        <div class="card">
+
+            <h1>Invitation Not Available</h1>
+
+            <p class="message">
+                {{ reason }}
+            </p>
+
+            <div class="notice">
+                Contact your Manager or Director and request a new Moderator invitation
+                if you still need to complete your account setup.
+            </div>
+
+        </div>
+
+    </div>
+
+</body>
+</html>

@@ -1,4 +1,4 @@
-from datetime import date, datetime, time, timedelta
+﻿from datetime import date, datetime, time, timedelta
 
 from django.utils import timezone
 
@@ -11,8 +11,8 @@ DAY_END = time(21, 0)
 NIGHT_START = time(21, 0)
 NIGHT_END = time(9, 0)
 
-DAY_AUTO_CLOSE = time(20, 45)
-NIGHT_AUTO_CLOSE = time(8, 45)
+DAY_AUTO_CLOSE = time(21, 0)
+NIGHT_AUTO_CLOSE = time(9, 0)
 
 
 def get_session_type(moment=None):
@@ -61,10 +61,12 @@ def get_operating_date(moment=None, session_type=None):
 
 def get_scheduled_close_at(moment=None, session_type=None):
     """
-    Return the automatic session closure datetime.
+    Return the hard boundary datetime for the current coverage session.
 
-    Day coverage closes automatically at 20:45.
-    Night coverage closes automatically at 08:45 the following morning.
+    Day coverage ends at 21:00.
+    Night coverage ends at 09:00 the following morning.
+
+    The continuation prompt is issued 15 minutes before this boundary.
     """
 
     if moment is None:

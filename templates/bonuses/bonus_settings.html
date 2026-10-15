@@ -1,0 +1,348 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bonus Settings</title>
+
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            font-family: Arial, Helvetica, sans-serif;
+            background: linear-gradient(135deg, #f3f7ff 0%, #eefaf7 100%);
+            color: #172b4d;
+        }
+
+        .bonus-page {
+            min-height: 100vh;
+            padding: 45px 20px;
+        }
+
+        .bonus-container {
+            max-width: 1050px;
+            margin: 0 auto;
+        }
+
+        .top-link {
+            display: inline-block;
+            margin-bottom: 20px;
+            color: #2563eb;
+            text-decoration: none;
+            font-size: 14px;
+            font-weight: 700;
+        }
+
+        .top-link:hover {
+            text-decoration: underline;
+        }
+
+        .bonus-card {
+            background: #ffffff;
+            border: 1px solid #e5e7eb;
+            border-radius: 22px;
+            overflow: hidden;
+            box-shadow: 0 18px 50px rgba(31, 41, 55, 0.12);
+        }
+
+        .bonus-header {
+            padding: 38px;
+            background: linear-gradient(135deg, #1d4ed8, #2563eb 55%, #0f766e);
+            color: white;
+        }
+
+        .bonus-header h1 {
+            margin: 0 0 10px;
+            font-size: 30px;
+            font-weight: 800;
+        }
+
+        .bonus-header p {
+            margin: 0;
+            color: rgba(255, 255, 255, 0.88);
+            line-height: 1.6;
+            font-size: 15px;
+        }
+
+        .bonus-body {
+            padding: 35px;
+        }
+
+        .current-box {
+            padding: 24px;
+            margin-bottom: 28px;
+            border-radius: 16px;
+            background: #ecfdf5;
+            border: 1px solid #a7f3d0;
+        }
+
+        .current-label {
+            color: #047857;
+            font-size: 12px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.6px;
+            margin-bottom: 8px;
+        }
+
+        .current-amount {
+            color: #065f46;
+            font-size: 30px;
+            font-weight: 900;
+            margin-bottom: 7px;
+        }
+
+        .current-details {
+            color: #047857;
+            font-size: 14px;
+        }
+
+        .action-row {
+            margin-bottom: 32px;
+        }
+
+        .primary-button {
+            display: inline-block;
+            padding: 14px 22px;
+            border-radius: 12px;
+            background: linear-gradient(135deg, #2563eb, #1d4ed8);
+            color: white;
+            text-decoration: none;
+            font-size: 14px;
+            font-weight: 800;
+            box-shadow: 0 7px 18px rgba(37, 99, 235, 0.24);
+        }
+
+        .primary-button:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 10px 23px rgba(37, 99, 235, 0.3);
+        }
+
+        .section-title {
+            margin: 0 0 16px;
+            color: #172b4d;
+            font-size: 20px;
+            font-weight: 800;
+        }
+
+        .table-wrap {
+            overflow-x: auto;
+            border: 1px solid #e5e7eb;
+            border-radius: 15px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            min-width: 650px;
+        }
+
+        th {
+            padding: 15px 17px;
+            text-align: left;
+            background: #f8fafc;
+            color: #475569;
+            font-size: 12px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.4px;
+        }
+
+        td {
+            padding: 17px;
+            border-top: 1px solid #eef2f7;
+            color: #334155;
+            font-size: 14px;
+        }
+
+        .amount {
+            color: #087f5b;
+            font-weight: 800;
+        }
+
+        .active-badge,
+        .inactive-badge {
+            display: inline-block;
+            padding: 6px 10px;
+            border-radius: 999px;
+            font-size: 11px;
+            font-weight: 800;
+        }
+
+        .active-badge {
+            background: #dcfce7;
+            color: #166534;
+        }
+
+        .inactive-badge {
+            background: #f1f5f9;
+            color: #64748b;
+        }
+
+        .edit-link {
+            color: #2563eb;
+            font-weight: 700;
+            text-decoration: none;
+        }
+
+        .edit-link:hover {
+            text-decoration: underline;
+        }
+
+        .empty {
+            padding: 30px;
+            text-align: center;
+            color: #64748b;
+            background: #f8fafc;
+            border-radius: 14px;
+        }
+
+        @media (max-width: 700px) {
+            .bonus-page {
+                padding: 25px 14px;
+            }
+
+            .bonus-header,
+            .bonus-body {
+                padding: 25px 20px;
+            }
+
+            .bonus-header h1 {
+                font-size: 25px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="bonus-page">
+    <div class="bonus-container">
+
+        <a class="top-link" href="/dashboard/">
+            Director Dashboard
+        </a>
+
+        <div class="bonus-card">
+
+            <div class="bonus-header">
+                <h1>Moderator Bonus Settings</h1>
+                <p>
+                    Configure the number of chats a Moderator must complete
+                    within 24 hours and the bonus amount they receive.
+                </p>
+            </div>
+
+            <div class="bonus-body">
+
+                {% if active_bonus_tier %}
+                    <div class="current-box">
+                        <div class="current-label">Current Active Bonus</div>
+
+                        <div class="current-amount">
+                            KES {{ active_bonus_tier.bonus_amount|floatformat:2 }}
+                        </div>
+
+                        <div class="current-details">
+                            {{ active_bonus_tier.minimum_chats|floatformat:0 }}
+                            chats within
+                            {{ active_bonus_tier.qualifying_window_hours }}
+                            hours
+                            {% if active_bonus_tier.effective_from %}
+                                - Effective {{ active_bonus_tier.effective_from|date:"d M Y" }}
+                            {% endif %}
+                        </div>
+                    </div>
+                {% endif %}
+
+                <div class="action-row">
+                    <a
+                        href="{% url 'bonuses:bonus_settings_create' %}"
+                        class="primary-button"
+                    >
+                        Configure New Bonus
+                    </a>
+                </div>
+
+                <h2 class="section-title">Bonus History</h2>
+
+                {% if bonus_history %}
+                    <div class="table-wrap">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Bonus Amount</th>
+                                    <th>Chat Target</th>
+                                    <th>Qualification</th>
+                                    <th>Effective From</th>
+                                    <th>Status</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+
+                            <tbody>
+                                {% for bonus in bonus_history %}
+                                    <tr>
+                                        <td class="amount">
+                                            KES {{ bonus.bonus_amount|floatformat:2 }}
+                                        </td>
+
+                                        <td>
+                                            {{ bonus.minimum_chats|floatformat:0 }} chats
+                                        </td>
+
+                                        <td>
+                                            {{ bonus.qualifying_window_hours }} hours
+                                        </td>
+
+                                        <td>
+                                            {% if bonus.effective_from %}
+                                                {{ bonus.effective_from|date:"d M Y" }}
+                                            {% else %}
+                                                Immediate
+                                            {% endif %}
+                                        </td>
+
+                                        <td>
+                                            {% if bonus.active %}
+                                                <span class="active-badge">
+                                                    Active
+                                                </span>
+                                            {% else %}
+                                                <span class="inactive-badge">
+                                                    Inactive
+                                                </span>
+                                            {% endif %}
+                                        </td>
+
+                                        <td>
+                                            <a
+                                                class="edit-link"
+                                                href="{% url 'bonuses:bonus_settings_edit' bonus.id %}"
+                                            >
+                                                Edit
+                                            </a>
+                                        </td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <div class="empty">
+                        No bonus configurations have been created yet.
+                    </div>
+                {% endif %}
+
+            </div>
+        </div>
+
+    </div>
+</div>
+
+</body>
+</html>
+

@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Access Denied | Sansfrontieres</title>
+
+    <style>
+        body {
+            margin: 0;
+            min-height: 100vh;
+            display: grid;
+            place-items: center;
+            background: #f4f7f6;
+            font-family: Arial, sans-serif;
+        }
+
+        .card {
+            background: white;
+            padding: 40px;
+            border-radius: 16px;
+            text-align: center;
+            box-shadow: 0 10px 35px rgba(0,0,0,.08);
+            max-width: 420px;
+        }
+
+        h1 {
+            color: #b33333;
+        }
+
+        p {
+            color: #68756e;
+        }
+
+        a {
+            display: inline-block;
+            margin-top: 15px;
+            padding: 11px 18px;
+            background: #08704d;
+            color: white;
+            border-radius: 9px;
+            text-decoration: none;
+            font-weight: bold;
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="card">
+
+    <h1>Access Denied</h1>
+
+    <p>
+        Only an authorized Director can access the Director Portal.
+    </p>
+
+    <a href="{% url 'dashboard:home' %}">
+        Return to Dashboard
+    </a>
+
+</div>
+
+</body>
+</html>

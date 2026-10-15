@@ -1,0 +1,136 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Create Staff Role - Sansfrontieres</title>
+    <style>
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+            background: #f4f6f8;
+            color: #1f2937;
+        }
+
+        header {
+            background: #111827;
+            color: white;
+            padding: 20px 32px;
+        }
+
+        main {
+            max-width: 700px;
+            margin: 50px auto;
+            padding: 0 24px;
+        }
+
+        .card {
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 2px 12px rgba(0,0,0,.06);
+        }
+
+        label {
+            display: block;
+            margin-top: 18px;
+            margin-bottom: 7px;
+            font-weight: bold;
+        }
+
+        input, textarea {
+            width: 100%;
+            box-sizing: border-box;
+            padding: 12px;
+            border: 1px solid #d1d5db;
+            border-radius: 7px;
+            font-size: 15px;
+        }
+
+        textarea {
+            min-height: 120px;
+        }
+
+        button {
+            margin-top: 24px;
+            background: #111827;
+            color: white;
+            border: 0;
+            padding: 13px 20px;
+            border-radius: 7px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        .back {
+            display: inline-block;
+            margin-top: 20px;
+        }
+
+        .message {
+            background: #fee2e2;
+            padding: 12px;
+            border-radius: 7px;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+
+<header>
+    <strong>SANSFRONTIERES</strong>
+    <div>Director Portal · Create Staff Role</div>
+</header>
+
+<main>
+
+    <div class="card">
+
+        <h1>Create Staff Role</h1>
+
+        <p>
+            Create an organizational role that can later be assigned
+            to staff members.
+        </p>
+
+        {% if messages %}
+            {% for message in messages %}
+                <div class="message">{{ message }}</div>
+            {% endfor %}
+        {% endif %}
+
+        <form method="post">
+            {% csrf_token %}
+
+            <label for="name">Role Name</label>
+            <input
+                type="text"
+                id="name"
+                name="name"
+                maxlength="100"
+                required
+                placeholder="e.g. Account"
+            >
+
+            <label for="description">Description</label>
+            <textarea
+                id="description"
+                name="description"
+                placeholder="Describe the responsibilities of this role."
+            ></textarea>
+
+            <button type="submit">
+                Create Role
+            </button>
+        </form>
+
+        <a class="back" href="{% url 'accounts:role_list' %}">
+            ← Back to Staff Roles
+        </a>
+
+    </div>
+
+</main>
+
+</body>
+</html>

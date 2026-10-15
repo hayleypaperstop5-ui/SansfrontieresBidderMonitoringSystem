@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Payroll Review</title>
+    <style>
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+            background: #f5f7fb;
+            color: #172033;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 40px auto;
+            padding: 0 24px;
+        }
+        .top-link {
+            color: #4f46e5;
+            text-decoration: none;
+            font-weight: 700;
+        }
+        h1 {
+            margin-bottom: 8px;
+        }
+        .subtitle {
+            color: #64748b;
+            margin-bottom: 28px;
+        }
+        .panel {
+            background: white;
+            border-radius: 16px;
+            padding: 24px;
+            margin-bottom: 24px;
+            box-shadow: 0 4px 18px rgba(15, 23, 42, .06);
+        }
+        .summary {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 14px;
+        }
+        .card {
+            background: #f8fafc;
+            border-radius: 12px;
+            padding: 16px;
+        }
+        .label {
+            font-size: 12px;
+            text-transform: uppercase;
+            color: #64748b;
+            font-weight: 700;
+        }
+        .value {
+            margin-top: 6px;
+            font-size: 20px;
+            font-weight: 800;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        th, td {
+            padding: 13px 10px;
+            border-bottom: 1px solid #e2e8f0;
+            text-align: left;
+        }
+        th {
+            font-size: 12px;
+            text-transform: uppercase;
+            color: #64748b;
+        }
+        td.num {
+            text-align: right;
+        }
+        .qualified {
+            font-weight: 800;
+        }
+        .muted {
+            color: #64748b;
+        }
+        .actions {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+            margin-top: 24px;
+        }
+        .button {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 12px 18px;
+            border-radius: 10px;
+            text-decoration: none;
+            border: 0;
+            cursor: pointer;
+            font-weight: 800;
+            font-size: 14px;
+        }
+        .primary {
+            background: #4f46e5;
+            color: white;
+        }
+        .secondary {
+            background: #e2e8f0;
+            color: #172033;
+        }
+        .notice {
+            background: #eef2ff;
+            color: #3730a3;
+            border-radius: 10px;
+            padding: 14px 16px;
+            margin-bottom: 20px;
+        }
+        @media (max-width: 760px) {
+            .table-wrap {
+                overflow-x: auto;
+            }
+            table {
+                min-width: 760px;
+            }
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <a class="top-link" href="{% url 'payments:payment_settings' %}">
+        <- Payment Settings
+    </a>
+
+    <h1>Payroll Review</h1>
+    <div class="subtitle">
+        Review the read-only payroll calculation before consuming unpaid chats.
+    </div>
+
+    <div class="panel">
+        <div class="summary">
+            <div class="card">
+                <div class="label">Payroll Period</div>
+                <div class="value">
+                    {{ plan.week_start|date:"d M Y" }} - {{ plan.week_end|date:"d M Y" }}
+                </div>
+            </div>
+            <div class="card">
+                <div class="label">Qualification Threshold</div>
+                <div class="value">{{ plan.threshold }} chats</div>
+            </div>
+            <div class="card">
+                <div class="label">Rate Method</div>
+                <div class="value">{% if plan.rate_method == 'CHAT_TIER' %}Chat Tier{% elif plan.rate_method == 'PLAYER_CHAT_RATE' %}Player Chat Rate{% elif plan.rate_method == 'BOTH' %}Both{% else %}{{ plan.rate_method }}{% endif %}</div>
+            </div>
+            <div class="card">
+                <div class="label">Payment Method</div>
+                <div class="value">{% if plan.payment_method == 'WEEKLY_PER_CHAT' %}Weekly / Per Chat{% elif plan.payment_method == 'MONTHLY' %}Monthly{% else %}{{ plan.payment_method }}{% endif %}</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="notice">
+        This review is read-only. No unpaid chats are consumed and no payment
+        records are created until <strong>Process Payroll</strong> is submitted.
+    </div>
+
+    <div class="panel">
+        <h2>Player Qualification &amp; Payable Chats</h2>
+
+        {% if plan.review_rows %}
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Moderator</th>
+                        <th>Player</th>
+                        <th>Opening CF</th>
+                        <th>Current</th>
+                        <th>Total</th>
+                        <th>Payable</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in plan.review_rows %}
+                    <tr>
+                        <td>{{ row.moderator }}</td>
+                        <td>{{ row.player }}</td>
+                        <td class="num">{{ row.opening_cf }}</td>
+                        <td class="num">{{ row.current }}</td>
+                        <td class="num">{{ row.total }}</td>
+                        <td class="num qualified">{{ row.payable }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+            <p class="muted">No unpaid Player chats are currently available for review.</p>
+        {% endif %}
+    </div>
+
+    <div class="panel">
+        <h2>Financial Calculation</h2>
+
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Moderator</th>
+                        <th>Payable Chats</th>
+                        <th>Chat Earnings</th>
+                        <th>Bonuses</th>
+                        <th>Earned Amount</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in plan.moderator_rows %}
+                    <tr>
+                        <td>{{ row.moderator }}</td>
+                        <td class="num">{{ row.payable }}</td>
+                        <td class="num">KES {{ row.chat_earnings|floatformat:2 }}</td>
+                        <td class="num">KES {{ row.bonus_earned|floatformat:2 }}</td>
+                        <td class="num qualified">KES {{ row.earned_amount|floatformat:2 }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="5" class="muted">
+                            No Moderator earnings are currently available.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <div class="summary" style="margin-top:20px;">
+            <div class="card">
+                <div class="label">Payable Chats</div>
+                <div class="value">{{ plan.total_payable_chats }}</div>
+            </div>
+            <div class="card">
+                <div class="label">Chat Earnings</div>
+                <div class="value">KES {{ plan.total_chat_earnings|floatformat:2 }}</div>
+            </div>
+            <div class="card">
+                <div class="label">Bonuses</div>
+                <div class="value">KES {{ plan.total_bonuses|floatformat:2 }}</div>
+            </div>
+            <div class="card">
+                <div class="label">Earned Amount</div>
+                <div class="value">KES {{ plan.total_earned|floatformat:2 }}</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="actions">
+        <a
+            class="button secondary"
+            href="{% url 'payments:payment_settings' %}"
+        >
+            Back to Payment Settings
+        </a>
+
+        <form method="post" action="{% url 'payments:payroll_process' %}">
+            {% csrf_token %}
+            <input
+                type="hidden"
+                name="payment_date"
+                value="{{ plan.payment_date|date:'Y-m-d' }}"
+            >
+            <button type="submit" class="button primary">
+                Process Payroll
+            </button>
+        </form>
+    </div>
+</div>
+</body>
+</html>

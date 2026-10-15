@@ -1,25 +1,1072 @@
+﻿from datetime import timedelta
+from decimal import Decimal
+
+from django.contrib import messages
+from django.contrib.auth import update_session_auth_hash
+from django.contrib.auth.forms import PasswordChangeForm
 from django.contrib.auth.decorators import login_required
-from django.shortcuts import render
+from django.db import transaction
+from django.db import models
+from django.db.models import Count, Sum
+from django.shortcuts import redirect, render
+from django.utils import timezone
 
 from accounts.decorators import role_required
-from accounts.models import User
+from accounts.forms import StaffSelfProfileForm
+from accounts.models import StaffProfile, User
 from accounts.permissions import ADMIN_ROLES
-from shifts.models import Shift
+from accounts.utils import normalize_whatsapp_number
+from bonuses.models import BonusAward
+from coverage.forms import ContinuationResponseForm
+from coverage.models import CoverageSession
+from coverage.services import (
+    close_expired_coverage_sessions,
+    request_replacement,
+    respond_to_coverage_continuation,
+)
+from payments.models import ModeratorPayment, PaymentRecord, PaymentSettings
+from payments.services import (
+    calculate_gross_amount,
+    get_applicable_rate_tier,
+    get_player_payment_threshold,
+    process_thursday_payroll,
+)
+from players.models import Player
 
 
-@login_required
+@login_required(login_url="/login/")
 def dashboard(request):
+    """
+    Main dashboard.
+
+    Moderators see the Moderator dashboard.
+    Directors see the Director dashboard.
+    Other roles are redirected to the normal dashboard/home route.
+    """
+
+    if request.user.role == User.Role.DIRECTOR:
+        return director_dashboard(request)
+
+    if request.user.role == User.Role.MANAGER:
+        manager_reports = list(
+            CoverageSession.objects
+            .filter(
+                end_of_session_report__isnull=False,
+            )
+            .select_related(
+                "end_of_session_report",
+                "player",
+                "moderator",
+            )
+            .order_by(
+                "-operating_date",
+                "-end_of_session_report__submitted_at",
+            )[:20]
+        )
+
+        return render(
+            request,
+            "dashboard/dashboard.html",
+            {
+                "manager_reports": manager_reports,
+            },
+        )
+
+    if request.user.role != User.Role.MODERATOR:
+        return render(
+            request,
+            "dashboard/dashboard.html",
+        )
+
+    moment = timezone.localtime()
+    today = moment.date()
+
+    close_expired_coverage_sessions(
+        moment=moment,
+    )
+
+    coverage_sessions = (
+        CoverageSession.objects
+        .select_related(
+            "player",
+            "replacement_moderator",
+        )
+        .filter(
+            moderator=request.user,
+        )
+        .order_by(
+            "-operating_date",
+            "-created_at",
+        )
+    )
+
+    # Prefer an actually ACTIVE coverage session over an older
+    # OPEN/waiting session. Self-application now signs the winning
+    # moderator in automatically, so ACTIVE must be the authoritative
+    # current coverage state.
+    current_session = (
+        coverage_sessions
+        .filter(
+            status=CoverageSession.Status.ACTIVE,
+        )
+        .order_by(
+            "-signed_in_at",
+            "-created_at",
+            "-id",
+        )
+        .first()
+    )
+
+    # If there is no ACTIVE session, fall back to the normal pending/
+    # handover/report states.
+    if current_session is None:
+        current_session = coverage_sessions.filter(
+            status__in=(
+                CoverageSession.Status.OPEN,
+                CoverageSession.Status.REPLACEMENT_REQUESTED,
+                CoverageSession.Status.HANDOVER,
+                CoverageSession.Status.CONTINUATION_PENDING,
+                CoverageSession.Status.AWAITING_REPORT,
+            ),
+        ).first()
+
+    awaiting_reports = coverage_sessions.filter(
+        status=CoverageSession.Status.AWAITING_REPORT,
+    ).count()
+
+    missed_sessions = coverage_sessions.filter(
+        status__in=(
+            CoverageSession.Status.EXPIRED,
+            CoverageSession.Status.MISSED,
+        ),
+    ).count()
+
+    replacement_requests = coverage_sessions.filter(
+        status=CoverageSession.Status.REPLACEMENT_REQUESTED,
+    ).count()
+
+    reports = (
+        coverage_sessions
+        .filter(
+            end_of_session_report__isnull=False,
+        )
+        .select_related(
+            "end_of_session_report",
+            "player",
+        )
+    )
+
+    chats_today = sum(
+        report.end_of_session_report.chats_responded
+        for report in reports
+        if report.operating_date == today
+    )
+
+    week_start = today - timedelta(days=today.weekday())
+
+    chats_this_week = sum(
+        report.end_of_session_report.chats_responded
+        for report in reports
+        if week_start <= report.operating_date <= today
+    )
+
+    month_start = today.replace(day=1)
+
+    chats_this_month = sum(
+        report.end_of_session_report.chats_responded
+        for report in reports
+        if month_start <= report.operating_date <= today
+    )
+
+    recent_reports = list(reports[:5])
+
+    payment_records = (
+        PaymentRecord.objects
+        .filter(
+            moderator=request.user,
+        )
+        .order_by("-created_at")
+    )
+
+    unpaid_chats = sum(
+        payment.chats_responded - payment.payroll_processed_chats
+        for payment in payment_records
+    )
+
+    paid_chats = sum(
+        payment.payroll_processed_chats
+        for payment in payment_records
+    )
+
+    moderator_payroll = (
+        ModeratorPayment.objects
+        .filter(
+            moderator=request.user,
+        )
+        .order_by("-payment_week_end")
+    )
+
+    payroll_earned = sum(
+        (
+            payment.earned_amount
+            for payment in moderator_payroll
+        ),
+        Decimal("0.00"),
+    )
+
+    payroll_paid = sum(
+        (
+            payment.amount_paid
+            for payment in moderator_payroll
+        ),
+        Decimal("0.00"),
+    )
+
+    payroll_outstanding = sum(
+        (
+            payment.outstanding_amount
+            for payment in moderator_payroll
+        ),
+        Decimal("0.00"),
+    )
+
+    payroll_chat_earnings = sum(
+        (
+            payment.chat_earnings
+            for payment in moderator_payroll
+        ),
+        Decimal("0.00"),
+    )
+
+    payroll_bonus_earned = sum(
+        (
+            payment.bonus_earned
+            for payment in moderator_payroll
+        ),
+        Decimal("0.00"),
+    )
+
+    current_rate = None
+
+    try:
+        applicable_rate_tier = get_applicable_rate_tier(
+            chats_responded=chats_today,
+            operating_date=today,
+        )
+    except Exception:
+        applicable_rate_tier = None
+
+    if applicable_rate_tier is not None:
+        current_rate = applicable_rate_tier.rate_per_chat
+
+    bonus_awards = BonusAward.objects.filter(
+        moderator=request.user,
+    )
+
+    bonus_earned = sum(
+        (
+            award.bonus_amount
+            for award in bonus_awards
+        ),
+        Decimal("0.00"),
+    )
+
+    total_earnings = payroll_earned
+    amount_earned = payroll_earned
+    paid_amount = payroll_paid
+    outstanding_amount = payroll_outstanding
+    bonus_earned = payroll_bonus_earned
+
+    next_action = {
+        "title": "You're all caught up",
+        "message": (
+            "No action is currently required. "
+            "Keep up the good work."
+        ),
+        "button_label": None,
+        "button_url": None,
+        "tone": "success",
+    }
+
+    if current_session is not None:
+
+        if current_session.status == CoverageSession.Status.OPEN:
+            next_action = {
+                "title": "Action Required",
+                "message": (
+                    "You have an assigned coverage session "
+                    "waiting for sign-in."
+                ),
+                "button_label": "Sign In to Coverage",
+                "button_url": "coverage:moderator_coverage",
+                "tone": "warning",
+            }
+
+
+        elif current_session.status == CoverageSession.Status.CONTINUATION_PENDING:
+            next_action = {
+                "title": "Continuation Required",
+                "message": (
+                    "Your coverage continuation window is open. "
+                    "Choose YES to continue covering the same Player "
+                    "or NO to end this coverage session and submit your report."
+                ),
+                "button_label": "Respond to Continuation",
+                "button_url": "dashboard:my_shifts",
+                "tone": "warning",
+            }
+
+        elif (
+            current_session.status
+            == CoverageSession.Status.AWAITING_REPORT
+        ):
+            next_action = {
+                "title": "Report Required",
+                "message": (
+                    "Your previous coverage session has ended. "
+                    "Submit your end-of-session report."
+                ),
+                "button_label": "Submit Report",
+                "button_url": "coverage:end_of_session_report",
+                "button_args": [current_session.id],
+                "tone": "warning",
+            }
+
+        elif (
+            current_session.status
+            == CoverageSession.Status.REPLACEMENT_REQUESTED
+        ):
+            next_action = {
+                "title": "Replacement Requested",
+                "message": (
+                    "Your replacement request has been sent. "
+                    "Continue covering the Player until the "
+                    "replacement is secured."
+                ),
+                "button_label": "Manage Coverage",
+                "button_url": "coverage:moderator_coverage",
+                "tone": "warning",
+            }
+
+        elif current_session.status in (
+            CoverageSession.Status.ACTIVE,
+            CoverageSession.Status.HANDOVER,
+        ):
+            next_action = {
+                "title": "Coverage In Progress",
+                "message": (
+                    "You are currently responsible for this "
+                    "Player coverage session."
+                ),
+                "button_label": "Manage Coverage",
+                "button_url": "coverage:moderator_coverage",
+                "tone": "success",
+            }
+
+    manager_contact = (
+        StaffProfile.objects
+        .select_related("user")
+        .filter(
+            user__role=User.Role.MANAGER,
+            status=StaffProfile.Status.ACTIVE,
+        )
+        .first()
+    )
+
+    director_contact = (
+        StaffProfile.objects
+        .select_related("user")
+        .filter(
+            user__role=User.Role.DIRECTOR,
+            status=StaffProfile.Status.ACTIVE,
+        )
+        .first()
+    )
+
+    if manager_contact:
+        manager_contact.whatsapp_number = normalize_whatsapp_number(
+            manager_contact.phone_number
+        )
+
+    if director_contact:
+        director_contact.whatsapp_number = normalize_whatsapp_number(
+            director_contact.phone_number
+        )
     return render(
         request,
         "dashboard/dashboard.html",
+        {
+            "current_session": current_session,
+            "awaiting_reports": awaiting_reports,
+            "missed_sessions": missed_sessions,
+            "replacement_requests": replacement_requests,
+            "chats_today": chats_today,
+            "chats_this_week": chats_this_week,
+            "chats_this_month": chats_this_month,
+            "recent_reports": recent_reports,
+            "unpaid_chats": unpaid_chats,
+            "amount_earned": amount_earned,
+            "paid_amount": paid_amount,
+            "paid_chats": paid_chats,
+            "outstanding_amount": outstanding_amount,
+            "bonus_earned": bonus_earned,
+            "total_earnings": total_earnings,
+            "current_rate": current_rate,
+            "next_action": next_action,
+            "payment_count": payment_records.count(),
+            "moderator_payroll": moderator_payroll,
+            "payroll_earned": payroll_earned,
+            "payroll_paid": payroll_paid,
+            "payroll_outstanding": payroll_outstanding,
+            "payroll_chat_earnings": payroll_chat_earnings,
+            "payroll_bonus_earned": payroll_bonus_earned,
+            "manager_contact": manager_contact,
+            "director_contact": director_contact,
+        },
     )
 
 
+@role_required(User.Role.DIRECTOR)
+def process_director_payroll(request):
+    """
+    Process the Director's weekly Moderator payroll action.
+
+    Payroll processing is POST-only and is delegated to the payment
+    service so the dashboard does not contain payroll business logic.
+    """
+
+    # Configuration and review must occur before payroll.
+    return redirect("payments:payment_settings")
+
+    if request.method != "POST":
+        return redirect("dashboard:home")
+
+    payment_date = timezone.localtime().date()
+
+    try:
+        result = process_thursday_payroll(
+            payment_date=payment_date,
+        )
+
+        messages.success(
+            request,
+            (
+                f"Weekly payroll processed successfully. "
+                f"{result['payments_created']} Moderator payment record(s) "
+                f"created."
+            ),
+        )
+
+    except Exception as exc:
+        messages.error(
+            request,
+            f"Weekly payroll could not be processed: {exc}",
+        )
+
+    return redirect("dashboard:home")
+
+
+@role_required(User.Role.DIRECTOR)
+def director_dashboard(request):
+    """
+    Director executive dashboard.
+
+    This view is intentionally read-only for now.
+
+    Configuration actions such as:
+    - chat-rate management
+    - staff management
+    - player management
+    - bonus management
+    - payroll settings
+
+    should be connected to the existing management views rather
+    than creating duplicate configuration systems.
+    """
+
+    moment = timezone.localtime()
+    today = moment.date()
+
+    week_start = today - timedelta(days=today.weekday())
+
+    # ---------------------------------------------------------
+    # STAFF
+    # ---------------------------------------------------------
+
+    staff = User.objects.filter(staff_profile__isnull=False).distinct()
+
+    active_staff = staff.filter(
+        is_active=True,
+    ).count()
+
+    moderators = staff.filter(
+        role=User.Role.MODERATOR,
+    )
+
+    active_moderators = moderators.filter(
+        is_active=True,
+    ).count()
+
+    managers = staff.filter(
+        role=User.Role.MANAGER,
+    )
+
+    active_managers = managers.filter(
+        is_active=True,
+    ).count()
+
+    # ---------------------------------------------------------
+    # PLAYERS
+    # ---------------------------------------------------------
+
+    total_players = Player.objects.count()
+
+    active_players = Player.objects.filter(
+        status=Player.Status.ACTIVE,
+    ).count()
+
+    inactive_players = Player.objects.filter(
+        status=Player.Status.INACTIVE,
+    ).count()
+
+    # ---------------------------------------------------------
+    # COVERAGE
+    # ---------------------------------------------------------
+
+    total_coverage_sessions = CoverageSession.objects.count()
+
+    active_coverage_sessions = CoverageSession.objects.filter(
+        status__in=(
+            CoverageSession.Status.OPEN,
+            CoverageSession.Status.ACTIVE,
+            CoverageSession.Status.REPLACEMENT_REQUESTED,
+            CoverageSession.Status.HANDOVER,
+            CoverageSession.Status.AWAITING_REPORT,
+        ),
+    ).count()
+
+    # ---------------------------------------------------------
+    # CHAT VOLUME
+    # ---------------------------------------------------------
+
+    completed_reports = CoverageSession.objects.filter(
+        end_of_session_report__isnull=False,
+    ).select_related(
+        "end_of_session_report",
+        "player",
+        "moderator",
+    )
+
+    total_chats = 0
+
+    chats_this_week = 0
+
+    chats_this_month = 0
+
+    month_start = today.replace(day=1)
+
+    for session in completed_reports:
+
+        report = session.end_of_session_report
+
+        chats = report.chats_responded or 0
+
+        total_chats += chats
+
+        if week_start <= session.operating_date <= today:
+            chats_this_week += chats
+
+        if month_start <= session.operating_date <= today:
+            chats_this_month += chats
+
+    # ---------------------------------------------------------
+    # PAYROLL
+    # ---------------------------------------------------------
+
+    moderator_payroll = ModeratorPayment.objects.select_related(
+        "moderator",
+    )
+
+    total_payment_records = moderator_payroll.count()
+
+    generated_amount = sum(
+        (payment.earned_amount for payment in moderator_payroll),
+        Decimal("0.00"),
+    )
+
+    paid_amount = sum(
+        (payment.amount_paid for payment in moderator_payroll),
+        Decimal("0.00"),
+    )
+
+    outstanding_amount = sum(
+        (payment.outstanding_amount for payment in moderator_payroll),
+        Decimal("0.00"),
+    )
+
+    unpaid_payment_records = moderator_payroll.filter(
+        status=ModeratorPayment.Status.UNPAID,
+    ).count()
+
+    paid_payment_records = moderator_payroll.filter(
+        status=ModeratorPayment.Status.PAID,
+    ).count()
+
+    # ---------------------------------------------------------
+    # BONUSES
+    # ---------------------------------------------------------
+
+
+    bonus_awards = BonusAward.objects.select_related(
+        "moderator",
+    )
+
+    total_bonuses = sum(
+        (
+            award.bonus_amount
+            for award in bonus_awards
+        ),
+        Decimal("0.00"),
+    )
+
+    weekly_bonuses = sum(
+        (
+            award.bonus_amount
+            for award in bonus_awards
+            if week_start <= award.bonus_date <= today
+        ),
+        Decimal("0.00"),
+    )
+
+    # ---------------------------------------------------------
+    # CURRENT CHAT RATE
+    # ---------------------------------------------------------
+
+    current_rate_tier = None
+
+    try:
+        current_rate_tier = get_applicable_rate_tier(
+            chats_responded=chats_this_week,
+            operating_date=today,
+        )
+    except Exception:
+        current_rate_tier = None
+
+    current_rate = (
+        current_rate_tier.rate_per_chat
+        if current_rate_tier
+        else None
+    )
+
+    # ---------------------------------------------------------
+    # MODERATOR PERFORMANCE
+    # ---------------------------------------------------------
+
+    moderator_performance = []
+
+    for moderator in moderators:
+
+        moderator_payroll_records = moderator_payroll.filter(
+            moderator=moderator,
+        )
+
+        moderator_bonuses = bonus_awards.filter(
+            moderator=moderator,
+        )
+
+        moderator_chats = sum(
+            (
+                payment.payable_chats
+                for payment in moderator_payroll_records
+            ),
+            0,
+        )
+
+        moderator_gross = sum(
+            (
+                payment.earned_amount
+                for payment in moderator_payroll_records
+            ),
+            Decimal("0.00"),
+        )
+
+        moderator_paid = sum(
+            (
+                payment.amount_paid
+                for payment in moderator_payroll_records
+            ),
+            Decimal("0.00"),
+        )
+
+        moderator_outstanding = sum(
+            (
+                payment.outstanding_amount
+                for payment in moderator_payroll_records
+            ),
+            Decimal("0.00"),
+        )
+
+        moderator_bonus = sum(
+            (
+                bonus.bonus_amount
+                for bonus in moderator_bonuses
+            ),
+            Decimal("0.00"),
+        )
+
+        moderator_performance.append(
+            {
+                "moderator": moderator,
+                "chats": moderator_chats,
+                "gross": moderator_gross,
+                "bonus": moderator_bonus,
+                "paid": moderator_paid,
+                "outstanding": moderator_outstanding,
+            }
+        )
+
+    moderator_performance.sort(
+        key=lambda item: item["gross"],
+        reverse=True,
+    )
+
+    # ---------------------------------------------------------
+    # PLAYER CHAT QUALIFICATION
+    # ---------------------------------------------------------
+
+    player_chat_threshold = get_player_payment_threshold(
+        operating_date=today,
+    )
+
+    player_chat_totals = []
+
+    unprocessed_payment_records = (
+        PaymentRecord.objects
+        .select_related(
+            "coverage_session",
+            "coverage_session__player",
+        )
+        .filter(
+            coverage_session__operating_date__lte=today,
+            chats_responded__gt=models.F("payroll_processed_chats"),
+        )
+        .order_by(
+            "coverage_session__player_id",
+            "id",
+        )
+    )
+
+    player_unprocessed_chats = {}
+
+    for payment_record in unprocessed_payment_records:
+        player = payment_record.coverage_session.player
+        unprocessed = (
+            payment_record.chats_responded
+            - payment_record.payroll_processed_chats
+        )
+
+        player_unprocessed_chats[player.id] = (
+            player_unprocessed_chats.get(player.id, 0)
+            + unprocessed
+        )
+
+    players = Player.objects.all()
+
+    for player in players:
+        player_chats = player_unprocessed_chats.get(
+            player.id,
+            0,
+        )
+
+        player_chat_totals.append(
+            {
+                "player": player,
+                "chats": player_chats,
+                "qualifies": player_chats >= player_chat_threshold,
+                "remaining": max(
+                    player_chat_threshold - player_chats,
+                    0,
+                ),
+            }
+        )
+
+    qualifying_players = [
+        item
+        for item in player_chat_totals
+        if item["qualifies"]
+    ]
+
+    non_qualifying_players = [
+        item
+        for item in player_chat_totals
+        if not item["qualifies"]
+    ]
+
+    payable_chats = sum(
+        item["chats"]
+        for item in qualifying_players
+    )
+
+    # ---------------------------------------------------------
+    # PREFERRED PAYROLL DAY
+    # ---------------------------------------------------------
+
+    payment_settings = PaymentSettings.objects.first()
+
+    preferred_payment_day = (
+        payment_settings.payment_day
+        if payment_settings is not None
+        else 3
+    )
+
+    days_until_preferred_payday = (
+        preferred_payment_day - today.weekday()
+    ) % 7
+
+    next_payday = today + timedelta(
+        days=days_until_preferred_payday,
+    )
+
+    # ---------------------------------------------------------
+    # RECENT PAYMENTS
+    # ---------------------------------------------------------
+
+    payment_records = (
+        PaymentRecord.objects
+        .select_related(
+            "moderator",
+            "coverage_session",
+            "coverage_session__player",
+        )
+        .order_by("-created_at")
+    )
+
+    recent_payments = list(
+        payment_records
+        .order_by("-created_at")[:10]
+    )
+
+    # ---------------------------------------------------------
+    # CONTEXT
+    # ---------------------------------------------------------
+
+    context = {
+        # General
+        "today": today,
+        "week_start": week_start,
+        "next_payday": next_payday,
+        "preferred_payment_day": preferred_payment_day,
+
+        # Staff
+        "total_staff": staff.count(),
+        "active_staff": active_staff,
+        "moderators_count": moderators.count(),
+        "active_moderators": active_moderators,
+        "managers_count": managers.count(),
+        "active_managers": active_managers,
+
+        # Players
+        "total_players": total_players,
+        "active_players": active_players,
+        "inactive_players": inactive_players,
+
+        # Coverage
+        "total_coverage_sessions": total_coverage_sessions,
+        "active_coverage_sessions": active_coverage_sessions,
+
+        # Chats
+        "total_chats": total_chats,
+        "chats_this_week": chats_this_week,
+        "chats_this_month": chats_this_month,
+
+        # Player qualification
+        "player_chat_totals": player_chat_totals,
+        "qualifying_players": qualifying_players,
+        "non_qualifying_players": non_qualifying_players,
+        "qualifying_player_count": len(qualifying_players),
+        "non_qualifying_player_count": len(
+            non_qualifying_players
+        ),
+        "payable_chats": payable_chats,
+
+        # Payments
+        "total_payment_records": total_payment_records,
+        "generated_amount": generated_amount,
+        "paid_amount": paid_amount,
+        "outstanding_amount": outstanding_amount,
+        "unpaid_payment_records": unpaid_payment_records,
+        "paid_payment_records": paid_payment_records,
+
+        # Bonuses
+        "total_bonuses": total_bonuses,
+        "weekly_bonuses": weekly_bonuses,
+
+        # Rates
+        "current_rate_tier": current_rate_tier,
+        "current_rate": current_rate,
+
+        # Moderator performance
+        "moderator_performance": moderator_performance,
+
+        # Recent payments
+        "recent_payments": recent_payments,
+
+        # Completed End-of-Session Reports
+        "completed_reports": list(
+            completed_reports.order_by(
+                "-operating_date",
+                "-end_of_session_report__submitted_at",
+            )[:20]
+        ),
+    }
+
+    return render(
+        request,
+        "dashboard/director_dashboard.html",
+        context,
+    )
+
+
+@login_required(login_url="/login/")
+def profile(request):
+    profile_user = request.user
+    staff_profile = getattr(profile_user, "staff_profile", None)
+
+    if request.method == "POST":
+        if staff_profile is None:
+            messages.error(
+                request,
+                "Your staff profile is not available. Contact management for assistance.",
+            )
+            return redirect("dashboard:profile")
+
+        form = StaffSelfProfileForm(
+            request.POST,
+            user=profile_user,
+            staff_profile=staff_profile,
+        )
+
+        if form.is_valid():
+            with transaction.atomic():
+                profile_user.first_name = form.cleaned_data["first_name"].strip()
+                profile_user.last_name = form.cleaned_data["last_name"].strip()
+
+                new_email = form.cleaned_data["email"]
+                profile_user.email = new_email
+                profile_user.username = new_email
+
+                profile_user.save(
+                    update_fields=[
+                        "first_name",
+                        "last_name",
+                        "email",
+                        "username",
+                    ]
+                )
+
+                staff_profile.phone_number = form.cleaned_data["phone_number"].strip()
+                staff_profile.whatsapp_number = form.cleaned_data["whatsapp_number"].strip()
+                staff_profile.mpesa_number = form.cleaned_data["mpesa_number"].strip()
+
+                staff_profile.save(
+                    update_fields=[
+                        "phone_number",
+                        "whatsapp_number",
+                        "mpesa_number",
+                        "updated_at",
+                    ]
+                )
+
+            messages.success(
+                request,
+                "Your account details have been updated successfully.",
+            )
+            return redirect("dashboard:profile")
+    else:
+        form = StaffSelfProfileForm(
+            user=profile_user,
+            staff_profile=staff_profile,
+        )
+
+    return render(
+        request,
+        "dashboard/profile.html",
+        {
+            "profile_user": profile_user,
+            "staff_profile": staff_profile,
+            "form": form,
+        },
+    )
+
+
+
+
+@login_required(login_url="/login/")
+def password_change(request):
+    if request.method == "POST":
+        form = PasswordChangeForm(request.user, request.POST)
+
+        if form.is_valid():
+            user = form.save()
+            update_session_auth_hash(request, user)
+            messages.success(
+                request,
+                "Your password has been changed successfully.",
+            )
+            return redirect("dashboard:password_change")
+    else:
+        form = PasswordChangeForm(request.user)
+
+    return render(
+        request,
+        "dashboard/password_change.html",
+        {"form": form},
+    )
 @role_required(*ADMIN_ROLES)
 def admin_test(request):
     return render(
         request,
         "dashboard/admin_test.html",
+    )
+
+
+@login_required(login_url="/login/")
+def coverage_history(request):
+    if request.user.role != User.Role.MODERATOR:
+        return render(
+            request,
+            "dashboard/coverage_history.html",
+            {
+                "coverage_sessions": [],
+                "message": (
+                    "Coverage History is available "
+                    "to Moderators only."
+                ),
+            },
+        )
+
+    coverage_sessions = (
+        CoverageSession.objects
+        .select_related(
+            "player",
+            "replacement_moderator",
+            "end_of_session_report",
+        )
+        .filter(
+            moderator=request.user,
+        )
+        .order_by(
+            "-operating_date",
+            "-created_at",
+        )
+    )
+
+    return render(
+        request,
+        "dashboard/coverage_history.html",
+        {
+            "coverage_sessions": coverage_sessions,
+        },
     )
 
 
@@ -30,30 +1077,148 @@ def my_shifts(request):
             request,
             "dashboard/my_shifts.html",
             {
-                "shifts": [],
-                "message": "My Shifts is available to Moderators only.",
+                "coverage_sessions": [],
+                "message": (
+                    "My Shifts is available to Moderators only."
+                ),
             },
         )
 
-    from django.db.models import Q
+    if request.method == "POST":
 
-    shifts = Shift.objects.filter(
-        Q(primary_moderator=request.user) |
-        Q(substitute=request.user)
-    ).select_related(
-        "player",
-        "primary_moderator",
-        "substitute",
-        "actual_worker",
-    ).order_by(
-        "-date",
-        "scheduled_start",
+        session_id = request.POST.get("session_id")
+
+        action = request.POST.get("action")
+
+        session = (
+            CoverageSession.objects
+            .filter(
+                id=session_id,
+                moderator=request.user,
+            )
+            .first()
+        )
+
+        if session is None:
+            return render(
+                request,
+                "dashboard/my_shifts.html",
+                {
+                    "coverage_sessions": (
+                        CoverageSession.objects
+                        .filter(
+                            moderator=request.user,
+                        )
+                        .select_related(
+                            "player",
+                            "replacement_moderator",
+                        )
+                    ),
+                    "message": (
+                        "The requested coverage session "
+                        "could not be found."
+                    ),
+                },
+            )
+
+        try:
+
+            if action == "request_replacement":
+
+                request_replacement(
+                    session=session,
+                    moderator=request.user,
+                )
+
+
+            elif action == "respond_continuation":
+
+                form = ContinuationResponseForm(request.POST)
+
+                if not form.is_valid():
+                    raise ValueError("Select YES or NO to continue.")
+
+                respond_to_coverage_continuation(
+                    session=session,
+                    moderator=request.user,
+                    response=form.cleaned_data["response"],
+                )
+        except Exception as exc:
+
+            messages.error(
+                request,
+                str(exc),
+            )
+
+        else:
+
+            if action == "request_replacement":
+
+                messages.success(
+                    request,
+                    (
+                        "Replacement requested. Please continue "
+                        "covering the Player until the replacement "
+                        "is secured."
+                    ),
+                )
+
+
+            elif action == "respond_continuation":
+
+                response = request.POST.get("response")
+
+                if response == "YES":
+                    messages.success(
+                        request,
+                        "Continuation confirmed. You will continue covering the same Player for the next coverage period.",
+                    )
+
+                elif response == "NO":
+                    messages.success(
+                        request,
+                        "Coverage ended. Submit your End-of-Session Report within 30 minutes.",
+                    )
+        return redirect(
+            "dashboard:my_shifts"
+        )
+
+    close_expired_coverage_sessions(
+        moment=timezone.localtime(),
+    )
+
+    coverage_sessions = (
+        CoverageSession.objects
+        .select_related(
+            "player",
+            "replacement_moderator",
+        )
+        .filter(
+            moderator=request.user,
+        )
+        .order_by(
+            "-operating_date",
+            "-created_at",
+        )
     )
 
     return render(
         request,
         "dashboard/my_shifts.html",
         {
-            "shifts": shifts,
+            "coverage_sessions": coverage_sessions,
         },
     )
+
+
+
+
+
+
+
+
+
+
+
+
+

@@ -1,0 +1,248 @@
+
+from datetime import timedelta
+from django.conf import settings
+from django.core.mail import send_mass_mail
+from django.db import transaction
+from django.db.models import Sum
+from django.utils import timezone
+
+from accounts.models import StaffProfile, User
+from coverage.models import CoverageApplication, CoverageSession
+from players.models import Player
+from notifications.models import Notification
+
+ACTIVE_COVERAGE_STATUSES = (
+    CoverageSession.Status.OPEN,
+    CoverageSession.Status.ACTIVE,
+    CoverageSession.Status.CONTINUATION_PENDING,
+    CoverageSession.Status.REPLACEMENT_REQUESTED,
+    CoverageSession.Status.HANDOVER,
+    CoverageSession.Status.AWAITING_REPORT,
+)
+
+def _week_start(moment):
+    local = timezone.localtime(moment)
+    return (local - timedelta(days=local.weekday())).replace(
+        hour=0, minute=0, second=0, microsecond=0
+    )
+
+def get_chats_this_week(moderator, moment=None):
+    moment = moment or timezone.localtime()
+    start = _week_start(moment)
+    from coverage.models import EndOfSessionReport
+    total = (
+        EndOfSessionReport.objects.filter(
+            moderator=moderator,
+            submitted_at__gte=start,
+            submitted_at__lte=moment,
+        ).aggregate(total=Sum("chats_responded"))["total"]
+        or 0
+    )
+    return int(total)
+
+def moderator_is_eligible(moderator, moment=None):
+    if moderator is None or getattr(moderator, "role", None) != "MODERATOR" or not moderator.is_active:
+        return False
+    try:
+        profile = moderator.staff_profile
+    except StaffProfile.DoesNotExist:
+        return False
+
+    if profile.status != StaffProfile.Status.ACTIVE:
+        return False
+
+    return not CoverageSession.objects.filter(
+        moderator=moderator, status__in=ACTIVE_COVERAGE_STATUSES
+    ).exists()
+
+def _new_coverage_players(moment):
+    from coverage.services import get_session_type, get_operating_date
+    session_type = get_session_type(moment)
+    operating_date = get_operating_date(moment, session_type)
+
+    covered_ids = set(
+        CoverageSession.objects.filter(
+            operating_date=operating_date,
+            session_type=session_type,
+            status__in=ACTIVE_COVERAGE_STATUSES,
+        ).values_list("player_id", flat=True)
+    )
+    return Player.objects.filter(status=Player.Status.ACTIVE).exclude(id__in=covered_ids).order_by("player_number")
+
+def _replacement_players(moment):
+    return CoverageSession.objects.filter(
+        status=CoverageSession.Status.REPLACEMENT_REQUESTED,
+        player__status=Player.Status.ACTIVE,
+    ).select_related("player", "moderator").order_by("player__player_number", "id")
+
+def get_coverage_opportunities(moderator, moment=None):
+    moment = moment or timezone.localtime()
+    if not moderator_is_eligible(moderator, moment):
+        return {
+            "eligible": False,
+            "weekly_chats": 0,
+            "new_players": Player.objects.none(),
+            "replacement_sessions": CoverageSession.objects.none(),
+        }
+    return {
+        "eligible": True,
+        "weekly_chats": get_chats_this_week(moderator, moment),
+        "new_players": _new_coverage_players(moment),
+        "replacement_sessions": _replacement_players(moment),
+    }
+
+def _notify(recipient, title, message, alert_level="INFO"):
+    Notification.objects.create(
+        recipient=recipient, title=title, message=message, alert_level=alert_level
+    )
+
+def _management_users():
+    return User.objects.filter(
+        role__in=("ADMIN", "DIRECTOR", "MANAGER"), is_active=True
+    ).exclude(email="")
+
+def _email_users(users, subject, message):
+    recipients = [user.email for user in users if getattr(user, "email", None)]
+    if not recipients:
+        return
+    send_mass_mail(
+        ((subject, message, getattr(settings, "DEFAULT_FROM_EMAIL", None), [email]) for email in recipients),
+        fail_silently=True,
+    )
+
+def _assign_new_coverage_locked(application, moment):
+    from coverage.services import get_session_type, get_operating_date
+    moderator, player = application.moderator, application.player
+    session_type = get_session_type(moment)
+    operating_date = get_operating_date(moment, session_type)
+
+    if CoverageSession.objects.filter(
+        player=player, operating_date=operating_date, session_type=session_type, status__in=ACTIVE_COVERAGE_STATUSES
+    ).exists():
+        return None
+
+    return CoverageSession.objects.create(
+        moderator=moderator,
+        player=player,
+        operating_date=operating_date,
+        session_type=session_type,
+        status=CoverageSession.Status.OPEN,
+    )
+
+def _assign_replacement_locked(application, replacement_session, moment):
+    replacement_moderator = application.moderator
+    outgoing_moderator = replacement_session.moderator
+    player = replacement_session.player
+
+    if getattr(outgoing_moderator, "id", None) == replacement_moderator.id:
+        return None
+
+    session = CoverageSession.objects.create(
+        moderator=replacement_moderator,
+        player=player,
+        operating_date=replacement_session.operating_date,
+        session_type=replacement_session.session_type,
+        status=CoverageSession.Status.OPEN,
+    )
+
+    replacement_session.replacement_moderator = replacement_moderator
+    replacement_session.replacement_session = session
+    replacement_session.status = CoverageSession.Status.HANDOVER
+    replacement_session.save(update_fields=["replacement_moderator", "replacement_session", "status"])
+    return session
+
+@transaction.atomic
+def apply_for_player(moderator, player_id, opportunity_type, moment=None):
+    moment = moment or timezone.localtime()
+    if not moderator_is_eligible(moderator, moment):
+        raise ValueError("You are not currently eligible to apply for coverage.")
+
+    player = Player.objects.select_for_update().get(id=player_id)
+    if player.status != Player.Status.ACTIVE:
+        raise ValueError("This player is no longer available.")
+
+    weekly_chats = get_chats_this_week(moderator, moment)
+    existing = CoverageApplication.objects.filter(
+        player=player, moderator=moderator, status=CoverageApplication.Status.PENDING
+    ).first()
+
+    if existing:
+        return existing, existing.resulting_session, False
+
+    application = CoverageApplication.objects.create(
+        player=player, moderator=moderator, opportunity_type=opportunity_type, chats_this_week=weekly_chats
+    )
+
+    if opportunity_type == CoverageApplication.OpportunityType.REPLACEMENT:
+        replacement_session = CoverageSession.objects.select_for_update().filter(
+            player=player, status=CoverageSession.Status.REPLACEMENT_REQUESTED
+        ).order_by("replacement_requested_at", "id").first()
+
+        if not replacement_session:
+            application.status = CoverageApplication.Status.LOST
+            application.save(update_fields=["status"])
+            raise ValueError("This replacement opportunity is no longer available.")
+
+        applicants = list(CoverageApplication.objects.select_for_update().filter(
+            player=player, opportunity_type=CoverageApplication.OpportunityType.REPLACEMENT, status=CoverageApplication.Status.PENDING
+        ).select_related("moderator").order_by("-chats_this_week", "applied_at", "id"))
+
+        winner = next((c for c in applicants if moderator_is_eligible(c.moderator, moment)), None)
+        if not winner:
+            application.status = CoverageApplication.Status.LOST
+            application.save(update_fields=["status"])
+            raise ValueError("No eligible moderator is available for this opportunity.")
+
+        session = _assign_replacement_locked(winner, replacement_session, moment)
+
+    else:
+        list(CoverageSession.objects.select_for_update().filter(player=player, status__in=ACTIVE_COVERAGE_STATUSES))
+        applicants = list(CoverageApplication.objects.select_for_update().filter(
+            player=player, opportunity_type=CoverageApplication.OpportunityType.NEW, status=CoverageApplication.Status.PENDING
+        ).select_related("moderator").order_by("-chats_this_week", "applied_at", "id"))
+
+        winner = next((c for c in applicants if moderator_is_eligible(c.moderator, moment)), None)
+        if not winner:
+            application.status = CoverageApplication.Status.LOST
+            application.save(update_fields=["status"])
+            raise ValueError("No eligible moderator is available for this opportunity.")
+
+        session = _assign_new_coverage_locked(winner, moment)
+
+        if not session:
+            for candidate in applicants:
+                candidate.status = CoverageApplication.Status.LOST
+                candidate.save(update_fields=["status"])
+            raise ValueError("This player is no longer available.")
+
+    winner.status = CoverageApplication.Status.WON
+    winner.resulting_session = session
+    winner.save(update_fields=["status", "resulting_session"])
+
+    loser_qs = CoverageApplication.objects.filter(
+        player=player, opportunity_type=opportunity_type, status=CoverageApplication.Status.PENDING
+    ).exclude(id=winner.id)
+    losers = list(loser_qs.select_related("moderator"))
+    loser_qs.update(status=CoverageApplication.Status.LOST)
+
+    management = list(_management_users())
+    if opportunity_type == CoverageApplication.OpportunityType.REPLACEMENT:
+        outgoing = replacement_session.moderator
+        m_title = "Moderator Replacement Awarded"
+        m_msg = f"{winner.moderator.username} assigned to replace {outgoing.username} for player {player.player_number}."
+        _notify(winner.moderator, "Replacement Assignment Successful", f"You replaced {outgoing.username} for player {player.player_number}.")
+        _notify(outgoing, "Replacement Moderator Assigned", f"{winner.moderator.username} replaced you for player {player.player_number}.")
+        _email_users([outgoing], "Replacement Moderator Assigned", m_msg)
+    else:
+        m_title = "Coverage Opportunity Awarded"
+        m_msg = f"{winner.moderator.username} awarded coverage for player {player.player_number}."
+        _notify(winner.moderator, "Coverage Assignment Successful", f"You were awarded coverage for player {player.player_number}.")
+
+    for manager in management:
+        _notify(manager, m_title, m_msg)
+    _email_users(management, m_title, m_msg)
+
+    for loser in losers:
+        _notify(loser.moderator, "Coverage Opportunity Awarded", f"Another moderator was awarded coverage for player {player.player_number}.")
+
+    return winner, session, True

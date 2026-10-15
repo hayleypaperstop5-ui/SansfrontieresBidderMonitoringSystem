@@ -1,11 +1,34 @@
+import uuid
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.core.validators import MinValueValidator, MaxValueValidator
-from django.db import models
+from django.db import models, transaction
 from django.db.models import Q
 
 
+class CoverageSessionCounter(models.Model):
+    class SessionType(models.TextChoices):
+        DAY = "DAY", "Day"
+        NIGHT = "NIGHT", "Night"
+
+    session_type = models.CharField(
+        max_length=5,
+        choices=SessionType.choices,
+        unique=True,
+    )
+    next_number = models.PositiveIntegerField(default=1)
+
+    def __str__(self):
+        return f"{self.session_type}: {self.next_number}"
+
+
 class CoverageSession(models.Model):
+    session_code = models.CharField(
+        max_length=8,
+        unique=True,
+        editable=False,
+        help_text="Human-readable unique coverage session identifier.",
+    )
     class SessionType(models.TextChoices):
         DAY = "DAY", "Day"
         NIGHT = "NIGHT", "Night"
@@ -13,8 +36,11 @@ class CoverageSession(models.Model):
     class Status(models.TextChoices):
         OPEN = "OPEN", "Open"
         ACTIVE = "ACTIVE", "Active"
+        CONTINUATION_PENDING = "CONTINUATION_PENDING", "Continuation Pending"
         REPLACEMENT_REQUESTED = "REPLACEMENT_REQUESTED", "Replacement Requested"
         HANDOVER = "HANDOVER", "Handover"
+        AWAITING_REPORT = "AWAITING_REPORT", "Awaiting Report"
+        EXPIRED = "EXPIRED", "Expired"
         COMPLETED = "COMPLETED", "Completed"
         MISSED = "MISSED", "Missed"
         CANCELLED = "CANCELLED", "Cancelled"
@@ -47,11 +73,39 @@ class CoverageSession(models.Model):
     )
 
     signed_in_at = models.DateTimeField(null=True, blank=True)
+    sign_in_deadline_at = models.DateTimeField(null=True, blank=True, help_text="Deadline by which the assigned Moderator must sign in.")
 
     scheduled_close_at = models.DateTimeField(
         null=True,
         blank=True,
         help_text="System calculated boundary for automatic session closure.",
+    )
+
+    continuation_deadline_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Deadline for the Moderator to answer the continuation prompt.",
+    )
+
+    continuation_response = models.CharField(
+        max_length=3,
+        choices=[
+            ("YES", "Yes"),
+            ("NO", "No"),
+        ],
+        blank=True,
+    )
+
+    continuation_prompted_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Timestamp when the continuation prompt was issued.",
+    )
+
+    continuation_responded_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Timestamp when the Moderator answered the continuation prompt.",
     )
 
     signed_out_at = models.DateTimeField(null=True, blank=True)
@@ -95,6 +149,49 @@ class CoverageSession(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    def _generate_session_code(self):
+        if self.session_type == self.SessionType.DAY:
+            prefix = "SFCMD"
+            counter_type = CoverageSessionCounter.SessionType.DAY
+        elif self.session_type == self.SessionType.NIGHT:
+            prefix = "SFCMN"
+            counter_type = CoverageSessionCounter.SessionType.NIGHT
+        else:
+            raise ValueError(
+                "CoverageSession requires session_type DAY or NIGHT "
+                "before a business session ID can be generated."
+            )
+
+        with transaction.atomic():
+            counter, _ = CoverageSessionCounter.objects.get_or_create(
+                session_type=counter_type,
+                defaults={"next_number": 1},
+            )
+
+            counter = (
+                CoverageSessionCounter.objects
+                .select_for_update()
+                .get(pk=counter.pk)
+            )
+
+            number = counter.next_number
+
+            if number > 999:
+                raise ValueError(
+                    f"{counter_type} session sequence has exceeded 999."
+                )
+
+            counter.next_number = number + 1
+            counter.save(update_fields=["next_number"])
+
+            return f"{prefix}{number:03d}"
+
+    def save(self, *args, **kwargs):
+        if not self.session_code:
+            self.session_code = self._generate_session_code()
+
+        super().save(*args, **kwargs)
+
     class Meta:
         ordering = ["-operating_date", "session_type", "-created_at"]
         indexes = [
@@ -116,9 +213,10 @@ class CoverageSession(models.Model):
                 fields=["player"],
                 condition=Q(
                     status__in=[
+                        "OPEN",
                         "ACTIVE",
+                        "CONTINUATION_PENDING",
                         "REPLACEMENT_REQUESTED",
-                        "HANDOVER",
                     ]
                 ),
                 name="unique_active_coverage_per_player",
@@ -127,7 +225,9 @@ class CoverageSession(models.Model):
                 fields=["moderator"],
                 condition=Q(
                     status__in=[
+                        "OPEN",
                         "ACTIVE",
+                        "CONTINUATION_PENDING",
                         "REPLACEMENT_REQUESTED",
                         "HANDOVER",
                     ]
@@ -234,6 +334,94 @@ class EndOfSessionReport(models.Model):
             f"{self.coverage_session.operating_date}"
         )
 
+
+class ReportCompliance(models.Model):
+    class Status(models.TextChoices):
+        PENDING = "PENDING", "Pending"
+        COMPLETED_ON_TIME = "COMPLETED_ON_TIME", "Completed On Time"
+        OVERDUE = "OVERDUE", "Overdue"
+        LATE = "LATE", "Late"
+
+    coverage_session = models.OneToOneField(
+        CoverageSession,
+        on_delete=models.PROTECT,
+        related_name="report_compliance",
+    )
+
+    report = models.OneToOneField(
+        EndOfSessionReport,
+        on_delete=models.PROTECT,
+        related_name="report_compliance",
+        null=True,
+        blank=True,
+    )
+
+    signed_out_at = models.DateTimeField()
+    report_deadline = models.DateTimeField()
+    report_submitted_at = models.DateTimeField(
+        null=True,
+        blank=True,
+    )
+
+    status = models.CharField(
+        max_length=30,
+        choices=Status.choices,
+        default=Status.PENDING,
+    )
+
+    overdue_at = models.DateTimeField(
+        null=True,
+        blank=True,
+    )
+
+    completed_at = models.DateTimeField(
+        null=True,
+        blank=True,
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-signed_out_at"]
+        indexes = [
+            models.Index(
+                fields=["status", "report_deadline"],
+                name="report_comp_status_deadline",
+            ),
+            models.Index(
+                fields=["signed_out_at"],
+                name="report_comp_signed_out_idx",
+            ),
+        ]
+
+    def clean(self):
+        super().clean()
+
+        if self.report_deadline and self.signed_out_at:
+            if self.report_deadline < self.signed_out_at:
+                raise ValidationError(
+                    {
+                        "report_deadline": (
+                            "Report deadline cannot be earlier than sign-out time."
+                        )
+                    }
+                )
+
+        if self.report_submitted_at and self.report_submitted_at < self.signed_out_at:
+            raise ValidationError(
+                {
+                    "report_submitted_at": (
+                        "Report submission cannot be earlier than sign-out time."
+                    )
+                }
+            )
+
+    def __str__(self):
+        return (
+            f"{self.coverage_session} | "
+            f"{self.get_status_display()}"
+        )
 
 class CoverageAlert(models.Model):
     class AlertType(models.TextChoices):
@@ -368,3 +556,61 @@ class CoverageAlert(models.Model):
             f"{self.player} - {self.get_alert_type_display()} "
             f"({self.get_status_display()})"
         )
+
+
+class CoverageApplication(models.Model):
+    class OpportunityType(models.TextChoices):
+        NEW = "NEW", "New Coverage"
+        REPLACEMENT = "REPLACEMENT", "Replacement"
+
+    class Status(models.TextChoices):
+        PENDING = "PENDING", "Pending"
+        WON = "WON", "Won"
+        LOST = "LOST", "Lost"
+        CANCELLED = "CANCELLED", "Cancelled"
+
+    player = models.ForeignKey(
+        "players.Player",
+        on_delete=models.PROTECT,
+        related_name="coverage_applications",
+    )
+
+    moderator = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="coverage_applications",
+        limit_choices_to={"role": "MODERATOR"},
+    )
+
+    opportunity_type = models.CharField(
+        max_length=20,
+        choices=OpportunityType.choices,
+    )
+
+    chats_this_week = models.PositiveIntegerField(default=0)
+    applied_at = models.DateTimeField(auto_now_add=True)
+
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.PENDING,
+    )
+
+    resulting_session = models.ForeignKey(
+        "coverage.CoverageSession",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="winning_application",
+    )
+
+    class Meta:
+        ordering = ["applied_at", "id"]
+        indexes = [
+            models.Index(fields=["player", "opportunity_type", "status"]),
+            models.Index(fields=["moderator", "status"]),
+            models.Index(fields=["player", "chats_this_week", "applied_at"]),
+        ]
+
+    def __str__(self):
+        return f"{self.moderator} -> {self.player} ({self.opportunity_type}, {self.status})"

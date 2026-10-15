@@ -24,6 +24,25 @@ urlpatterns = [
         "chat-rates/add/",
         views.chat_rate_create,
         name="chat_rate_create",
+    ),    path(
+        "chat-rates/<int:rate_id>/edit/",
+        views.chat_rate_edit,
+        name="chat_rate_edit",
+    ),
+    path(
+        "player-chat-rates/",
+        views.player_chat_rate_list,
+        name="player_chat_rate_list",
+    ),
+    path(
+        "player-chat-rates/add/",
+        views.player_chat_rate_create,
+        name="player_chat_rate_create",
+    ),
+    path(
+        "player-chat-rates/<int:rate_id>/edit/",
+        views.player_chat_rate_edit,
+        name="player_chat_rate_edit",
     ),
     path(
         "<int:player_id>/edit/",
@@ -41,3 +60,4 @@ urlpatterns = [
         name="player_deactivate",
     ),
 ]
+

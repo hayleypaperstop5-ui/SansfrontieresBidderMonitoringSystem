@@ -1,0 +1,529 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Coverage History | Sansfrontieres</title>
+
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            font-family: Arial, Helvetica, sans-serif;
+            background: #f4f7f9;
+            color: #1f2937;
+        }
+
+        .topbar {
+            background: #123b2a;
+            color: white;
+            padding: 18px 32px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .brand {
+            font-size: 22px;
+            font-weight: 700;
+        }
+
+        .notifications-link {
+            color: white;
+            text-decoration: none;
+            font-size: 14px;
+            font-weight: 700;
+        }
+
+        .notifications-link:hover {
+            text-decoration: underline;
+        }
+
+        .layout {
+            display: flex;
+            min-height: calc(100vh - 65px);
+        }
+
+        .sidebar {
+            width: 230px;
+            background: #0f2f23;
+            padding: 28px 16px;
+            flex-shrink: 0;
+        }
+
+        .sidebar-title {
+            color: #d1fae5;
+            font-size: 12px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin: 0 12px 18px;
+        }
+
+        .nav-link {
+            display: block;
+            color: #dbe7e1;
+            text-decoration: none;
+            padding: 12px 14px;
+            border-radius: 8px;
+            margin-bottom: 6px;
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        .nav-link:hover,
+        .nav-link.active {
+            background: #174936;
+            color: white;
+        }
+
+        .main {
+            flex: 1;
+            padding: 32px;
+            min-width: 0;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .page-heading {
+            margin-bottom: 28px;
+        }
+
+        .page-heading h1 {
+            margin: 0 0 6px;
+            color: #123b2a;
+            font-size: 30px;
+        }
+
+        .page-heading p {
+            margin: 0;
+            color: #64748b;
+        }
+
+        .panel {
+            background: white;
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            padding: 22px;
+            box-shadow: 0 3px 12px rgba(0, 0, 0, 0.04);
+        }
+
+        .panel-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .panel-header h2 {
+            margin: 0;
+            color: #123b2a;
+            font-size: 19px;
+        }
+
+        .button {
+            display: inline-block;
+            padding: 10px 15px;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: 700;
+            font-size: 13px;
+        }
+
+        .button-secondary {
+            background: #e2e8f0;
+            color: #334155;
+        }
+
+        .button-secondary:hover {
+            background: #cbd5e1;
+        }
+
+        .table-wrapper {
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            min-width: 950px;
+        }
+
+        th {
+            background: #f8fafc;
+            color: #475569;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: .4px;
+            text-align: left;
+            padding: 13px 12px;
+            border-bottom: 2px solid #e2e8f0;
+            white-space: nowrap;
+        }
+
+        td {
+            padding: 14px 12px;
+            border-bottom: 1px solid #eef2f7;
+            color: #334155;
+            font-size: 13px;
+            vertical-align: middle;
+        }
+
+        tbody tr:hover {
+            background: #f8fafc;
+        }
+
+        .player {
+            font-weight: 700;
+            color: #123b2a;
+        }
+
+        .session {
+            font-weight: 700;
+        }
+
+        .status {
+            display: inline-block;
+            padding: 6px 9px;
+            border-radius: 999px;
+            font-size: 11px;
+            font-weight: 800;
+            background: #dcfce7;
+            color: #166534;
+            white-space: nowrap;
+        }
+
+        .status-warning {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
+        .status-danger {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        .status-neutral {
+            background: #e2e8f0;
+            color: #475569;
+        }
+
+        .report {
+            color: #166534;
+            font-weight: 700;
+        }
+
+        .no-report {
+            color: #94a3b8;
+        }
+
+        .empty-state {
+            background: white;
+            border: 1px dashed #cbd5e1;
+            border-radius: 12px;
+            padding: 36px 28px;
+            text-align: center;
+            color: #64748b;
+        }
+
+        .empty-state strong {
+            display: block;
+            color: #334155;
+            margin-bottom: 6px;
+        }
+
+        .logout {
+            margin-top: 30px;
+        }
+
+        .logout a {
+            display: inline-block;
+            background: #b91c1c;
+            color: white;
+            padding: 11px 16px;
+            border-radius: 8px;
+            font-weight: 700;
+            text-decoration: none;
+            font-size: 13px;
+        }
+
+        .logout a:hover {
+            background: #991b1b;
+        }
+
+        @media (max-width: 650px) {
+            .layout {
+                display: block;
+            }
+
+            .sidebar {
+                width: 100%;
+                padding: 14px;
+            }
+
+            .sidebar-title {
+                margin-bottom: 10px;
+            }
+
+            .nav-link {
+                display: inline-block;
+                margin-right: 4px;
+            }
+
+            .main {
+                padding: 20px 15px;
+            }
+
+            .topbar {
+                padding: 16px 18px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="topbar">
+    <div class="brand">Sansfrontieres</div>
+
+    <a href="{% url 'notifications:list' %}" class="notifications-link">
+        &#128276; Notifications
+        {% if unread_notification_count %}
+            <span class="badge bg-danger ms-1">
+                {{ unread_notification_count }}
+            </span>
+        {% endif %}
+    </a>
+</div>
+
+{% if request.user.role == "MODERATOR" %}
+
+<div class="layout">
+
+    <aside class="sidebar">
+        <div class="sidebar-title">Moderator Portal</div>
+
+        <a href="{% url 'dashboard:home' %}" class="nav-link">
+            Dashboard
+        </a>
+
+        <a href="{% url 'coverage:moderator_coverage' %}" class="nav-link">
+            My Coverage
+        </a>
+
+        <a href="{% url 'dashboard:coverage_history' %}" class="nav-link active">
+            Coverage History
+        </a>
+
+        <a href="{% url 'notifications:list' %}" class="nav-link">
+            Notifications
+            {% if unread_notification_count %}
+                <span class="badge bg-danger ms-1">
+                    {{ unread_notification_count }}
+                </span>
+            {% endif %}
+        </a>
+
+        <div class="logout">
+            <a href="{% url 'accounts:logout' %}">
+                Log out
+            </a>
+        </div>
+    </aside>
+
+    <main class="main">
+        <div class="container">
+
+            <div class="page-heading">
+                <h1>Coverage History</h1>
+                <p>
+                    Review your previous Player coverage sessions and submitted session reports.
+                </p>
+            </div>
+
+            {% if message %}
+
+                <div class="empty-state">
+                    <strong>{{ message }}</strong>
+                    Coverage history is available to Moderators only.
+                </div>
+
+            {% elif coverage_sessions %}
+
+                <div class="panel">
+
+                    <div class="panel-header">
+                        <h2>Player Coverage Sessions</h2>
+
+                        <a
+                            href="{% url 'coverage:moderator_coverage' %}"
+                            class="button button-secondary"
+                        >
+                            My Coverage
+                        </a>
+                    </div>
+
+                    <div class="table-wrapper">
+
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Player</th>
+                                    <th>Session</th>
+                                    <th>Signed In</th>
+                                    <th>Signed Out</th>
+                                    <th>Closure</th>
+                                    <th>Status</th>
+                                    <th>Report</th>
+                                </tr>
+                            </thead>
+
+                            <tbody>
+
+                                {% for session in coverage_sessions %}
+
+                                    <tr>
+
+                                        <td>
+                                            {{ session.operating_date|date:"d M Y" }}
+                                        </td>
+
+                                        <td class="player">
+                                            Player {{ session.player.player_number }} -
+                                            {{ session.player.name }}
+                                        </td>
+
+                                        <td class="session">
+                                            {{ session.get_session_type_display }}
+                                        </td>
+
+                                        <td>
+                                            {% if session.signed_in_at %}
+                                                {{ session.signed_in_at|date:"d M Y H:i" }}
+                                            {% else %}
+                                                -
+                                            {% endif %}
+                                        </td>
+
+                                        <td>
+                                            {% if session.signed_out_at %}
+                                                {{ session.signed_out_at|date:"d M Y H:i" }}
+                                            {% else %}
+                                                -
+                                            {% endif %}
+                                        </td>
+
+                                        <td>
+                                            {{ session.get_closure_reason_display|default:"-" }}
+                                        </td>
+
+                                        <td>
+                                            {% if session.status == "COMPLETED" %}
+                                                <span class="status">
+                                                    Completed
+                                                </span>
+                                            {% elif session.status == "EXPIRED" or session.status == "MISSED" %}
+                                                <span class="status status-danger">
+                                                    Missed
+                                                </span>
+                                            {% elif session.status == "CANCELLED" %}
+                                                <span class="status status-neutral">
+                                                    Cancelled
+                                                </span>
+                                            {% elif session.status == "AWAITING_REPORT" %}
+                                                <span class="status status-warning">
+                                                    Report Required
+                                                </span>
+                                            {% elif session.status == "OPEN" %}
+                                                <span class="status status-warning">
+                                                    Awaiting Sign-in
+                                                </span>
+                                            {% elif session.status == "ACTIVE" %}
+                                                <span class="status">
+                                                    Active
+                                                </span>
+                                            {% elif session.status == "REPLACEMENT_REQUESTED" %}
+                                                <span class="status status-warning">
+                                                    Replacement Requested
+                                                </span>
+                                            {% elif session.status == "HANDOVER" %}
+                                                <span class="status status-warning">
+                                                    Handover
+                                                </span>
+                                            {% else %}
+                                                <span class="status status-neutral">
+                                                    {{ session.get_status_display }}
+                                                </span>
+                                            {% endif %}
+                                        </td>
+
+                                        <td>
+                                            {% if session.end_of_session_report %}
+                                                <span class="report">
+                                                    {{ session.end_of_session_report.chats_responded }}
+                                                    chats
+                                                </span>
+                                            {% else %}
+                                                <span class="no-report">
+                                                    Not submitted
+                                                </span>
+                                            {% endif %}
+                                        </td>
+
+                                    </tr>
+
+                                {% endfor %}
+
+                            </tbody>
+                        </table>
+
+                    </div>
+
+                </div>
+
+            {% else %}
+
+                <div class="empty-state">
+                    <strong>No coverage history yet</strong>
+                    Your completed and previous Player coverage sessions will appear here.
+                </div>
+
+            {% endif %}
+
+        </div>
+    </main>
+
+</div>
+
+{% else %}
+
+<main style="max-width:1100px; margin:40px auto; padding:0 24px;">
+
+    <div class="empty-state">
+        <strong>Coverage History is available to Moderators only.</strong>
+        Please return to your dashboard.
+    </div>
+
+    <div class="logout">
+        <a href="{% url 'accounts:logout' %}">
+            Log out
+        </a>
+    </div>
+
+</main>
+
+{% endif %}
+
+</body>
+</html>
+
+<script src="{% static 'js/notification_alerts.js' %}"></script>
