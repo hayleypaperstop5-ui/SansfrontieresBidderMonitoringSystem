@@ -17,6 +17,7 @@ from .services import (
     start_coverage_session,
     assign_replacement,
     assign_coverage_session,
+    close_expired_coverage_sessions,
 )
 
 
@@ -836,17 +837,85 @@ class CoverageServiceTests(TestCase):
             1,
         )
 
+class AutoExpiryTests(TestCase):
+    """Verify close_expired_coverage_sessions expires stale OPEN sessions."""
 
+    def setUp(self):
+        from accounts.models import StaffProfile
+        self.moderator_a = User.objects.create_user(
+            username="expiry_mod_a",
+            password="testpass123",
+            role=User.Role.MODERATOR,
+        )
+        self.moderator_b = User.objects.create_user(
+            username="expiry_mod_b",
+            password="testpass123",
+            role=User.Role.MODERATOR,
+        )
+        self.moderator_c = User.objects.create_user(
+            username="expiry_mod_c",
+            password="testpass123",
+            role=User.Role.MODERATOR,
+        )
+        for m in (self.moderator_a, self.moderator_b, self.moderator_c):
+            StaffProfile.objects.create(
+                user=m,
+                status=StaffProfile.Status.ACTIVE,
+            )
 
+        self.player_a = Player.objects.create(
+            player_number=8801, name="Expiry Player A", status=Player.Status.ACTIVE,
+        )
+        self.player_b = Player.objects.create(
+            player_number=8802, name="Expiry Player B", status=Player.Status.ACTIVE,
+        )
+        self.player_c = Player.objects.create(
+            player_number=8803, name="Expiry Player C", status=Player.Status.ACTIVE,
+        )
 
+    def test_expired_open_session_with_past_deadline_becomes_missed(self):
+        now = timezone.localtime()
+        session = CoverageSession.objects.create(
+            moderator=self.moderator_a,
+            player=self.player_a,
+            operating_date=now.date(),
+            session_type=CoverageSession.SessionType.DAY,
+            status=CoverageSession.Status.OPEN,
+            sign_in_deadline_at=now - timedelta(hours=1),
+            scheduled_close_at=now + timedelta(hours=4),
+        )
+        close_expired_coverage_sessions(moment=now)
+        session.refresh_from_db()
+        self.assertEqual(session.status, CoverageSession.Status.MISSED)
+        self.assertEqual(session.closure_reason, CoverageSession.ClosureReason.AUTOMATIC)
 
+    def test_expired_open_session_with_past_scheduled_close_becomes_missed(self):
+        now = timezone.localtime()
+        session = CoverageSession.objects.create(
+            moderator=self.moderator_b,
+            player=self.player_b,
+            operating_date=now.date(),
+            session_type=CoverageSession.SessionType.DAY,
+            status=CoverageSession.Status.OPEN,
+            sign_in_deadline_at=None,
+            scheduled_close_at=now - timedelta(hours=1),
+        )
+        close_expired_coverage_sessions(moment=now)
+        session.refresh_from_db()
+        self.assertEqual(session.status, CoverageSession.Status.MISSED)
 
-
-
-
-
-
-
-
-
+    def test_open_session_with_future_deadline_is_untouched(self):
+        now = timezone.localtime()
+        session = CoverageSession.objects.create(
+            moderator=self.moderator_c,
+            player=self.player_c,
+            operating_date=now.date(),
+            session_type=CoverageSession.SessionType.DAY,
+            status=CoverageSession.Status.OPEN,
+            sign_in_deadline_at=now + timedelta(hours=1),
+            scheduled_close_at=now + timedelta(hours=4),
+        )
+        close_expired_coverage_sessions(moment=now)
+        session.refresh_from_db()
+        self.assertEqual(session.status, CoverageSession.Status.OPEN)
 
