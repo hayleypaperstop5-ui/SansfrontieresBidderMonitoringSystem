@@ -30,7 +30,22 @@ def payroll_review(request):
             ),
         )
         return redirect("dashboard:home")
-    return render(request, "payments/payroll_review.html", {"plan": plan})
+
+    # Detect whether this week's payroll has already been processed so we
+    # can show an accurate banner and prevent a confusing failed POST.
+    already_processed = ModeratorPayment.objects.filter(
+        payment_week_start=plan["week_start"],
+        payment_week_end=plan["week_end"],
+    ).exists()
+
+    return render(
+        request,
+        "payments/payroll_review.html",
+        {
+            "plan": plan,
+            "already_processed": already_processed,
+        },
+    )
 
 
 @role_required(*RATE_MANAGEMENT_ROLES)
