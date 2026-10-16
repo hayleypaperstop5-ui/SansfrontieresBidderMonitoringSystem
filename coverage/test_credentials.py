@@ -60,7 +60,7 @@ class PlayerModelCredentialTests(TestCase):
 class CredentialFormTests(TestCase):
     def test_blank_password_preserves_existing(self):
         from players.forms import PlayerEditForm
-        p = Player.objects.create(player_number=8003, name="Form Test")
+        p = Player.objects.create(player_number=3, name="Form Test")
         p.login_password = "original-secret"
         p.save()
 
