@@ -1,4 +1,4 @@
-﻿from django.urls import path
+from django.urls import path
 from . import views
 
 app_name = "coverage"
@@ -21,5 +21,10 @@ urlpatterns = [
         "manager/alerts/",
         views.manager_coverage_alerts,
         name="manager_coverage_alerts",
+    ),
+    path(
+        "credentials/<int:disclosure_id>/acknowledge/",
+        views.acknowledge_credential,
+        name="acknowledge_credential",
     ),
 ]

@@ -608,5 +608,36 @@ def apply_for_coverage(request, player_id):
 
     return redirect("coverage:opportunities")
 
+@login_required
+def acknowledge_credential(request, disclosure_id):
+    """
+    Mark a CredentialDisclosure as acknowledged by its recipient.
 
+    Only the moderator who is the recipient of the disclosure can
+    acknowledge it. Returns a JSON response suitable for the popup's
+    fetch() call.
+    """
+    from django.http import JsonResponse
+    from django.utils import timezone as tz
+    from players.models import CredentialDisclosure
 
+    if request.method != "POST":
+        return JsonResponse({"error": "POST required"}, status=405)
+
+    try:
+        disclosure = CredentialDisclosure.objects.get(
+            id=disclosure_id,
+            moderator=request.user,
+        )
+    except CredentialDisclosure.DoesNotExist:
+        return JsonResponse({"error": "not found"}, status=404)
+
+    if disclosure.acknowledged_at is None:
+        disclosure.acknowledged_at = tz.now()
+        disclosure.save(update_fields=["acknowledged_at"])
+
+    return JsonResponse({
+        "ok": True,
+        "disclosure_id": disclosure.id,
+        "acknowledged_at": disclosure.acknowledged_at.isoformat(),
+    })
