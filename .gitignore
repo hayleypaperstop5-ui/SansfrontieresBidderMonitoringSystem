@@ -66,3 +66,5 @@ templates/**/*.encoding-backup
 templates/**/*.self_application_backup
 templates/**/*.before_*
 staticfiles/
+payment-statement-*.pdf
+*.pdf.tmp
