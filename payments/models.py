@@ -1,4 +1,4 @@
-﻿from django.conf import settings
+from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.core.validators import MinValueValidator
 from django.db import models
@@ -114,6 +114,37 @@ class ModeratorPayment(models.Model):
         decimal_places=2,
         default=0,
         validators=[MinValueValidator(0)],
+    )
+
+    paid_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="When the Director marked this payment as paid.",
+    )
+
+    paid_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="moderator_payments_made",
+        help_text="Director who recorded the payment.",
+    )
+
+    mpesa_reference = models.CharField(
+        max_length=100,
+        blank=True,
+        default="",
+        help_text="M-Pesa transaction reference entered by the Director.",
+    )
+
+    amount_paid = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(0)],
+        help_text="Amount actually paid. Null until the payment is recorded.",
     )
 
     rate_method = models.CharField(
