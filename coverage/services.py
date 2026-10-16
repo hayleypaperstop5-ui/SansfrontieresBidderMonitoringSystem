@@ -32,6 +32,7 @@ def _notify_management_team(*, title, message, alert_level):
         role__in=(
             User.Role.MANAGER,
             User.Role.DIRECTOR,
+            User.Role.ADMIN,
         ),
         is_active=True,
     )
@@ -68,6 +69,7 @@ def _email_management_team(*, subject, message):
         role__in=(
             User.Role.MANAGER,
             User.Role.DIRECTOR,
+            User.Role.ADMIN,
         ),
         is_active=True,
     ).exclude(email="").values_list("email", flat=True)
@@ -359,6 +361,18 @@ def request_replacement(
             "Regards,\n\n"
             "Sansfrontieres Chat Moderation"
         ),
+    )
+
+    # Confirm the request to the requesting moderator.
+    _notify_moderator(
+        moderator=session.moderator,
+        title="Replacement Request Submitted",
+        message=(
+            f"Your replacement request for Player {session.player} has been "
+            "submitted. Management has been notified. Please continue "
+            "covering the Player until a replacement is confirmed."
+        ),
+        alert_level=Notification.AlertLevel.IMPORTANT,
     )
 
     return session
