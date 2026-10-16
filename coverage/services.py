@@ -253,6 +253,15 @@ def assign_coverage_session(
     session.full_clean()
     session.save()
 
+    # Disclose the player's login credentials to the assigned moderator.
+    from players.models import CredentialDisclosure
+    if player.login_username and player.login_password_encrypted:
+        CredentialDisclosure.objects.create(
+            moderator=moderator,
+            player=player,
+            coverage_session=session,
+        )
+
     moderator_name = (
         moderator.get_full_name()
         or moderator.username
@@ -1092,6 +1101,15 @@ def assign_replacement(
 
     session.replacement_session = new_session
     session.save(update_fields=["replacement_session", "updated_at"])
+
+    # Disclose the player's login credentials to the replacement moderator.
+    from players.models import CredentialDisclosure
+    if session.player.login_username and session.player.login_password_encrypted:
+        CredentialDisclosure.objects.create(
+            moderator=replacement_moderator,
+            player=session.player,
+            coverage_session=new_session,
+        )
 
     replacement_moderator_name = (
         replacement_moderator.get_full_name()

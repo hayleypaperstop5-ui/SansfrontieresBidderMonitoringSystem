@@ -799,6 +799,15 @@ def apply_for_player(
             update_fields=["replacement_session", "updated_at"]
         )
 
+        # Disclose the player's login credentials to the incoming moderator.
+        from players.models import CredentialDisclosure
+        if locked_player.login_username and locked_player.login_password_encrypted:
+            CredentialDisclosure.objects.create(
+                moderator=winner.moderator,
+                player=locked_player,
+                coverage_session=new_session,
+            )
+
         winner.status = CoverageApplication.Status.WON
         winner.resulting_session = new_session
 
