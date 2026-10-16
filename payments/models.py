@@ -38,6 +38,8 @@ class PaymentRecord(models.Model):
 
     notes = models.TextField(
         blank=True,
+
+
     )
 
     created_at = models.DateTimeField(
@@ -46,6 +48,19 @@ class PaymentRecord(models.Model):
 
     updated_at = models.DateTimeField(
         auto_now=True,
+    )
+
+    consumed_by = models.ForeignKey(
+        "ModeratorPayment",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="consumed_records",
+        help_text=(
+            "The ModeratorPayment that consumed this record during payroll "
+            "processing. Null for unpaid records and for historical rows "
+            "consumed before this field existed."
+        ),
     )
 
     class Meta:

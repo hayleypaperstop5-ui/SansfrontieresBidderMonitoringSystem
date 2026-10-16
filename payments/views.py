@@ -305,3 +305,160 @@ def settle_moderator_payment_view(request, payment_id):
     )
 
     return redirect("dashboard:home")
+
+@role_required(*RATE_MANAGEMENT_ROLES)
+def settle_payment(request, payment_id):
+    """
+    Read-only reconciliation view for a single ModeratorPayment.
+
+    Shows the source sessions, per-player breakdown, and carried-forward
+    chats for the moderator's payment. Step 3 will add the Mark-as-Paid
+    action to this page.
+    """
+    from django.db.models import F, Sum
+    from payments.models import ModeratorPayment, PaymentRecord, PaymentSettings
+
+    payment = get_object_or_404(ModeratorPayment, pk=payment_id)
+
+    # Source PaymentRecord rows consumed by THIS ModeratorPayment.
+    # The FK is unambiguous: only records that this payroll run processed
+    # are returned. Historical rows consumed before the FK existed fall
+    # back to the moderator + processed filter.
+    source_records = (
+        PaymentRecord.objects
+        .filter(consumed_by=payment)
+        .select_related(
+            "coverage_session",
+            "coverage_session__player",
+            "coverage_session__moderator",
+        )
+        .order_by("coverage_session__operating_date", "coverage_session__id")
+    )
+
+    historical_fallback = False
+    if not source_records.exists():
+        # Legacy payment — no FK set. Fall back to the moderator + processed
+        # filter without date constraints.
+        source_records = (
+            PaymentRecord.objects
+            .filter(
+                moderator=payment.moderator,
+                payroll_processed_chats__gt=0,
+            )
+            .select_related(
+                "coverage_session",
+                "coverage_session__player",
+                "coverage_session__moderator",
+            )
+            .order_by("coverage_session__operating_date", "coverage_session__id")
+        )
+        historical_fallback = True
+
+    # Report submitted_at per session, if any
+    from coverage.models import EndOfSessionReport
+    session_ids = [r.coverage_session_id for r in source_records]
+    submitted_map = dict(
+        EndOfSessionReport.objects
+        .filter(coverage_session_id__in=session_ids)
+        .values_list("coverage_session_id", "submitted_at")
+    )
+
+    # Per-player breakdown — use stored JSON if available
+    breakdown = payment.player_chat_rate_breakdown or {}
+
+    # Distinct players this moderator was paid for in this week
+    player_ids = list({
+        r.coverage_session.player_id for r in source_records
+    })
+
+    # Carried-forward info per player
+    threshold = (
+        PaymentSettings.objects.first().minimum_chats_per_player
+        if PaymentSettings.objects.exists() else 700
+    )
+    carried = {}
+    for pid in player_ids:
+        # Accumulated unpaid chats (across all weeks) for this player
+        agg = (
+            PaymentRecord.objects
+            .filter(
+                coverage_session__player_id=pid,
+                chats_responded__gt=F("payroll_processed_chats"),
+            )
+            .aggregate(total=Sum(F("chats_responded") - F("payroll_processed_chats")))
+        )
+        accumulated_unpaid = agg["total"] or 0
+
+        # Submitted this week for this player (regardless of moderator)
+        week_agg = (
+            PaymentRecord.objects
+            .filter(
+                coverage_session__player_id=pid,
+                coverage_session__operating_date__gte=payment.payment_week_start,
+                coverage_session__operating_date__lte=payment.payment_week_end,
+            )
+            .aggregate(total=Sum("chats_responded"))
+        )
+        submitted_this_week = week_agg["total"] or 0
+
+        carried[pid] = {
+            "submitted_this_week": submitted_this_week,
+            "accumulated_unpaid": accumulated_unpaid,
+            "threshold": threshold,
+            "remaining_to_qualify": max(0, threshold - accumulated_unpaid),
+        }
+
+    # Resolve player objects for display
+    from players.models import Player
+    players = {
+        p.id: p for p in Player.objects.filter(id__in=player_ids)
+    }
+
+    rows = []
+    for r in source_records:
+        session = r.coverage_session
+        rows.append({
+            "session_id": session.id,
+            "player": session.player,
+            "operating_date": session.operating_date,
+            "session_type": session.get_session_type_display(),
+            "submitted_at": submitted_map.get(session.id),
+            "chats_responded": r.chats_responded,
+            "payroll_processed_chats": r.payroll_processed_chats,
+        })
+
+    # Pre-resolve player labels for the template
+    player_labels = {pid: str(p) for pid, p in players.items()}
+
+    # Enrich breakdown and carried with the resolved player label
+    breakdown_display = [
+        {
+            "player_id": pid,
+            "player_label": player_labels.get(int(pid), f"Player #{pid}"),
+            "qualifying_chats": info.get("qualifying_chats", 0),
+            "rate_per_chat": info.get("rate_per_chat", "0.00"),
+            "chat_earnings": info.get("chat_earnings", "0.00"),
+        }
+        for pid, info in (breakdown or {}).items()
+    ]
+
+    carried_display = [
+        {
+            "player_id": pid,
+            "player_label": player_labels.get(pid, f"Player #{pid}"),
+            "submitted_this_week": info["submitted_this_week"],
+            "accumulated_unpaid": info["accumulated_unpaid"],
+            "threshold": info["threshold"],
+            "remaining_to_qualify": info["remaining_to_qualify"],
+        }
+        for pid, info in carried.items()
+    ]
+
+    context = {
+        "payment": payment,
+        "rows": rows,
+        "breakdown_display": breakdown_display,
+        "carried_display": carried_display,
+        "threshold": threshold,
+    }
+    return render(request, "payments/settle_payment.html", context)
