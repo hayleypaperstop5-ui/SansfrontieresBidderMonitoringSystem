@@ -464,6 +464,7 @@ def settle_payment(request, payment_id):
         session = r.coverage_session
         rows.append({
             "session_id": session.id,
+            "session_code": getattr(session, "session_code", "") or "",
             "player": session.player,
             "operating_date": session.operating_date,
             "session_type": session.get_session_type_display(),
