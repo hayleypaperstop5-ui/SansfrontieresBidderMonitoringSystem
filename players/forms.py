@@ -5,11 +5,43 @@ from .models import ChatRateTier, Player, PlayerChatRateTier
 
 class PlayerCreationForm(forms.ModelForm):
 
+    login_username = forms.CharField(
+        required=False,
+        max_length=150,
+        label="Player Login Username",
+        widget=forms.TextInput(attrs={
+            "autocomplete": "off",
+            "placeholder": "Player's external account username",
+        }),
+    )
+
+    login_password = forms.CharField(
+        required=False,
+        max_length=200,
+        label="Player Login Password",
+        widget=forms.PasswordInput(attrs={
+            "autocomplete": "new-password",
+            "placeholder": "Player's external account password",
+        }, render_value=False),
+    )
+
+    login_notes = forms.CharField(
+        required=False,
+        label="Login Notes (optional)",
+        widget=forms.Textarea(attrs={
+            "rows": 3,
+            "placeholder": "2FA notes, recovery email, or other login context",
+        }),
+    )
+
     class Meta:
         model = Player
         fields = (
             "player_number",
             "name",
+            "login_username",
+            "login_password",
+            "login_notes",
         )
 
         widgets = {
@@ -58,6 +90,14 @@ class PlayerCreationForm(forms.ModelForm):
             )
 
         return name
+
+    def save(self, commit=True):
+        player = super().save(commit=False)
+        plaintext = self.cleaned_data.get("login_password") or ""
+        player.login_password = plaintext
+        if commit:
+            player.save()
+        return player
 
 
 class ChatRateTierForm(forms.ModelForm):
@@ -195,12 +235,45 @@ class PlayerChatRateTierForm(forms.ModelForm):
 
 class PlayerEditForm(forms.ModelForm):
 
+    login_username = forms.CharField(
+        required=False,
+        max_length=150,
+        label="Player Login Username",
+        widget=forms.TextInput(attrs={
+            "autocomplete": "off",
+            "placeholder": "Player's external account username",
+        }),
+    )
+
+    login_password = forms.CharField(
+        required=False,
+        max_length=200,
+        label="Player Login Password",
+        widget=forms.PasswordInput(attrs={
+            "autocomplete": "new-password",
+            "placeholder": "Leave blank to keep the current password",
+        }, render_value=False),
+        help_text="Leave blank to keep the existing password unchanged.",
+    )
+
+    login_notes = forms.CharField(
+        required=False,
+        label="Login Notes (optional)",
+        widget=forms.Textarea(attrs={
+            "rows": 3,
+            "placeholder": "2FA notes, recovery email, or other login context",
+        }),
+    )
+
     class Meta:
         model = Player
         fields = (
             "player_number",
             "name",
             "status",
+            "login_username",
+            "login_password",
+            "login_notes",
         )
 
         widgets = {
@@ -225,6 +298,11 @@ class PlayerEditForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        # Prefill plain-text fields from the existing instance.
+        # The password field is intentionally left blank.
+        if self.instance and self.instance.pk:
+            self.fields["login_username"].initial = self.instance.login_username
+            self.fields["login_notes"].initial = self.instance.login_notes
 
     def clean_player_number(self):
         player_number = self.cleaned_data["player_number"]
@@ -254,3 +332,13 @@ class PlayerEditForm(forms.ModelForm):
             )
 
         return name
+
+    def save(self, commit=True):
+        player = super().save(commit=False)
+        plaintext = self.cleaned_data.get("login_password") or ""
+        # Empty password means "keep the existing one"
+        if plaintext:
+            player.login_password = plaintext
+        if commit:
+            player.save()
+        return player
