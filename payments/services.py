@@ -1,3 +1,4 @@
+from django.utils import timezone
 from datetime import date
 from decimal import Decimal
 
@@ -412,6 +413,7 @@ def process_qualifying_player_chats(
         processed_players = {}
         moderator_totals = {}
         moderator_player_totals = {}
+        processed_record_ids_by_moderator = {}
 
         for player_id, player_payment_records in player_records.items():
 
@@ -877,6 +879,7 @@ def process_thursday_payroll(payment_date):
         processed_players = {}
         moderator_totals = {}
         moderator_player_totals = {}
+        processed_record_ids_by_moderator = {}
 
         for player_id, player_payment_records in locked_by_player.items():
             total_available_chats = sum(
@@ -948,6 +951,8 @@ def process_thursday_payroll(payment_date):
                     moderator_player_totals[moderator_id].get(player_id, 0) + unprocessed
                 )
 
+                processed_record_ids_by_moderator.setdefault(moderator_id, []).append(record.id)
+
             PlayerPayrollLedger.objects.create(
                 player_id=player_id,
                 payment_week_start=week_start,
@@ -990,7 +995,7 @@ def process_thursday_payroll(payment_date):
                     f"A Moderator payroll record already exists for {moderator.username}."
                 )
 
-            ModeratorPayment.objects.create(
+            moderator_payment = ModeratorPayment.objects.create(
                 moderator=moderator,
                 payment_week_start=week_start,
                 payment_week_end=week_end,
@@ -1012,6 +1017,15 @@ def process_thursday_payroll(payment_date):
                 outstanding_amount=financial["earned_amount"],
                 status=ModeratorPayment.Status.UNPAID,
             )
+
+            # Link consumed PaymentRecords to this payment so the settlement
+            # view can retrieve the exact source sessions unambiguously.
+            record_ids = processed_record_ids_by_moderator.get(moderator.id, [])
+            if record_ids:
+                PaymentRecord.objects.filter(id__in=record_ids).update(
+                    consumed_by=moderator_payment,
+                )
+
             created_payments.append(moderator_id)
 
         return {
@@ -1092,5 +1106,49 @@ def settle_moderator_payment(
 
     return moderator_payment
 
+@transaction.atomic
+def record_payment(*, payment, director, mpesa_reference, amount):
+    """
+    Mark a ModeratorPayment as paid and record the M-Pesa reference.
 
+    Supports partial payments: if `amount` is less than the outstanding
+    balance, the payment transitions to PARTIALLY_PAID and the
+    outstanding balance is reduced. Otherwise, it becomes PAID.
+    """
+    if payment.status == ModeratorPayment.Status.PAID:
+        raise ValidationError("This payment has already been recorded as paid.")
 
+    if not mpesa_reference or not str(mpesa_reference).strip():
+        raise ValidationError("An M-Pesa reference is required.")
+
+    try:
+        amount = Decimal(str(amount))
+    except Exception:
+        raise ValidationError("Invalid payment amount.")
+
+    if amount <= 0:
+        raise ValidationError("Payment amount must be greater than zero.")
+
+    outstanding = payment.outstanding_amount or Decimal("0.00")
+    if amount > outstanding:
+        raise ValidationError(
+            f"Payment amount ({amount}) exceeds outstanding balance ({outstanding})."
+        )
+
+    payment.paid_at = timezone.now()
+    payment.paid_by = director
+    payment.mpesa_reference = str(mpesa_reference).strip()
+    payment.amount_paid = (payment.amount_paid or Decimal("0.00")) + amount
+
+    if amount == outstanding:
+        payment.status = ModeratorPayment.Status.PAID
+        payment.outstanding_amount = Decimal("0.00")
+    else:
+        payment.status = ModeratorPayment.Status.PARTIALLY_PAID
+        payment.outstanding_amount = outstanding - amount
+
+    payment.save(update_fields=[
+        "paid_at", "paid_by", "mpesa_reference", "amount_paid",
+        "status", "outstanding_amount", "updated_at",
+    ])
+    return payment

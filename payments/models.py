@@ -282,6 +282,25 @@ class ModeratorPayment(models.Model):
             f"{self.earned_amount}"
         )
 
+    def delete(self, *args, **kwargs):
+        if self.status == self.Status.PAID:
+            raise ValidationError("Paid payroll records cannot be deleted.")
+        return super().delete(*args, **kwargs)
+
+    def save(self, *args, **kwargs):
+        if self.pk:
+            previous_status = (
+                ModeratorPayment.objects
+                .filter(pk=self.pk)
+                .values_list("status", flat=True)
+                .first()
+            )
+            if previous_status == self.Status.PAID and self.status != self.Status.PAID:
+                raise ValidationError(
+                    "A paid payroll record cannot be reverted to unpaid."
+                )
+        return super().save(*args, **kwargs)
+
 
 class ManagerPayment(models.Model):
 

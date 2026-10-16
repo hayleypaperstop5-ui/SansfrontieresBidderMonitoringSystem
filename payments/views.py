@@ -309,16 +309,35 @@ def settle_moderator_payment_view(request, payment_id):
 @role_required(*RATE_MANAGEMENT_ROLES)
 def settle_payment(request, payment_id):
     """
-    Read-only reconciliation view for a single ModeratorPayment.
+    Reconciliation and settlement view for a single ModeratorPayment.
 
     Shows the source sessions, per-player breakdown, and carried-forward
-    chats for the moderator's payment. Step 3 will add the Mark-as-Paid
-    action to this page.
+    chats. On POST, records the payment (M-Pesa reference + amount).
     """
     from django.db.models import F, Sum
     from payments.models import ModeratorPayment, PaymentRecord, PaymentSettings
 
     payment = get_object_or_404(ModeratorPayment, pk=payment_id)
+
+    if request.method == "POST":
+        from .services import record_payment
+        try:
+            record_payment(
+                payment=payment,
+                director=request.user,
+                mpesa_reference=request.POST.get("mpesa_reference", ""),
+                amount=request.POST.get("amount", "0"),
+            )
+            messages.success(
+                request,
+                f"Payment of KES {payment.amount_paid} recorded for "
+                f"{payment.moderator.get_full_name() or payment.moderator.username}.",
+            )
+        except ValidationError as exc:
+            messages.error(request, str(exc))
+        except Exception as exc:
+            messages.error(request, f"Unexpected error: {exc}")
+        return redirect("payments:settle_payment", payment_id=payment.id)
 
     # Source PaymentRecord rows consumed by THIS ModeratorPayment.
     # The FK is unambiguous: only records that this payroll run processed
