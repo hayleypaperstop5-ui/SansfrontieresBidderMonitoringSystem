@@ -537,3 +537,111 @@ def my_payments(request):
             "totals": totals,
         },
     )
+
+@login_required(login_url="/login/")
+def download_payment_statement_pdf(request, payment_id):
+    """Generate and return a PDF payment statement for a ModeratorPayment."""
+    from django.http import HttpResponse
+    from django.db.models import F, Sum
+    from payments.models import ModeratorPayment, PaymentRecord, PaymentSettings
+    from payments.pdf import build_payment_statement_pdf
+
+    payment = get_object_or_404(ModeratorPayment, pk=payment_id)
+
+    role = getattr(request.user, "role", None)
+    is_director = role in ("DIRECTOR", "ADMIN", "MANAGER")
+    is_owner = payment.moderator_id == request.user.id
+
+    if not (is_director or is_owner):
+        messages.error(request, "You do not have permission to download this statement.")
+        return redirect("dashboard:home")
+
+    # Gather the same context the settle view uses
+    source_records = (
+        PaymentRecord.objects
+        .filter(consumed_by=payment)
+        .select_related("coverage_session", "coverage_session__player")
+        .order_by("coverage_session__operating_date", "coverage_session__id")
+    )
+    if not source_records.exists():
+        source_records = (
+            PaymentRecord.objects
+            .filter(moderator=payment.moderator, payroll_processed_chats__gt=0)
+            .select_related("coverage_session", "coverage_session__player")
+            .order_by("coverage_session__operating_date", "coverage_session__id")
+        )
+
+    from coverage.models import EndOfSessionReport
+    session_ids = [r.coverage_session_id for r in source_records]
+    submitted_map = dict(
+        EndOfSessionReport.objects
+        .filter(coverage_session_id__in=session_ids)
+        .values_list("coverage_session_id", "submitted_at")
+    )
+
+    rows = []
+    for r in source_records:
+        session = r.coverage_session
+        rows.append({
+            "session_id": session.id,
+            "session_code": getattr(session, "session_code", "") or "",
+            "player": session.player,
+            "operating_date": session.operating_date,
+            "session_type": session.get_session_type_display(),
+            "submitted_at": submitted_map.get(session.id),
+            "chats_responded": r.chats_responded,
+            "payroll_processed_chats": r.payroll_processed_chats,
+        })
+
+    breakdown = payment.player_chat_rate_breakdown or {}
+    from players.models import Player
+    player_ids = list({r.coverage_session.player_id for r in source_records})
+    players = {p.id: p for p in Player.objects.filter(id__in=player_ids)}
+    breakdown_display = [
+        {
+            "player_label": str(players.get(int(pid), f"Player #{pid}")),
+            "qualifying_chats": info.get("qualifying_chats", 0),
+            "rate_per_chat": info.get("rate_per_chat", "0.00"),
+            "chat_earnings": info.get("chat_earnings", "0.00"),
+        }
+        for pid, info in breakdown.items()
+    ]
+
+    threshold = (
+        PaymentSettings.objects.first().minimum_chats_per_player
+        if PaymentSettings.objects.exists() else 700
+    )
+    carried_display = []
+    for pid in player_ids:
+        agg = (
+            PaymentRecord.objects
+            .filter(
+                coverage_session__player_id=pid,
+                chats_responded__gt=F("payroll_processed_chats"),
+            )
+            .aggregate(total=Sum(F("chats_responded") - F("payroll_processed_chats")))
+        )
+        week_agg = (
+            PaymentRecord.objects
+            .filter(
+                coverage_session__player_id=pid,
+                coverage_session__operating_date__gte=payment.payment_week_start,
+                coverage_session__operating_date__lte=payment.payment_week_end,
+            )
+            .aggregate(total=Sum("chats_responded"))
+        )
+        accumulated = agg["total"] or 0
+        carried_display.append({
+            "player_label": str(players.get(pid, f"Player #{pid}")),
+            "submitted_this_week": week_agg["total"] or 0,
+            "accumulated_unpaid": accumulated,
+            "threshold": threshold,
+            "remaining_to_qualify": max(0, threshold - accumulated),
+        })
+
+    buffer = build_payment_statement_pdf(payment, rows, breakdown_display, carried_display)
+
+    filename = f"payment-statement-{payment.id}.pdf"
+    response = HttpResponse(buffer.getvalue(), content_type="application/pdf")
+    response["Content-Disposition"] = f'attachment; filename="{filename}"'
+    return response

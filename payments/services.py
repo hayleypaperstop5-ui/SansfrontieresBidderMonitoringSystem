@@ -1151,4 +1151,35 @@ def record_payment(*, payment, director, mpesa_reference, amount):
         "paid_at", "paid_by", "mpesa_reference", "amount_paid",
         "status", "outstanding_amount", "updated_at",
     ])
+
+    # Notify the moderator that their payment was recorded.
+    from notifications.models import Notification
+    period = (
+        f"{payment.payment_week_start.strftime('%d %b %Y')} - "
+        f"{payment.payment_week_end.strftime('%d %b %Y')}"
+    )
+    if payment.status == ModeratorPayment.Status.PAID:
+        title = "Payment Received"
+        message = (
+            f"Your payment of KES {payment.amount_paid} for the period "
+            f"{period} has been recorded. "
+            f"M-Pesa reference: {payment.mpesa_reference}."
+        )
+    else:
+        title = "Partial Payment Received"
+        message = (
+            f"A partial payment of KES {amount} for the period {period} "
+            f"has been recorded. Remaining outstanding: "
+            f"KES {payment.outstanding_amount}. "
+            f"M-Pesa reference: {payment.mpesa_reference}."
+        )
+
+    Notification.objects.create(
+        recipient=payment.moderator,
+        notification_type=Notification.NotificationType.GENERAL,
+        alert_level=Notification.AlertLevel.IMPORTANT,
+        title=title,
+        message=message,
+    )
+
     return payment
