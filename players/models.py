@@ -19,6 +19,26 @@ class Player(models.Model):
         max_length=150,
     )
 
+    login_username = models.CharField(
+        max_length=150,
+        blank=True,
+        default="",
+        help_text="The login username the moderator uses to access this player's account.",
+    )
+
+    login_password_encrypted = models.CharField(
+        max_length=512,
+        blank=True,
+        default="",
+        help_text="Encrypted player login password. Never displayed in plain text outside the moderator popup.",
+    )
+
+    login_notes = models.TextField(
+        blank=True,
+        default="",
+        help_text="Optional notes about the player's login (2FA, recovery email, etc.).",
+    )
+
     status = models.CharField(
         max_length=20,
         choices=Status.choices,
@@ -30,6 +50,26 @@ class Player(models.Model):
 
     class Meta:
         ordering = ["player_number"]
+
+    @property
+    def login_password(self):
+        """Decrypt and return the player's login password."""
+        if not self.login_password_encrypted:
+            return ""
+        from accounts.credential_crypto import decrypt_value
+        try:
+            return decrypt_value(self.login_password_encrypted)
+        except Exception:
+            return ""
+
+    @login_password.setter
+    def login_password(self, value):
+        """Encrypt and store the player's login password."""
+        from accounts.credential_crypto import encrypt_value
+        if value:
+            self.login_password_encrypted = encrypt_value(value)
+        else:
+            self.login_password_encrypted = ""
 
     def __str__(self):
         return f"Player {self.player_number} - {self.name}"
@@ -214,3 +254,52 @@ class ChatRateTier(models.Model):
             chat_range = f"{self.minimum_chats}-{self.maximum_chats} chats"
 
         return f"{chat_range} | Rate {self.rate_per_chat}"
+
+
+class CredentialDisclosure(models.Model):
+    """
+    Tracks which moderator has been shown a player's login credentials
+    and when they acknowledged them.
+    """
+
+    moderator = models.ForeignKey(
+        "accounts.User",
+        on_delete=models.CASCADE,
+        related_name="credential_disclosures",
+    )
+
+    player = models.ForeignKey(
+        Player,
+        on_delete=models.CASCADE,
+        related_name="credential_disclosures",
+    )
+
+    coverage_session = models.ForeignKey(
+        "coverage.CoverageSession",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="credential_disclosures",
+    )
+
+    disclosed_at = models.DateTimeField(
+        auto_now_add=True,
+    )
+
+    acknowledged_at = models.DateTimeField(
+        null=True,
+        blank=True,
+    )
+
+    class Meta:
+        ordering = ["-disclosed_at"]
+        indexes = [
+            models.Index(
+                fields=["moderator", "acknowledged_at"],
+                name="cred_disc_mod_ack_idx",
+            ),
+        ]
+
+    def __str__(self):
+        status = "acknowledged" if self.acknowledged_at else "unacknowledged"
+        return f"{self.moderator} -> {self.player} ({status})"
