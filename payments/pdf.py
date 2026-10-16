@@ -38,6 +38,11 @@ def _date_str(d):
 def _datetime_str(dt):
     if dt is None:
         return "—"
+    from django.utils import timezone
+    try:
+        dt = timezone.localtime(dt)
+    except Exception:
+        pass
     return dt.strftime("%d %b %Y %H:%M")
 
 
@@ -55,7 +60,7 @@ def build_payment_statement_pdf(payment, rows, breakdown_display, carried_displa
     )
 
     styles = getSampleStyleSheet()
-    h1 = ParagraphStyle("h1", parent=styles["Heading1"], fontSize=18, spaceAfter=4)
+    h1 = ParagraphStyle("h1", parent=styles["Heading1"], fontSize=16, spaceAfter=4, alignment=1)  # 1 = centered
     h2 = ParagraphStyle("h2", parent=styles["Heading2"], fontSize=12, spaceBefore=10, spaceAfter=6)
     small = ParagraphStyle("small", parent=styles["Normal"], fontSize=9, textColor=colors.grey)
     body = styles["Normal"]
@@ -66,11 +71,14 @@ def build_payment_statement_pdf(payment, rows, breakdown_display, carried_displa
     # ---------- Header ----------
     moderator = payment.moderator
     mod_name = moderator.get_full_name() or moderator.username
-    story.append(Paragraph("Sansfrontieres &mdash; Payment Statement", h1))
+    story.append(Paragraph("Sansfrontieres Chat Moderations Payment Statement", h1))
+    subtitle_style = ParagraphStyle(
+        "subtitle", parent=small, alignment=1, spaceAfter=8,
+    )
     story.append(Paragraph(
         f"Statement #{payment.id} &nbsp;|&nbsp; "
         f"Issued {_date_str(payment.payment_date)}",
-        small,
+        subtitle_style,
     ))
     story.append(Spacer(1, 8))
 
