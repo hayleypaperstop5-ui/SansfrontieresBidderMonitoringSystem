@@ -18,7 +18,18 @@ from .services import settle_moderator_payment
 
 @role_required(*RATE_MANAGEMENT_ROLES)
 def payroll_review(request):
-    plan = build_payroll_plan(payment_date=date.today())
+    try:
+        plan = build_payroll_plan(payment_date=date.today())
+    except ValidationError as exc:
+        messages.error(
+            request,
+            (
+                f"Payroll cannot be computed: {exc} "
+                "Please configure Player Chat Rate Tiers for all active "
+                "players, then try again."
+            ),
+        )
+        return redirect("dashboard:home")
     return render(request, "payments/payroll_review.html", {"plan": plan})
 
 
