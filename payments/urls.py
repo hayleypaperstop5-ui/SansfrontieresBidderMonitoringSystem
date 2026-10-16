@@ -6,6 +6,7 @@ from . import views
 app_name = "payments"
 
 urlpatterns = [
+    path("my-payments/", views.my_payments, name="my_payments"),
     path("payroll/settle/<int:payment_id>/", views.settle_payment, name="settle_payment"),
     path("settings/", views.payment_settings, name="payment_settings"),
 path(

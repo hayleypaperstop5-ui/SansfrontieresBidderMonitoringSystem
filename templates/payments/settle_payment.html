@@ -175,7 +175,11 @@
 
   <div class="bg-white rounded-lg shadow-md p-6">
     <h2 class="text-lg font-semibold mb-4">Payment Action</h2>
-    {% if payment.status == 'PAID' %}
+    {% if not is_director %}
+      <div class="bg-blue-50 border border-blue-200 p-4 rounded text-sm text-blue-800">
+        Payment is recorded by a Director. If you have questions about this payment, contact management.
+      </div>
+    {% elif payment.status == 'PAID' %}
       <div class="bg-green-50 border border-green-200 p-4 rounded text-sm">
         <p class="font-semibold text-green-800">Payment completed</p>
         <p class="mt-2">Recorded on {{ payment.paid_at|date:"d M Y H:i" }}

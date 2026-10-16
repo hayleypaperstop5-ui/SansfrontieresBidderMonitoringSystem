@@ -208,3 +208,89 @@ class SettleViewTests(TestCase):
         self.assertEqual(self.payment.status, ModeratorPayment.Status.UNPAID)
         body = resp.content.decode("utf-8", errors="replace")
         self.assertIn("M-Pesa reference", body)
+
+class ModeratorAccessTests(TestCase):
+    """Verify a moderator can view (but not record) their own payments."""
+
+    def setUp(self):
+        self.director = User.objects.create_user(
+            username="ma_director",
+            password="testpass123",
+            role=User.Role.DIRECTOR,
+        )
+        self.moderator = User.objects.create_user(
+            username="ma_moderator",
+            password="testpass123",
+            role=User.Role.MODERATOR,
+        )
+        self.other_moderator = User.objects.create_user(
+            username="ma_other",
+            password="testpass123",
+            role=User.Role.MODERATOR,
+        )
+        StaffProfile.objects.create(
+            user=self.moderator, status=StaffProfile.Status.ACTIVE,
+        )
+        StaffProfile.objects.create(
+            user=self.other_moderator, status=StaffProfile.Status.ACTIVE,
+        )
+        today = date.today()
+        self.payment = ModeratorPayment.objects.create(
+            moderator=self.moderator,
+            payment_week_start=today - timedelta(days=6),
+            payment_week_end=today,
+            payment_date=today,
+            payable_chats=500,
+            chat_earnings=Decimal("1500.00"),
+            earned_amount=Decimal("1500.00"),
+            outstanding_amount=Decimal("1500.00"),
+            generated_amount=Decimal("1500.00"),
+            status=ModeratorPayment.Status.UNPAID,
+        )
+
+    def test_moderator_can_view_own_payment(self):
+        c = Client()
+        c.force_login(self.moderator)
+        url = reverse("payments:settle_payment", args=[self.payment.id])
+        resp = c.get(url)
+        self.assertEqual(resp.status_code, 200)
+        # Should see the "recorded by a Director" note, not the form
+        body = resp.content.decode("utf-8", errors="replace")
+        self.assertIn("recorded by a Director", body)
+        self.assertNotIn("Record Payment", body)
+
+    def test_moderator_cannot_view_others_payment(self):
+        c = Client()
+        c.force_login(self.other_moderator)
+        url = reverse("payments:settle_payment", args=[self.payment.id])
+        resp = c.get(url)
+        # Should redirect away
+        self.assertEqual(resp.status_code, 302)
+
+    def test_moderator_cannot_post_payment(self):
+        c = Client()
+        c.force_login(self.moderator)
+        url = reverse("payments:settle_payment", args=[self.payment.id])
+        resp = c.post(url, {"mpesa_reference": "TEST", "amount": "1500.00"})
+        self.payment.refresh_from_db()
+        self.assertEqual(self.payment.status, ModeratorPayment.Status.UNPAID)
+
+    def test_my_payments_lists_only_own(self):
+        c = Client()
+        c.force_login(self.moderator)
+        url = reverse("payments:my_payments")
+        resp = c.get(url)
+        self.assertEqual(resp.status_code, 200)
+        body = resp.content.decode("utf-8", errors="replace")
+        self.assertIn("My Payments", body)
+        self.assertIn("1500.00", body)
+        self.assertNotIn("ma_other", body)
+
+    def test_director_can_still_view_and_record(self):
+        c = Client()
+        c.force_login(self.director)
+        url = reverse("payments:settle_payment", args=[self.payment.id])
+        resp = c.get(url)
+        self.assertEqual(resp.status_code, 200)
+        body = resp.content.decode("utf-8", errors="replace")
+        self.assertIn("Record Payment", body)

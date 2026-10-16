@@ -321,7 +321,7 @@ def settle_moderator_payment_view(request, payment_id):
 
     return redirect("dashboard:home")
 
-@role_required(*RATE_MANAGEMENT_ROLES)
+@login_required(login_url="/login/")
 def settle_payment(request, payment_id):
     """
     Reconciliation and settlement view for a single ModeratorPayment.
@@ -334,7 +334,18 @@ def settle_payment(request, payment_id):
 
     payment = get_object_or_404(ModeratorPayment, pk=payment_id)
 
+    role = getattr(request.user, "role", None)
+    is_director = role in ("DIRECTOR", "ADMIN", "MANAGER")
+    is_owner = payment.moderator_id == request.user.id
+
+    if not (is_director or is_owner):
+        messages.error(request, "You do not have permission to view this payment.")
+        return redirect("dashboard:home")
+
     if request.method == "POST":
+        if not is_director:
+            messages.error(request, "Only Directors can record payments.")
+            return redirect("payments:settle_payment", payment_id=payment.id)
         from .services import record_payment
         try:
             record_payment(
@@ -494,5 +505,34 @@ def settle_payment(request, payment_id):
         "breakdown_display": breakdown_display,
         "carried_display": carried_display,
         "threshold": threshold,
+        "is_director": is_director,
     }
     return render(request, "payments/settle_payment.html", context)
+
+@login_required(login_url="/login/")
+def my_payments(request):
+    """List all payments for the logged-in moderator."""
+    if getattr(request.user, "role", None) != "MODERATOR":
+        messages.error(request, "This page is for moderators only.")
+        return redirect("dashboard:home")
+
+    payments = (
+        ModeratorPayment.objects
+        .filter(moderator=request.user)
+        .order_by("-payment_week_start", "-id")
+    )
+
+    totals = {
+        "earned": sum((p.earned_amount or 0) for p in payments),
+        "paid": sum((p.amount_paid or 0) for p in payments),
+        "outstanding": sum((p.outstanding_amount or 0) for p in payments),
+    }
+
+    return render(
+        request,
+        "payments/my_payments.html",
+        {
+            "payments": payments,
+            "totals": totals,
+        },
+    )
