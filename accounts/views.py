@@ -75,6 +75,17 @@ def login_view(request):
             password=password,
         )
 
+        # Fall back to email lookup if username authentication failed.
+        # This lets users sign in with either their username or their email.
+        if user is None and username:
+            matched = User.objects.filter(email__iexact=username).first()
+            if matched is not None:
+                user = authenticate(
+                    request,
+                    username=matched.username,
+                    password=password,
+                )
+
         if user is not None:
             if not user.is_active:
                 messages.error(
