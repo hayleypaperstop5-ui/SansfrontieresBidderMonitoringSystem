@@ -27,4 +27,9 @@ urlpatterns = [
         views.acknowledge_credential,
         name="acknowledge_credential",
     ),
+    path(
+        "players/<int:player_id>/credentials/",
+        views.player_credentials_view,
+        name="player_credentials",
+    ),
 ]

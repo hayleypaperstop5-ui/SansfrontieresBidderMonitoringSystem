@@ -210,6 +210,15 @@
                     {{ active_session.get_status_display }}
                 </p>
 
+                {% if active_session.player.login_username or active_session.player.login_password_encrypted %}
+                <p>
+                    <a href="{% url 'coverage:player_credentials' active_session.player.id %}"
+                       style="color:#1e40af;text-decoration:underline;font-weight:600;">
+                        View Player Login Details
+                    </a>
+                </p>
+                {% endif %}
+
                 <div class="alert alert-info">
                     You are currently covering this Player. Continue working until
                     your replacement has been secured or the Manager provides an

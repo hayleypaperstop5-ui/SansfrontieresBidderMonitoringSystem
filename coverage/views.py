@@ -641,3 +641,53 @@ def acknowledge_credential(request, disclosure_id):
         "disclosure_id": disclosure.id,
         "acknowledged_at": disclosure.acknowledged_at.isoformat(),
     })
+
+@login_required
+def player_credentials_view(request, player_id):
+    """
+    Read-only view of the player's login credentials for a moderator
+    who is CURRENTLY covering that player.
+
+    Management roles can also view this page for any player.
+    """
+    from players.models import Player
+
+    try:
+        player = Player.objects.get(pk=player_id)
+    except Player.DoesNotExist:
+        messages.error(request, "Player not found.")
+        return redirect("dashboard:home")
+
+    role = getattr(request.user, "role", None)
+    is_management = role in ("MANAGER", "DIRECTOR", "ADMIN")
+
+    if not is_management:
+        # Moderators can only see credentials for a player they currently cover.
+        has_active_session = CoverageSession.objects.filter(
+            player=player,
+            moderator=request.user,
+            status__in=(
+                CoverageSession.Status.ACTIVE,
+                CoverageSession.Status.REPLACEMENT_REQUESTED,
+                CoverageSession.Status.HANDOVER,
+            ),
+        ).exists()
+
+        if not has_active_session:
+            messages.error(
+                request,
+                "You can only view credentials for a player you are currently covering.",
+            )
+            return redirect("dashboard:home")
+
+    if not (player.login_username or player.login_password_encrypted):
+        messages.info(request, f"{player} does not have login credentials on file.")
+        return redirect("dashboard:home")
+
+    return render(
+        request,
+        "coverage/player_credentials.html",
+        {
+            "player": player,
+        },
+    )
