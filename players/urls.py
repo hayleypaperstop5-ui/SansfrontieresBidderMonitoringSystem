@@ -1,4 +1,5 @@
-from django.urls import path
+﻿from django.urls import path
+from django.views.generic import RedirectView
 
 from . import views
 
@@ -31,18 +32,27 @@ urlpatterns = [
     ),
     path(
         "player-chat-rates/",
-        views.player_chat_rate_list,
-        name="player_chat_rate_list",
+        RedirectView.as_view(
+            pattern_name="players:chat_rate_list",
+            permanent=False,
+        ),
+        name="player_chat_rate_list_redirect",
     ),
     path(
         "player-chat-rates/add/",
-        views.player_chat_rate_create,
-        name="player_chat_rate_create",
+        RedirectView.as_view(
+            pattern_name="players:chat_rate_create",
+            permanent=False,
+        ),
+        name="player_chat_rate_create_redirect",
     ),
     path(
         "player-chat-rates/<int:rate_id>/edit/",
-        views.player_chat_rate_edit,
-        name="player_chat_rate_edit",
+        RedirectView.as_view(
+            url="/players/chat-rates/",
+            permanent=False,
+        ),
+        name="player_chat_rate_edit_redirect",
     ),
     path(
         "<int:player_id>/edit/",
