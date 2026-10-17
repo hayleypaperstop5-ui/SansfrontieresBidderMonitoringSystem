@@ -1,4 +1,4 @@
-from datetime import timedelta
+﻿from datetime import timedelta
 from decimal import Decimal
 
 from django.contrib import messages
@@ -188,22 +188,35 @@ def dashboard(request):
         .order_by("-created_at")
     )
 
-    unpaid_chats = sum(
-        payment.chats_responded - payment.payroll_processed_chats
-        for payment in payment_records
-    )
-
-    paid_chats = sum(
-        payment.payroll_processed_chats
-        for payment in payment_records
-    )
-
     moderator_payroll = (
         ModeratorPayment.objects
         .filter(
             moderator=request.user,
         )
         .order_by("-payment_week_end")
+    )
+
+    # Chats whose ModeratorPayment is fully PAID
+    paid_chats = sum(
+        (
+            payment.payable_chats
+            for payment in moderator_payroll
+            if payment.status == ModeratorPayment.Status.PAID
+        ),
+        0,
+    )
+
+    # Chats whose ModeratorPayment is UNPAID or PARTIALLY_PAID
+    unpaid_chats = sum(
+        (
+            payment.payable_chats
+            for payment in moderator_payroll
+            if payment.status in (
+                ModeratorPayment.Status.UNPAID,
+                ModeratorPayment.Status.PARTIALLY_PAID,
+            )
+        ),
+        0,
     )
 
     payroll_earned = sum(
@@ -643,12 +656,48 @@ def director_dashboard(request):
     # ---------------------------------------------------------
 
     current_rate_tier = None
+    current_rate = None
 
     try:
-        current_rate_tier = get_applicable_rate_tier(
-            chats_responded=chats_this_week,
-            operating_date=today,
+        from coverage.models import CoverageSession
+        from players.models import PlayerChatRateTier
+        from payments.services import get_applicable_player_chat_rate_tier
+        from django.db.models import F, Sum as _Sum
+
+        active_session = (
+            CoverageSession.objects
+            .filter(
+                moderator=request.user,
+                status=CoverageSession.Status.ACTIVE,
+            )
+            .select_related("player")
+            .order_by("-signed_in_at")
+            .first()
         )
+
+        if active_session:
+            # Rate based on the active session's player's total weekly chats
+            player_week_chats = (
+                PaymentRecord.objects
+                .filter(
+                    coverage_session__player=active_session.player,
+                    coverage_session__operating_date__gte=today - timezone.timedelta(days=today.weekday() + 7),
+                    coverage_session__operating_date__lte=today,
+                )
+                .aggregate(total=_Sum("chats_responded"))["total"]
+                or 0
+            )
+            current_rate_tier = get_applicable_player_chat_rate_tier(
+                player=active_session.player,
+                chats_responded=player_week_chats,
+                operating_date=today,
+            )
+        else:
+            # No active session — show the highest rate tier for the current chat count
+            current_rate_tier = get_applicable_rate_tier(
+                chats_responded=chats_this_week,
+                operating_date=today,
+            )
     except Exception:
         current_rate_tier = None
 
