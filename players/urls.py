@@ -31,6 +31,11 @@ urlpatterns = [
         name="chat_rate_edit",
     ),
     path(
+        "chat-rates/<int:rate_id>/delete/",
+        views.chat_rate_delete,
+        name="chat_rate_delete",
+    ),
+    path(
         "player-chat-rates/",
         RedirectView.as_view(
             pattern_name="players:chat_rate_list",

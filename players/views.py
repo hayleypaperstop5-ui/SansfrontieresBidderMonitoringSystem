@@ -338,3 +338,22 @@ def player_deactivate(request, player_id):
 
     return redirect("players:player_list")
 
+@role_required(*RATE_MANAGEMENT_ROLES)
+def chat_rate_delete(request, rate_id):
+    """Delete a global ChatRateTier with a confirmation prompt."""
+    from .models import ChatRateTier as _CRT
+
+    tier = _CRT.objects.filter(pk=rate_id).first()
+    if not tier:
+        messages.error(request, "Rate tier not found.")
+        return redirect("players:chat_rate_list")
+
+    if request.method != "POST":
+        # GET — show confirmation page (or redirect; simplest is to reject GET)
+        messages.info(request, "To delete a rate tier, use the Delete button on the rate list.")
+        return redirect("players:chat_rate_list")
+
+    label = f"{tier.minimum_chats}-{tier.maximum_chats or 'plus'} chats at KES {tier.rate_per_chat}"
+    tier.delete()
+    messages.success(request, f"Rate tier ({label}) deleted.")
+    return redirect("players:chat_rate_list")
