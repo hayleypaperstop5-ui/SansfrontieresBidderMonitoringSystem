@@ -161,6 +161,16 @@ class StaffProfile(models.Model):
                 update_fields=["employee_number"]
             )
 
+    class Meta:
+        ordering = ["employee_number"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["mpesa_number"],
+                condition=models.Q(mpesa_number__gt=""),
+                name="unique_mpesa_number_when_set",
+            ),
+        ]
+
     def __str__(self):
         return (
             f"{self.user.get_full_name() or self.user.username} "
