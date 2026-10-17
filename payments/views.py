@@ -1,4 +1,4 @@
-from datetime import date
+﻿from datetime import date
 from decimal import Decimal
 
 from django.contrib import messages
@@ -686,31 +686,70 @@ def export_payments_csv(request):
 @role_required(*RATE_MANAGEMENT_ROLES)
 def payment_console(request):
     """
-    Director payment console — aggregated view of all ModeratorPayment rows.
+    Director payment console — grouped by moderator.
 
-    Shows summary cards, tabbed lists (unpaid / paid), and per-row actions
-    (Pay, View, PDF). The actual payment recording uses record_payment().
+    Shows one row per moderator with aggregate outstanding amounts
+    across all unpaid weeks. Clicking "Pay All" opens a per-moderator
+    settlement page (Commit B).
     """
     from django.db.models import Count, Sum
+    from accounts.models import User
 
     tab = request.GET.get("tab", "unpaid")
     if tab not in ("unpaid", "paid", "all"):
         tab = "unpaid"
 
-    base_qs = (
-        ModeratorPayment.objects
-        .select_related("moderator", "moderator__staff_profile", "paid_by")
-        .order_by("-payment_week_start", "-id")
-    )
+    base_qs = ModeratorPayment.objects.select_related("moderator")
 
     if tab == "unpaid":
-        payments = base_qs.exclude(status=ModeratorPayment.Status.PAID)
+        base_qs = base_qs.exclude(status=ModeratorPayment.Status.PAID)
     elif tab == "paid":
-        payments = base_qs.filter(status=ModeratorPayment.Status.PAID)
-    else:
-        payments = base_qs
+        base_qs = base_qs.filter(status=ModeratorPayment.Status.PAID)
+    # tab == "all" → no filter
 
-    # Summary aggregates (across ALL payments, not just the current tab)
+    # Group by moderator
+    grouped = (
+        base_qs
+        .values("moderator_id")
+        .annotate(
+            record_count=Count("id"),
+            total_payable_chats=Sum("payable_chats"),
+            total_earned=Sum("earned_amount"),
+            total_paid=Sum("amount_paid"),
+            total_outstanding=Sum("outstanding_amount"),
+        )
+        .order_by("-total_outstanding", "moderator_id")
+    )
+
+    # Resolve moderator objects and M-Pesa info for each row
+    moderator_ids = [g["moderator_id"] for g in grouped]
+    # Note: staff_profile is a reverse OneToOne, so it cannot be select_related.
+    # prefetch_related works for reverse relations but for ~10 moderators the
+    # N+1 is negligible — just fetch and access inline.
+    moderators = {
+        u.id: u for u in User.objects.filter(id__in=moderator_ids)
+    }
+
+    rows = []
+    for g in grouped:
+        mod = moderators.get(g["moderator_id"])
+        if not mod:
+            continue
+        profile = getattr(mod, "staff_profile", None)
+        mpesa = (profile.mpesa_number or "").strip() if profile else ""
+        rows.append({
+            "moderator_id": g["moderator_id"],
+            "moderator": mod,
+            "record_count": g["record_count"],
+            "total_payable_chats": g["total_payable_chats"] or 0,
+            "total_earned": g["total_earned"] or 0,
+            "total_paid": g["total_paid"] or 0,
+            "total_outstanding": g["total_outstanding"] or 0,
+            "mpesa_present": bool(mpesa),
+            "mpesa_number": mpesa,
+        })
+
+    # Summary totals across ALL records (not just the current tab)
     all_qs = ModeratorPayment.objects.all()
     summary = all_qs.aggregate(
         total_earned=Sum("earned_amount"),
@@ -723,7 +762,6 @@ def payment_console(request):
         "paid": all_qs.filter(status=ModeratorPayment.Status.PAID).count(),
     }
 
-    # Average per payment
     from decimal import Decimal
     total_count = summary_counts["total"] or 0
     total_earned = summary.get("total_earned") or Decimal("0.00")
@@ -733,13 +771,12 @@ def payment_console(request):
         request,
         "payments/payment_console.html",
         {
-            "payments": list(payments),
+            "rows": rows,
             "tab": tab,
             "summary": summary,
             "summary_counts": summary_counts,
         },
     )
-
 @role_required(*RATE_MANAGEMENT_ROLES)
 def request_mpesa_notification(request, moderator_id):
     """

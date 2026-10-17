@@ -1,4 +1,4 @@
-{% load static humanize %}
+﻿{% load static humanize %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -72,79 +72,83 @@
 
   {# Payments table #}
   <div class="bg-white rounded-lg shadow overflow-hidden">
-    {% if payments %}
+    {% if rows %}
     <table class="w-full text-sm">
       <thead class="text-left text-xs uppercase tracking-wider text-slate-400 border-b bg-slate-50">
         <tr>
-          <th class="py-3 px-4">Period</th>
           <th class="py-3 px-4">Moderator</th>
           <th class="py-3 px-4">M-Pesa</th>
-          <th class="py-3 px-4 text-right">Chats</th>
-          <th class="py-3 px-4 text-right">Earned</th>
-          <th class="py-3 px-4 text-right">Paid</th>
+          <th class="py-3 px-4 text-right">Total Chats</th>
+          <th class="py-3 px-4 text-right">Total Earned</th>
+          <th class="py-3 px-4 text-right">Total Paid</th>
           <th class="py-3 px-4 text-right">Outstanding</th>
           <th class="py-3 px-4">Status</th>
           <th class="py-3 px-4 text-right">Actions</th>
         </tr>
       </thead>
       <tbody>
-        {% for p in payments %}
+        {% for row in rows %}
         <tr class="border-b hover:bg-slate-50">
-          <td class="py-3 px-4">{{ p.payment_week_start|date:"d M" }} &ndash; {{ p.payment_week_end|date:"d M Y" }}</td>
           <td class="py-3 px-4">
-            {{ p.moderator.get_full_name|default:p.moderator.username }}
+            {{ row.moderator.get_full_name|default:row.moderator.username }}
+            <div class="text-xs text-slate-500">{{ row.record_count }} record{{ row.record_count|pluralize }}</div>
           </td>
-          <td class="py-3 px-4 text-xs" x-data="{mode: null}">
-            {% if p.moderator.staff_profile.mpesa_number %}
-              <div class="font-mono">{{ p.moderator.staff_profile.mpesa_number }}</div>
+          <td class="py-3 px-4 text-xs">
+            {% if row.mpesa_present %}
+              <span class="font-mono">{{ row.mpesa_number }}</span>
               <button type="button"
-                      onclick="var r=prompt('Reset M-Pesa for {{ p.moderator.get_full_name|default:p.moderator.username|escapejs }}? Reason (required):'); if(r && r.trim()){var f=document.getElementById('reset-form-{{ p.id }}'); f.querySelector('input[name=reason]').value=r.trim(); f.submit();}"
-                      class="text-red-700 hover:underline">Reset</button>
-              <form id="reset-form-{{ p.id }}" method="post"
-                    action="{% url 'payments:reset_moderator_mpesa' p.moderator.id %}" style="display:none;">
+                      onclick="var r=prompt('Reset M-Pesa for {{ row.moderator.get_full_name|default:row.moderator.username|escapejs }}? Reason (required):'); if(r && r.trim()){var f=document.getElementById('reset-form-{{ row.moderator.id }}'); f.querySelector('input[name=reason]').value=r.trim(); f.submit();}"
+                      class="text-red-700 hover:underline ml-2">Reset</button>
+              <form id="reset-form-{{ row.moderator.id }}" method="post"
+                    action="{% url 'payments:reset_moderator_mpesa' row.moderator.id %}" style="display:none;">
                 {% csrf_token %}
                 <input type="hidden" name="reason" value="">
               </form>
             {% else %}
               <span class="inline-block text-xs text-red-700 bg-red-50 px-2 py-0.5 rounded">⚠ No M-Pesa</span>
               <button type="button"
-                      onclick="var n=prompt('Set M-Pesa number for {{ p.moderator.get_full_name|default:p.moderator.username|escapejs }} (e.g. 0712345678):'); if(!n || !n.trim()) return; var r=prompt('Reason (required):'); if(!r || !r.trim()) return; var f=document.getElementById('set-form-{{ p.id }}'); f.querySelector('input[name=mpesa_number]').value=n.trim(); f.querySelector('input[name=reason]').value=r.trim(); f.submit();"
-                      class="text-blue-700 hover:underline font-semibold">Set M-Pesa</button>
-              <form method="post" action="{% url 'payments:request_mpesa_notification' p.moderator.id %}" style="display:inline-block;margin-left:4px;">
+                      onclick="var n=prompt('Set M-Pesa for {{ row.moderator.get_full_name|default:row.moderator.username|escapejs }} (e.g. 0712345678):'); if(!n || !n.trim()) return; var r=prompt('Reason (required):'); if(!r || !r.trim()) return; var f=document.getElementById('set-form-{{ row.moderator.id }}'); f.querySelector('input[name=mpesa_number]').value=n.trim(); f.querySelector('input[name=reason]').value=r.trim(); f.submit();"
+                      class="text-blue-700 hover:underline font-semibold ml-2">Set M-Pesa</button>
+              <form method="post" action="{% url 'payments:request_mpesa_notification' row.moderator.id %}" style="display:inline-block;margin-left:4px;">
                 {% csrf_token %}
                 <button type="submit"
                         class="text-xs text-white bg-amber-600 hover:bg-amber-700 px-2 py-0.5 rounded font-semibold"
-                        onclick="return confirm('Send a notification to {{ p.moderator.get_full_name|default:p.moderator.username|escapejs }} asking them to add their M-Pesa number?');">
+                        onclick="return confirm('Send a notification to {{ row.moderator.get_full_name|default:row.moderator.username|escapejs }}?');">
                   Request
                 </button>
               </form>
-              <form id="set-form-{{ p.id }}" method="post"
-                    action="{% url 'payments:set_moderator_mpesa' p.moderator.id %}" style="display:none;">
+              <form id="set-form-{{ row.moderator.id }}" method="post"
+                    action="{% url 'payments:set_moderator_mpesa' row.moderator.id %}" style="display:none;">
                 {% csrf_token %}
                 <input type="hidden" name="mpesa_number" value="">
                 <input type="hidden" name="reason" value="">
               </form>
             {% endif %}
           </td>
-          <td class="py-3 px-4 text-right">{{ p.payable_chats }}</td>
-          <td class="py-3 px-4 text-right font-mono">KES {{ p.earned_amount|floatformat:2|intcomma }}</td>
-          <td class="py-3 px-4 text-right font-mono text-green-700">KES {{ p.amount_paid|default:0|floatformat:2|intcomma }}</td>
-          <td class="py-3 px-4 text-right font-mono text-red-700">KES {{ p.outstanding_amount|default:0|floatformat:2|intcomma }}</td>
+          <td class="py-3 px-4 text-right">{{ row.total_payable_chats }}</td>
+          <td class="py-3 px-4 text-right font-mono">KES {{ row.total_earned|floatformat:2|intcomma }}</td>
+          <td class="py-3 px-4 text-right font-mono text-green-700">KES {{ row.total_paid|floatformat:2|intcomma }}</td>
+          <td class="py-3 px-4 text-right font-mono text-red-700">KES {{ row.total_outstanding|floatformat:2|intcomma }}</td>
           <td class="py-3 px-4">
-            {% if p.status == 'PAID' %}
+            {% if row.total_outstanding == 0 %}
               <span class="text-xs font-semibold text-green-700 bg-green-50 px-2 py-1 rounded">Paid</span>
-            {% elif p.status == 'PARTIALLY_PAID' %}
-              <span class="text-xs font-semibold text-amber-700 bg-amber-50 px-2 py-1 rounded">Partial</span>
             {% else %}
               <span class="text-xs font-semibold text-red-700 bg-red-50 px-2 py-1 rounded">Unpaid</span>
             {% endif %}
           </td>
-          <td class="py-3 px-4 text-right space-x-3">
-            <a href="{% url 'payments:settle_payment' p.id %}" class="text-xs text-blue-700 hover:underline">View</a>
-            <a href="{% url 'payments:download_payment_statement_pdf' p.id %}" class="text-xs text-blue-700 hover:underline" target="_blank">PDF</a>
-            {% if p.status != 'PAID' and p.moderator.staff_profile.mpesa_number %}
-              <a href="{% url 'payments:settle_payment' p.id %}" class="text-xs text-white bg-blue-700 hover:bg-blue-800 px-3 py-1 rounded font-semibold">Pay</a>
+          <td class="py-3 px-4 text-right space-x-2">
+            <a href="/payments/payroll/payments/?moderator={{ row.moderator.id }}"
+               class="text-xs text-blue-700 hover:underline">View records</a>
+            {% if row.total_outstanding > 0 and row.mpesa_present %}
+              <a href="/payments/payroll/settle-moderator/{{ row.moderator.id }}/"
+                 class="text-xs text-white bg-blue-700 hover:bg-blue-800 px-3 py-1 rounded font-semibold">Pay All</a>
             {% endif %}
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="8" class="py-16 text-center text-slate-500">
+            {% if tab == 'unpaid' %}No unpaid payments. Well done!{% elif tab == 'paid' %}No paid payments yet.{% else %}No payments recorded.{% endif %}
           </td>
         </tr>
         {% endfor %}
