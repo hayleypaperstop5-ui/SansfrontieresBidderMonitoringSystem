@@ -137,7 +137,7 @@
             {% endif %}
           </td>
           <td class="py-3 px-4 text-right space-x-2">
-            <a href="/payments/payroll/payments/?moderator={{ row.moderator.id }}"
+            <a href="{% url 'payments:settle_moderator_payments' row.moderator.id %}"
                class="text-xs text-blue-700 hover:underline">View records</a>
             {% if row.total_outstanding > 0 and row.mpesa_present %}
               <a href="/payments/payroll/settle-moderator/{{ row.moderator.id }}/"

@@ -699,7 +699,19 @@ def payment_console(request):
     if tab not in ("unpaid", "paid", "all"):
         tab = "unpaid"
 
+    # Optional: filter to a single moderator via ?moderator=<id>
+    filter_moderator_id = request.GET.get("moderator")
+    filter_moderator = None
+    if filter_moderator_id:
+        try:
+            from accounts.models import User as _User
+            filter_moderator = _User.objects.filter(pk=int(filter_moderator_id), role=_User.Role.MODERATOR).first()
+        except (ValueError, TypeError):
+            filter_moderator = None
+
     base_qs = ModeratorPayment.objects.select_related("moderator")
+    if filter_moderator:
+        base_qs = base_qs.filter(moderator=filter_moderator)
 
     if tab == "unpaid":
         base_qs = base_qs.exclude(status=ModeratorPayment.Status.PAID)

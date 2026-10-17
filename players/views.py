@@ -1,4 +1,4 @@
-from django.contrib import messages
+﻿from django.contrib import messages
 from django.shortcuts import redirect, render
 
 from accounts.decorators import role_required
@@ -208,7 +208,8 @@ def chat_rate_create(request):
 @role_required(*RATE_MANAGEMENT_ROLES)
 def chat_rate_edit(request, rate_id):
 
-    rate_tier = ChatRateTier.objects.get(pk=rate_id)
+    from django.shortcuts import get_object_or_404 as _g404
+    rate_tier = _g404(ChatRateTier, pk=rate_id)
 
     if request.method == "POST":
 
