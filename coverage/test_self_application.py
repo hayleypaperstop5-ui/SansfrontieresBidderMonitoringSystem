@@ -419,3 +419,44 @@ class ConcurrentApplicationTests(SelfApplicationTestDataMixin, TransactionTestCa
         self.assertEqual(CoverageSession.objects.filter(player=player, status=CoverageSession.Status.ACTIVE).count(), 1)
         self.assertEqual(CoverageApplication.objects.filter(player=player, status=CoverageApplication.Status.LOST).count(), 1)
         self.assertEqual(sum(r[0] == "success" for r in results), 1)
+
+class ReplacementConsolidationTests(SelfApplicationTestDataMixin, TestCase):
+    """Verify _assign_replacement_locked delegates to the canonical service."""
+
+    def test_assign_replacement_locked_delegates_to_service(self):
+        from coverage.self_application import _assign_replacement_locked
+        from coverage.models import CoverageSession, CoverageApplication
+        from coverage.services import assign_replacement
+        from unittest.mock import patch
+
+        moderator_a = self.make_user("consol_mod_a")
+        moderator_b = self.make_user("consol_mod_b")
+        player = self.make_player(9101)
+        now = timezone.localtime()
+
+        outgoing = CoverageSession.objects.create(
+            moderator=moderator_a,
+            player=player,
+            operating_date=now.date(),
+            session_type=CoverageSession.SessionType.DAY,
+            status=CoverageSession.Status.ACTIVE,
+            signed_in_at=now,
+        )
+
+        application = CoverageApplication.objects.create(
+            moderator=moderator_b,
+            player=player,
+            opportunity_type=CoverageApplication.OpportunityType.REPLACEMENT,
+            status=CoverageApplication.Status.WON,
+            chats_this_week=100,
+        )
+
+        with patch(
+            "coverage.services.assign_replacement",
+            wraps=assign_replacement,
+        ) as mocked:
+            result = _assign_replacement_locked(application, outgoing, now)
+            self.assertTrue(
+                mocked.called,
+                "_assign_replacement_locked must delegate to assign_replacement",
+            )
