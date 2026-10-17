@@ -179,7 +179,14 @@
 
   <div class="bg-white rounded-lg shadow-md p-6">
     <h2 class="text-lg font-semibold mb-4">Payment Action</h2>
-    {% if not is_director %}
+    {% if mpesa_missing %}
+      <div class="bg-red-50 border border-red-300 p-4 rounded text-sm text-red-800">
+        <p class="font-semibold">Cannot record payment — M-Pesa number missing.</p>
+        <p class="mt-2">This moderator has no M-Pesa number on their profile.
+        Ask them to add it in <strong>/dashboard/profile/</strong> before you can
+        record this payment.</p>
+      </div>
+    {% elif not is_director %}
       <div class="bg-blue-50 border border-blue-200 p-4 rounded text-sm text-blue-800">
         Payment is recorded by a Director. If you have questions about this payment, contact management.
       </div>

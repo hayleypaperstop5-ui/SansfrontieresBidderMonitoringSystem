@@ -1111,12 +1111,25 @@ def record_payment(*, payment, director, mpesa_reference, amount):
     """
     Mark a ModeratorPayment as paid and record the M-Pesa reference.
 
+    Rejects the payment if the moderator has no M-Pesa number on file,
+    so funds cannot be recorded against an account that cannot receive them.
+
     Supports partial payments: if `amount` is less than the outstanding
     balance, the payment transitions to PARTIALLY_PAID and the
     outstanding balance is reduced. Otherwise, it becomes PAID.
     """
     if payment.status == ModeratorPayment.Status.PAID:
         raise ValidationError("This payment has already been recorded as paid.")
+
+    # Require an M-Pesa number on the moderator's profile before payment.
+    moderator_profile = getattr(payment.moderator, "staff_profile", None)
+    moderator_mpesa = (moderator_profile.mpesa_number or "").strip() if moderator_profile else ""
+    if not moderator_mpesa:
+        raise ValidationError(
+            f"{payment.moderator.get_full_name() or payment.moderator.username} "
+            "has no M-Pesa number on file. Ask the moderator to add it in "
+            "their profile before recording this payment."
+        )
 
     if not mpesa_reference or not str(mpesa_reference).strip():
         raise ValidationError("An M-Pesa reference is required.")

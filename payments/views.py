@@ -500,6 +500,10 @@ def settle_payment(request, payment_id):
         for pid, info in carried.items()
     ]
 
+    moderator_profile = getattr(payment.moderator, "staff_profile", None)
+    moderator_mpesa = (moderator_profile.mpesa_number or "").strip() if moderator_profile else ""
+    mpesa_missing = not moderator_mpesa
+
     context = {
         "payment": payment,
         "rows": rows,
@@ -507,6 +511,7 @@ def settle_payment(request, payment_id):
         "carried_display": carried_display,
         "threshold": threshold,
         "is_director": is_director,
+        "mpesa_missing": mpesa_missing,
     }
     return render(request, "payments/settle_payment.html", context)
 
