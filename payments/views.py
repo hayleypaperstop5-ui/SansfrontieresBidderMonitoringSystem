@@ -756,3 +756,56 @@ def payment_console(request):
             "summary_counts": summary_counts,
         },
     )
+
+@role_required(*RATE_MANAGEMENT_ROLES)
+def request_mpesa_notification(request, moderator_id):
+    """
+    Send the selected moderator a notification asking them to add their
+    M-Pesa number so payment can be processed. Idempotent — safe to call
+    repeatedly; each call creates one notification.
+    """
+    from accounts.models import User
+    from notifications.models import Notification
+
+    if request.method != "POST":
+        return redirect("payments:payment_console")
+
+    moderator = get_object_or_404(User, pk=moderator_id, role=User.Role.MODERATOR)
+
+    profile = getattr(moderator, "staff_profile", None)
+    current_mpesa = (profile.mpesa_number or "").strip() if profile else ""
+
+    if current_mpesa:
+        messages.info(
+            request,
+            f"{moderator.get_full_name() or moderator.username} already has an M-Pesa number on file.",
+        )
+        return redirect("payments:payment_console")
+
+    # Compute the outstanding balance for a helpful message
+    from django.db.models import Sum
+    outstanding = (
+        ModeratorPayment.objects
+        .filter(moderator=moderator)
+        .aggregate(total=Sum("outstanding_amount"))
+        ["total"] or 0
+    )
+
+    Notification.objects.create(
+        recipient=moderator,
+        notification_type=Notification.NotificationType.GENERAL,
+        alert_level=Notification.AlertLevel.CRITICAL,
+        title="M-Pesa Number Required",
+        message=(
+            "Management has requested your M-Pesa number so your payment can "
+            f"be processed. Outstanding balance: KES {outstanding}. "
+            "Please add your personal M-Pesa number in your profile "
+            "(/dashboard/profile/) as soon as possible."
+        ),
+    )
+
+    messages.success(
+        request,
+        f"Notification sent to {moderator.get_full_name() or moderator.username}.",
+    )
+    return redirect("payments:payment_console")
