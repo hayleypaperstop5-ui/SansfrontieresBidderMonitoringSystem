@@ -105,6 +105,42 @@ class ModeratorSetupForm(forms.Form):
         label="M-Pesa number",
     )
 
+
+    def clean_mpesa_number(self):
+        """Validate M-Pesa format and enforce global uniqueness."""
+        import re
+        number = (self.cleaned_data.get("mpesa_number") or "").strip()
+
+        # Normalize: strip spaces and dashes
+        number = re.sub(r"[\s-]+", "", number)
+
+        # Accept formats: 0XXXXXXXXX (10 digits starting with 0),
+        # 254XXXXXXXXX (12 digits starting with 254), or +254XXXXXXXXX
+        if number.startswith("+254"):
+            number = number[1:]
+        if re.fullmatch(r"0[17]\d{8}", number):
+            pass  # valid local format
+        elif re.fullmatch(r"254[17]\d{8}", number):
+            pass  # valid international format
+        else:
+            raise forms.ValidationError(
+                "Enter a valid Kenyan M-Pesa number, e.g. 0712345678 "
+                "or 254712345678."
+            )
+
+        # Uniqueness — exclude the current user's own profile
+        existing = StaffProfile.objects.filter(mpesa_number=number)
+        if self.staff_profile is not None:
+            existing = existing.exclude(pk=self.staff_profile.pk)
+        if existing.exists():
+            raise forms.ValidationError(
+                "This M-Pesa number is already registered to another "
+                "moderator. Please enter your own personal number."
+            )
+
+        return number
+
+
     def clean_password(self):
         password = self.cleaned_data["password"]
         validate_password(password)
