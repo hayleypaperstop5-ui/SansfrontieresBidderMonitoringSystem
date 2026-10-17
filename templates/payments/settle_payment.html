@@ -116,7 +116,15 @@
 
   <div class="bg-white rounded-lg shadow-md p-6 mb-6">
     <h2 class="text-lg font-semibold mb-4">Source Sessions</h2>
-    {% if rows %}
+    {% if historical_fallback %}
+      <div class="bg-amber-50 border border-amber-200 p-4 rounded text-sm text-amber-800">
+        <p class="font-semibold">Source session details are not available for this historical payment.</p>
+        <p class="mt-2">This payment was recorded before session linkage was introduced. The
+        total payable chats of <strong>{{ payment.payable_chats }}</strong> and earned amount of
+        <strong>KES {{ payment.earned_amount|floatformat:2 }}</strong> are accurate. Per-session
+        breakdown is unavailable.</p>
+      </div>
+    {% elif rows %}
     <table class="w-full text-sm">
       <thead class="text-left text-xs uppercase tracking-wider text-slate-400 border-b">
         <tr>

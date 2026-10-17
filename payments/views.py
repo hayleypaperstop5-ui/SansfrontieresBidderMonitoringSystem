@@ -366,9 +366,9 @@ def settle_payment(request, payment_id):
         return redirect("payments:settle_payment", payment_id=payment.id)
 
     # Source PaymentRecord rows consumed by THIS ModeratorPayment.
-    # The FK is unambiguous: only records that this payroll run processed
-    # are returned. Historical rows consumed before the FK existed fall
-    # back to the moderator + processed filter.
+    # Only records with consumed_by=payment are shown. Historical payments
+    # created before the FK existed have consumed_by=NULL — for those we
+    # show an honest "unavailable" state rather than guessing.
     source_records = (
         PaymentRecord.objects
         .filter(consumed_by=payment)
@@ -380,24 +380,7 @@ def settle_payment(request, payment_id):
         .order_by("coverage_session__operating_date", "coverage_session__id")
     )
 
-    historical_fallback = False
-    if not source_records.exists():
-        # Legacy payment — no FK set. Fall back to the moderator + processed
-        # filter without date constraints.
-        source_records = (
-            PaymentRecord.objects
-            .filter(
-                moderator=payment.moderator,
-                payroll_processed_chats__gt=0,
-            )
-            .select_related(
-                "coverage_session",
-                "coverage_session__player",
-                "coverage_session__moderator",
-            )
-            .order_by("coverage_session__operating_date", "coverage_session__id")
-        )
-        historical_fallback = True
+    historical_fallback = not source_records.exists() and payment.payable_chats > 0
 
     # Report submitted_at per session, if any
     from coverage.models import EndOfSessionReport
