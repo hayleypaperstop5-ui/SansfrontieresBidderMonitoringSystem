@@ -6,6 +6,7 @@ from django.core.exceptions import ValidationError
 from django.db import models, transaction
 
 from players.models import ChatRateTier, Player, PlayerChatRateTier
+from accounts.models import User
 
 from .models import PaymentRecord, PaymentSettings, PlayerPayrollLedger
 
@@ -1027,6 +1028,49 @@ def process_thursday_payroll(payment_date):
                 )
 
             created_payments.append(moderator_id)
+
+        # -----------------------------------------------------------
+        # Notify moderators whose M-Pesa number is missing so they can
+        # add it before the Director attempts to record their payment.
+        # -----------------------------------------------------------
+        from notifications.models import Notification as _Notif
+
+        missing_mpesa_moderator_ids = set()
+        for moderator_id, financial in plan["moderator_financials"].items():
+            if financial["payable_chats"] <= 0:
+                continue
+            moderator = financial["moderator"]
+            profile = getattr(moderator, "staff_profile", None)
+            mpesa = (profile.mpesa_number or "").strip() if profile else ""
+            if not mpesa:
+                missing_mpesa_moderator_ids.add(moderator_id)
+
+        for moderator_id in missing_mpesa_moderator_ids:
+            try:
+                moderator = User.objects.get(pk=moderator_id)
+            except User.DoesNotExist:
+                continue
+
+            earned = Decimal("0.00")
+            for mp in ModeratorPayment.objects.filter(
+                moderator=moderator,
+                payment_week_start=week_start,
+                payment_week_end=week_end,
+            ):
+                earned += mp.earned_amount or Decimal("0.00")
+
+            _Notif.objects.create(
+                recipient=moderator,
+                notification_type=_Notif.NotificationType.GENERAL,
+                alert_level=_Notif.AlertLevel.CRITICAL,
+                title="M-Pesa Number Missing",
+                message=(
+                    f"Your payroll for {week_start} to {week_end} was processed "
+                    f"with earnings of KES {earned}, but your M-Pesa number is "
+                    "missing from your profile. Please add it in "
+                    "/dashboard/profile/ so management can process your payment."
+                ),
+            )
 
         return {
             "payment_date": payment_date,

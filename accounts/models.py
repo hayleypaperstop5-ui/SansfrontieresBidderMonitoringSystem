@@ -202,3 +202,35 @@ class StaffInvitation(models.Model):
 
     def __str__(self):
         return f"Invitation for {self.user.get_full_name() or self.user.email}"
+
+class MpesaResetLog(models.Model):
+    """Audit log of Director-initiated M-Pesa number resets."""
+
+    moderator = models.ForeignKey(
+        User,
+        on_delete=models.PROTECT,
+        related_name="mpesa_resets",
+    )
+
+    reset_by = models.ForeignKey(
+        User,
+        on_delete=models.PROTECT,
+        related_name="mpesa_resets_performed",
+    )
+
+    previous_number = models.CharField(max_length=30, blank=True, default="")
+
+    reason = models.TextField()
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        verbose_name = "M-Pesa Reset Log"
+        verbose_name_plural = "M-Pesa Reset Logs"
+
+    def __str__(self):
+        return (
+            f"{self.moderator.username} reset by {self.reset_by.username} "
+            f"on {self.created_at:%Y-%m-%d}"
+        )
