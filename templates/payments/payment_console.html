@@ -4,21 +4,20 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Payment Console</title>
+  <title>Payments</title>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-slate-50 text-slate-900 font-sans antialiased">
 <div class="max-w-7xl mx-auto p-6">
 
-  <div class="mb-6 flex justify-between items-center">
-    <div>
-      <a href="{% url 'payments:payroll_review' %}" class="text-sm text-blue-700 hover:underline">&larr; Back to Payroll Review</a>
-      <h1 class="text-2xl font-bold mt-2">Payment Console</h1>
-      <p class="text-slate-500 text-sm mt-1">Review and record moderator payments.</p>
-    </div>
-    <a href="{% url 'payments:export_payments_csv' %}" class="text-sm text-blue-700 hover:underline font-semibold">
-      Download CSV &darr;
-    </a>
+  <div class="mb-6" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;">
+    <a href="{% url 'payments:payroll_review' %}" style="display:inline-block;background:#4f46e5;color:#fff;text-decoration:none;padding:10px 20px;border-radius:10px;font-weight:700;font-size:14px;box-shadow:0 2px 6px rgba(79,70,229,0.25);">Payroll Review</a>
+    <a href="{% url 'payments:export_payments_csv' %}" style="display:inline-block;background:#059669;color:#fff;text-decoration:none;padding:10px 20px;border-radius:10px;font-weight:700;font-size:14px;box-shadow:0 2px 6px rgba(5,150,105,0.25);">Download CSV</a>
+  </div>
+
+  <div class="mb-6">
+    <h1 class="text-2xl font-bold">Payments</h1>
+    <p class="text-slate-500 text-sm mt-1">Review and record moderator payments.</p>
   </div>
 
   {% if messages %}
@@ -79,6 +78,7 @@
         <tr>
           <th class="py-3 px-4">Period</th>
           <th class="py-3 px-4">Moderator</th>
+          <th class="py-3 px-4">M-Pesa</th>
           <th class="py-3 px-4 text-right">Chats</th>
           <th class="py-3 px-4 text-right">Earned</th>
           <th class="py-3 px-4 text-right">Paid</th>
@@ -93,10 +93,12 @@
           <td class="py-3 px-4">{{ p.payment_week_start|date:"d M" }} &ndash; {{ p.payment_week_end|date:"d M Y" }}</td>
           <td class="py-3 px-4">
             {{ p.moderator.get_full_name|default:p.moderator.username }}
-            {% if not p.moderator.staff_profile.mpesa_number %}
-              <span class="ml-1 inline-block text-xs text-red-700 bg-red-50 px-2 py-0.5 rounded" title="No M-Pesa number on file">
-                ⚠ No M-Pesa
-              </span>
+          </td>
+          <td class="py-3 px-4 font-mono text-xs">
+            {% if p.moderator.staff_profile.mpesa_number %}
+              {{ p.moderator.staff_profile.mpesa_number }}
+            {% else %}
+              <span class="inline-block text-xs text-red-700 bg-red-50 px-2 py-0.5 rounded">⚠ No M-Pesa</span>
             {% endif %}
           </td>
           <td class="py-3 px-4 text-right">{{ p.payable_chats }}</td>
