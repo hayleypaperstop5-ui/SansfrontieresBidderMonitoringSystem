@@ -1,4 +1,4 @@
-from django.db import models
+﻿from django.db import models
 from django.core.validators import MinValueValidator
 
 
@@ -210,6 +210,16 @@ class ChatRateTier(models.Model):
 
     class Meta:
         ordering = ["minimum_chats"]
+        constraints = [
+            models.CheckConstraint(
+                condition=(
+                    models.Q(maximum_chats__isnull=True)
+                    | models.Q(minimum_chats__lt=models.F("maximum_chats"))
+                    | models.Q(minimum_chats=models.F("maximum_chats"))
+                ),
+                name="chat_rate_tier_min_lte_max_or_unbounded",
+            ),
+        ]
 
     def clean(self):
         from django.core.exceptions import ValidationError
@@ -222,14 +232,29 @@ class ChatRateTier(models.Model):
                 "Maximum chats must be greater than or equal to minimum chats."
             )
 
-        overlapping = ChatRateTier.objects.filter(
-            active=True,
+        # Inactive tiers are historical/disabled and may freely overlap
+        # active tiers — they do not participate in rate lookups.
+        if not self.active:
+            return
+
+        # Only check overlap against tiers that could be applied at the
+        # same operating date. Tiers with different non-null effective_from
+        # dates are historical versions, not conflicts.
+        overlapping = ChatRateTier.objects.filter(active=True).exclude(pk=self.pk)
+        if self.effective_from is None:
+            overlapping = overlapping.filter(effective_from__isnull=True)
+        else:
+            overlapping = overlapping.filter(
+                models.Q(effective_from__isnull=True)
+                | models.Q(effective_from=self.effective_from)
+            )
+        overlapping = overlapping.filter(
             minimum_chats__lte=(
                 self.maximum_chats
                 if self.maximum_chats is not None
                 else 10**18
             ),
-        ).exclude(pk=self.pk)
+        )
 
         for tier in overlapping:
             if tier.maximum_chats is None:
@@ -246,6 +271,11 @@ class ChatRateTier(models.Model):
                 raise ValidationError(
                     "This chat range overlaps with another active rate tier."
                 )
+
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        return super().save(*args, **kwargs)
 
     def __str__(self):
         if self.maximum_chats is None:

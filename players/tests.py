@@ -5,7 +5,7 @@ from django.urls import reverse
 
 from accounts.models import StaffProfile, User
 from coverage.models import CoverageSession
-from .models import Player, PlayerChatRateTier
+from .models import ChatRateTier, Player, PlayerChatRateTier
 
 
 class PlayerCoverageStatusTests(TestCase):
@@ -213,3 +213,41 @@ class PlayerChatRateManagementTests(TestCase):
         response = self.client.get("/players/chat-rates/")
         # role_required should reject moderators (redirect away)
         self.assertIn(response.status_code, (302, 403))
+
+class ChatRateTierConstraintTests(TestCase):
+    """Verify overlap and range validation on ChatRateTier."""
+
+    def test_inverted_range_raises_validation_error(self):
+        from django.core.exceptions import ValidationError
+        with self.assertRaises(ValidationError):
+            ChatRateTier.objects.create(
+                minimum_chats=300, maximum_chats=100, rate_per_chat=5, active=True,
+            )
+
+    def test_overlapping_active_tier_raises_validation_error(self):
+        from django.core.exceptions import ValidationError
+        ChatRateTier.objects.create(
+            minimum_chats=0, maximum_chats=299, rate_per_chat=3, active=True,
+        )
+        with self.assertRaises(ValidationError):
+            ChatRateTier.objects.create(
+                minimum_chats=100, maximum_chats=400, rate_per_chat=5, active=True,
+            )
+
+    def test_non_overlapping_tiers_save_successfully(self):
+        ChatRateTier.objects.create(
+            minimum_chats=0, maximum_chats=299, rate_per_chat=3, active=True,
+        )
+        ChatRateTier.objects.create(
+            minimum_chats=300, maximum_chats=599, rate_per_chat=4.5, active=True,
+        )
+        self.assertEqual(ChatRateTier.objects.count(), 2)
+
+    def test_inactive_tier_can_overlap(self):
+        ChatRateTier.objects.create(
+            minimum_chats=0, maximum_chats=299, rate_per_chat=3, active=True,
+        )
+        ChatRateTier.objects.create(
+            minimum_chats=100, maximum_chats=200, rate_per_chat=5, active=False,
+        )
+        self.assertEqual(ChatRateTier.objects.filter(active=False).count(), 1)
