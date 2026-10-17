@@ -699,3 +699,60 @@ def export_payments_csv(request):
         ])
 
     return response
+
+@role_required(*RATE_MANAGEMENT_ROLES)
+def payment_console(request):
+    """
+    Director payment console — aggregated view of all ModeratorPayment rows.
+
+    Shows summary cards, tabbed lists (unpaid / paid), and per-row actions
+    (Pay, View, PDF). The actual payment recording uses record_payment().
+    """
+    from django.db.models import Count, Sum
+
+    tab = request.GET.get("tab", "unpaid")
+    if tab not in ("unpaid", "paid", "all"):
+        tab = "unpaid"
+
+    base_qs = (
+        ModeratorPayment.objects
+        .select_related("moderator", "moderator__staff_profile", "paid_by")
+        .order_by("-payment_week_start", "-id")
+    )
+
+    if tab == "unpaid":
+        payments = base_qs.exclude(status=ModeratorPayment.Status.PAID)
+    elif tab == "paid":
+        payments = base_qs.filter(status=ModeratorPayment.Status.PAID)
+    else:
+        payments = base_qs
+
+    # Summary aggregates (across ALL payments, not just the current tab)
+    all_qs = ModeratorPayment.objects.all()
+    summary = all_qs.aggregate(
+        total_earned=Sum("earned_amount"),
+        total_paid=Sum("amount_paid"),
+        total_outstanding=Sum("outstanding_amount"),
+    )
+    summary_counts = {
+        "total": all_qs.count(),
+        "unpaid": all_qs.exclude(status=ModeratorPayment.Status.PAID).count(),
+        "paid": all_qs.filter(status=ModeratorPayment.Status.PAID).count(),
+    }
+
+    # Determine which payments have a missing M-Pesa number for the template
+    payments_list = list(payments)
+    for p in payments_list:
+        profile = getattr(p.moderator, "staff_profile", None)
+        p._mpesa_present = bool(profile and (profile.mpesa_number or "").strip())
+
+    return render(
+        request,
+        "payments/payment_console.html",
+        {
+            "payments": payments_list,
+            "tab": tab,
+            "summary": summary,
+            "summary_counts": summary_counts,
+        },
+    )

@@ -1,0 +1,138 @@
+{% load static humanize %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Payment Console</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-50 text-slate-900 font-sans antialiased">
+<div class="max-w-7xl mx-auto p-6">
+
+  <div class="mb-6 flex justify-between items-center">
+    <div>
+      <a href="{% url 'payments:payroll_review' %}" class="text-sm text-blue-700 hover:underline">&larr; Back to Payroll Review</a>
+      <h1 class="text-2xl font-bold mt-2">Payment Console</h1>
+      <p class="text-slate-500 text-sm mt-1">Review and record moderator payments.</p>
+    </div>
+    <a href="{% url 'payments:export_payments_csv' %}" class="text-sm text-blue-700 hover:underline font-semibold">
+      Download CSV &darr;
+    </a>
+  </div>
+
+  {% if messages %}
+    {% for message in messages %}
+      <div class="mb-4 p-3 rounded border
+        {% if message.tags == 'success' %}bg-green-50 border-green-300 text-green-800
+        {% elif message.tags == 'error' %}bg-red-50 border-red-300 text-red-800
+        {% else %}bg-blue-50 border-blue-300 text-blue-800{% endif %}">
+        {{ message }}
+      </div>
+    {% endfor %}
+  {% endif %}
+
+  {# Summary cards #}
+  <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+    <div class="bg-white rounded-lg shadow p-4">
+      <div class="text-xs uppercase tracking-wider text-slate-400">Total Earned</div>
+      <div class="text-xl font-bold mt-1">KES {{ summary.total_earned|default:0|floatformat:2|intcomma }}</div>
+      <div class="text-xs text-slate-500 mt-1">{{ summary_counts.total }} payments</div>
+    </div>
+    <div class="bg-white rounded-lg shadow p-4">
+      <div class="text-xs uppercase tracking-wider text-slate-400">Total Paid</div>
+      <div class="text-xl font-bold mt-1 text-green-700">KES {{ summary.total_paid|default:0|floatformat:2|intcomma }}</div>
+      <div class="text-xs text-slate-500 mt-1">{{ summary_counts.paid }} paid</div>
+    </div>
+    <div class="bg-white rounded-lg shadow p-4">
+      <div class="text-xs uppercase tracking-wider text-slate-400">Outstanding</div>
+      <div class="text-xl font-bold mt-1 text-red-700">KES {{ summary.total_outstanding|default:0|floatformat:2|intcomma }}</div>
+      <div class="text-xs text-slate-500 mt-1">{{ summary_counts.unpaid }} unpaid</div>
+    </div>
+    <div class="bg-white rounded-lg shadow p-4">
+      <div class="text-xs uppercase tracking-wider text-slate-400">Avg per Payment</div>
+      <div class="text-xl font-bold mt-1">
+        {% if summary_counts.total %}KES {{ summary.total_earned|default:0|floatformat:2|intcomma }}
+        {% else %}KES 0.00{% endif %}
+      </div>
+      <div class="text-xs text-slate-500 mt-1">across all records</div>
+    </div>
+  </div>
+
+  {# Tabs #}
+  <div class="mb-4 border-b border-slate-200">
+    <nav class="flex gap-6">
+      <a href="?tab=unpaid" class="pb-2 {% if tab == 'unpaid' %}border-b-2 border-blue-700 text-blue-700 font-semibold{% else %}text-slate-600{% endif %}">
+        To Pay ({{ summary_counts.unpaid }})
+      </a>
+      <a href="?tab=paid" class="pb-2 {% if tab == 'paid' %}border-b-2 border-blue-700 text-blue-700 font-semibold{% else %}text-slate-600{% endif %}">
+        Paid ({{ summary_counts.paid }})
+      </a>
+      <a href="?tab=all" class="pb-2 {% if tab == 'all' %}border-b-2 border-blue-700 text-blue-700 font-semibold{% else %}text-slate-600{% endif %}">
+        All ({{ summary_counts.total }})
+      </a>
+    </nav>
+  </div>
+
+  {# Payments table #}
+  <div class="bg-white rounded-lg shadow overflow-hidden">
+    {% if payments %}
+    <table class="w-full text-sm">
+      <thead class="text-left text-xs uppercase tracking-wider text-slate-400 border-b bg-slate-50">
+        <tr>
+          <th class="py-3 px-4">Period</th>
+          <th class="py-3 px-4">Moderator</th>
+          <th class="py-3 px-4 text-right">Chats</th>
+          <th class="py-3 px-4 text-right">Earned</th>
+          <th class="py-3 px-4 text-right">Paid</th>
+          <th class="py-3 px-4 text-right">Outstanding</th>
+          <th class="py-3 px-4">Status</th>
+          <th class="py-3 px-4 text-right">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for p in payments %}
+        <tr class="border-b hover:bg-slate-50">
+          <td class="py-3 px-4">{{ p.payment_week_start|date:"d M" }} &ndash; {{ p.payment_week_end|date:"d M Y" }}</td>
+          <td class="py-3 px-4">
+            {{ p.moderator.get_full_name|default:p.moderator.username }}
+            {% if not p._mpesa_present %}
+              <span class="ml-1 inline-block text-xs text-red-700 bg-red-50 px-2 py-0.5 rounded" title="No M-Pesa number on file">
+                ⚠ No M-Pesa
+              </span>
+            {% endif %}
+          </td>
+          <td class="py-3 px-4 text-right">{{ p.payable_chats }}</td>
+          <td class="py-3 px-4 text-right font-mono">KES {{ p.earned_amount|floatformat:2|intcomma }}</td>
+          <td class="py-3 px-4 text-right font-mono text-green-700">KES {{ p.amount_paid|default:0|floatformat:2|intcomma }}</td>
+          <td class="py-3 px-4 text-right font-mono text-red-700">KES {{ p.outstanding_amount|default:0|floatformat:2|intcomma }}</td>
+          <td class="py-3 px-4">
+            {% if p.status == 'PAID' %}
+              <span class="text-xs font-semibold text-green-700 bg-green-50 px-2 py-1 rounded">Paid</span>
+            {% elif p.status == 'PARTIALLY_PAID' %}
+              <span class="text-xs font-semibold text-amber-700 bg-amber-50 px-2 py-1 rounded">Partial</span>
+            {% else %}
+              <span class="text-xs font-semibold text-red-700 bg-red-50 px-2 py-1 rounded">Unpaid</span>
+            {% endif %}
+          </td>
+          <td class="py-3 px-4 text-right space-x-3">
+            <a href="{% url 'payments:settle_payment' p.id %}" class="text-xs text-blue-700 hover:underline">View</a>
+            <a href="{% url 'payments:download_payment_statement_pdf' p.id %}" class="text-xs text-blue-700 hover:underline" target="_blank">PDF</a>
+            {% if p.status != 'PAID' and p._mpesa_present %}
+              <a href="{% url 'payments:settle_payment' p.id %}" class="text-xs text-white bg-blue-700 hover:bg-blue-800 px-3 py-1 rounded font-semibold">Pay</a>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div class="py-16 text-center text-slate-500">
+      {% if tab == 'unpaid' %}No unpaid payments. Well done!{% elif tab == 'paid' %}No paid payments yet.{% else %}No payments recorded.{% endif %}
+    </div>
+    {% endif %}
+  </div>
+
+</div>
+</body>
+</html>
