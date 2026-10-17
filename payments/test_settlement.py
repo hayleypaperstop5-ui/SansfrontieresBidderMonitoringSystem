@@ -436,3 +436,64 @@ class PaymentNotificationTests(TestCase):
         latest = Notification.objects.filter(recipient=self.moderator).order_by("-created_at").first()
         self.assertEqual(latest.title, "Payment Received")
         self.assertIn("NOTIFTEST1", latest.message)
+
+class GlobalRateFallbackTests(TestCase):
+    """Verify the global ChatRateTier is used when a player has no override."""
+
+    def test_player_without_override_uses_global_rate(self):
+        from datetime import date as _date
+        from players.models import ChatRateTier, Player, PlayerChatRateTier
+        from payments.services import get_applicable_player_chat_rate_tier
+
+        # Create a global tier
+        ChatRateTier.objects.create(
+            minimum_chats=0,
+            maximum_chats=299,
+            rate_per_chat=Decimal("3.00"),
+            active=True,
+        )
+
+        # Create a player with NO PlayerChatRateTier rows
+        player = Player.objects.create(player_number=7301, name="Test Player No Override")
+        self.assertFalse(
+            PlayerChatRateTier.objects.filter(player=player).exists()
+        )
+
+        # Lookup should resolve to the global tier
+        tier = get_applicable_player_chat_rate_tier(
+            player=player,
+            chats_responded=100,
+            operating_date=_date.today(),
+        )
+        self.assertEqual(tier.rate_per_chat, Decimal("3.00"))
+
+    def test_player_override_beats_global(self):
+        from datetime import date as _date
+        from players.models import ChatRateTier, Player, PlayerChatRateTier
+        from payments.services import get_applicable_player_chat_rate_tier
+
+        # Global tier: 0-299 → 3.00
+        ChatRateTier.objects.create(
+            minimum_chats=0,
+            maximum_chats=299,
+            rate_per_chat=Decimal("3.00"),
+            active=True,
+        )
+
+        # Player override: 0-299 → 5.00 (custom rate)
+        player = Player.objects.create(player_number=7302, name="Test Player With Override")
+        PlayerChatRateTier.objects.create(
+            player=player,
+            minimum_chats=0,
+            maximum_chats=299,
+            rate_per_chat=Decimal("5.00"),
+            active=True,
+            effective_from=None,
+        )
+
+        tier = get_applicable_player_chat_rate_tier(
+            player=player,
+            chats_responded=100,
+            operating_date=_date.today(),
+        )
+        self.assertEqual(tier.rate_per_chat, Decimal("5.00"))

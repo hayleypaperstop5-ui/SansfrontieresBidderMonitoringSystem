@@ -61,17 +61,17 @@ def get_applicable_player_chat_rate_tier(
     operating_date,
 ):
     """
-    Return the Player-specific chat rate tier applicable to the supplied
-    Player, qualifying chat count, and operating date.
-    """
+    Return the applicable PlayerChatRateTier with fallback to the global
+    ChatRateTier card.
 
+    Priority:
+      1. Per-player override (PlayerChatRateTier).
+      2. Global ChatRateTier card (default for all players).
+    """
     if chats_responded < 0:
         raise ValidationError("Chats responded cannot be negative.")
 
-    if not isinstance(operating_date, date):
-        raise ValidationError("A valid operating date is required.")
-
-    tiers = (
+    override = (
         PlayerChatRateTier.objects
         .filter(
             player=player,
@@ -91,20 +91,15 @@ def get_applicable_player_chat_rate_tier(
             "-minimum_chats",
             "-id",
         )
+        .first()
     )
+    if override is not None:
+        return override
 
-    tier = tiers.first()
-
-    if tier is None:
-        raise ValidationError(
-            (
-                "No active Player chat rate tier applies to "
-                f"Player {player.pk}."
-            )
-        )
-
-    return tier
-
+    return get_applicable_rate_tier(
+        chats_responded=chats_responded,
+        operating_date=operating_date,
+    )
 
 
 def calculate_gross_amount(chats_responded, rate_per_chat):
