@@ -1,0 +1,112 @@
+{% load static humanize %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Settle Payment — {{ moderator.get_full_name|default:moderator.username }}</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-50 text-slate-900 font-sans antialiased">
+<div class="max-w-4xl mx-auto p-6">
+
+  <div class="mb-6">
+    <a href="{% url 'payments:payment_console' %}" style="display:inline-block;background:#4f46e5;color:#fff;text-decoration:none;padding:10px 20px;border-radius:10px;font-weight:700;font-size:14px;">Payments</a>
+  </div>
+
+  {% if messages %}
+    {% for message in messages %}
+      <div class="mb-4 p-3 rounded border
+        {% if message.tags == 'success' %}bg-green-50 border-green-300 text-green-800
+        {% elif message.tags == 'error' %}bg-red-50 border-red-300 text-red-800
+        {% else %}bg-blue-50 border-blue-300 text-blue-800{% endif %}">
+        {{ message }}
+      </div>
+    {% endfor %}
+  {% endif %}
+
+  <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+    <h1 class="text-2xl font-bold">{{ moderator.get_full_name|default:moderator.username }}</h1>
+    <p class="text-slate-500 text-sm mt-1">
+      {% if mpesa_number %}M-Pesa: <span class="font-mono">{{ mpesa_number }}</span>{% else %}<span class="text-red-600">⚠ No M-Pesa on profile</span>{% endif %}
+    </p>
+    <div class="mt-4 grid grid-cols-2 gap-4 text-sm">
+      <div>
+        <div class="text-xs uppercase tracking-wider text-slate-400">Unpaid Records</div>
+        <div class="text-lg font-semibold">{{ unpaid_records|length }}</div>
+      </div>
+      <div>
+        <div class="text-xs uppercase tracking-wider text-slate-400">Total Outstanding</div>
+        <div class="text-lg font-bold text-red-700">KES {{ total_outstanding|floatformat:2|intcomma }}</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+    <h2 class="text-lg font-semibold mb-4">Unpaid Records</h2>
+    {% if unpaid_records %}
+    <table class="w-full text-sm">
+      <thead class="text-left text-xs uppercase tracking-wider text-slate-400 border-b">
+        <tr>
+          <th class="py-2">Period</th>
+          <th class="py-2 text-right">Payable Chats</th>
+          <th class="py-2 text-right">Earned</th>
+          <th class="py-2 text-right">Paid</th>
+          <th class="py-2 text-right">Outstanding</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for mp in unpaid_records %}
+        <tr class="border-b">
+          <td class="py-2">{{ mp.payment_week_start|date:"d M" }} &ndash; {{ mp.payment_week_end|date:"d M Y" }}</td>
+          <td class="py-2 text-right">{{ mp.payable_chats }}</td>
+          <td class="py-2 text-right font-mono">KES {{ mp.earned_amount|floatformat:2|intcomma }}</td>
+          <td class="py-2 text-right font-mono text-green-700">KES {{ mp.amount_paid|default:0|floatformat:2|intcomma }}</td>
+          <td class="py-2 text-right font-mono text-red-700">KES {{ mp.outstanding_amount|default:0|floatformat:2|intcomma }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p class="text-slate-500 text-sm">No unpaid records. All settled!</p>
+    {% endif %}
+  </div>
+
+  {% if unpaid_records and mpesa_number %}
+  <div class="bg-white rounded-lg shadow-md p-6">
+    <h2 class="text-lg font-semibold mb-4">Record Payment</h2>
+    <p class="text-sm text-slate-500 mb-4">
+      Enter the M-Pesa reference and the amount. The amount will be applied to the
+      oldest unpaid week first. Partial payments on the newest record are supported.
+    </p>
+    <form method="post" class="space-y-4">
+      {% csrf_token %}
+      <div>
+        <label class="block text-xs uppercase tracking-wider text-slate-500 mb-1">Amount (KES)</label>
+        <input type="number" step="0.01" name="amount"
+               value="{{ total_outstanding|floatformat:2 }}"
+               class="border border-slate-300 rounded px-3 py-2 w-full font-mono" required>
+        <p class="text-xs text-slate-500 mt-1">Total outstanding: KES {{ total_outstanding|floatformat:2|intcomma }}</p>
+      </div>
+      <div>
+        <label class="block text-xs uppercase tracking-wider text-slate-500 mb-1">M-Pesa Transaction Reference</label>
+        <input type="text" name="mpesa_reference"
+               placeholder="e.g. QK12345678"
+               class="border border-slate-300 rounded px-3 py-2 w-full font-mono" required>
+      </div>
+      <button type="submit"
+              class="bg-blue-700 hover:bg-blue-800 text-white px-5 py-2 rounded font-semibold">
+        Record Payment
+      </button>
+    </form>
+  </div>
+  {% elif unpaid_records and not mpesa_number %}
+  <div class="bg-amber-50 border border-amber-200 p-4 rounded text-sm text-amber-800">
+    <p class="font-semibold">Cannot record payment — M-Pesa number missing.</p>
+    <p class="mt-2">Please set the moderator's M-Pesa number on the Payments console before proceeding.</p>
+  </div>
+  {% endif %}
+
+</div>
+</body>
+</html>

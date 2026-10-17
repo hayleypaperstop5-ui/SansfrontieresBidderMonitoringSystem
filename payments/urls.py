@@ -1,4 +1,4 @@
-from django.urls import path
+﻿from django.urls import path
 
 from . import views
 
@@ -6,6 +6,7 @@ from . import views
 app_name = "payments"
 
 urlpatterns = [
+    path("payroll/settle-moderator/<int:moderator_id>/", views.settle_moderator_payments, name="settle_moderator_payments"),
     path("moderator/<int:moderator_id>/reset-mpesa/", views.reset_moderator_mpesa, name="reset_moderator_mpesa"),
     path("moderator/<int:moderator_id>/set-mpesa/", views.set_moderator_mpesa, name="set_moderator_mpesa"),
     path("moderator/<int:moderator_id>/request-mpesa/", views.request_mpesa_notification, name="request_mpesa_notification"),

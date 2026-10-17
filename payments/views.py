@@ -983,3 +983,57 @@ def reset_moderator_mpesa(request, moderator_id):
         f"M-Pesa reset for {moderator_label}. Notification sent.",
     )
     return redirect("payments:payment_console")
+
+@role_required(*RATE_MANAGEMENT_ROLES)
+def settle_moderator_payments(request, moderator_id):
+    """
+    Per-moderator settlement: shows all unpaid records and a single form
+    that records one M-Pesa transaction covering them sequentially.
+    """
+    from accounts.models import User
+    from decimal import Decimal
+
+    moderator = get_object_or_404(User, pk=moderator_id, role=User.Role.MODERATOR)
+    profile = getattr(moderator, "staff_profile", None)
+    mpesa = (profile.mpesa_number or "").strip() if profile else ""
+
+    unpaid = (
+        ModeratorPayment.objects
+        .filter(moderator=moderator)
+        .exclude(status=ModeratorPayment.Status.PAID)
+        .order_by("payment_week_start", "id")
+    )
+    unpaid_list = list(unpaid)
+    total_outstanding = sum(
+        (mp.outstanding_amount or Decimal("0.00")) for mp in unpaid_list
+    )
+
+    if request.method == "POST":
+        from .services import record_payment_group
+        try:
+            record_payment_group(
+                moderator=moderator,
+                director=request.user,
+                mpesa_reference=request.POST.get("mpesa_reference", ""),
+                amount=request.POST.get("amount", "0"),
+            )
+            messages.success(
+                request,
+                f"Payment recorded for {moderator.get_full_name() or moderator.username}.",
+            )
+        except ValidationError as exc:
+            messages.error(request, str(exc))
+        except Exception as exc:
+            messages.error(request, f"Unexpected error: {exc}")
+        return redirect("payments:settle_moderator_payments", moderator_id=moderator.id)
+
+    return render(
+        request,
+        "payments/settle_moderator_payments.html",
+        {
+            "moderator": moderator,
+            "mpesa_number": mpesa,
+            "unpaid_records": unpaid_list,
+            "total_outstanding": total_outstanding,
+        },
+    )

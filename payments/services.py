@@ -1,4 +1,4 @@
-from django.utils import timezone
+﻿from django.utils import timezone
 from datetime import date
 from decimal import Decimal
 
@@ -1235,3 +1235,142 @@ def record_payment(*, payment, director, mpesa_reference, amount):
     )
 
     return payment
+
+@transaction.atomic
+def record_payment_group(*, moderator, director, mpesa_reference, amount):
+    """
+    Record a single payment covering all unpaid ModeratorPayment rows
+    for a moderator.
+
+    Splits sequentially: oldest week first. If `amount` doesn't cover
+    all records, the oldest are paid in full and the next one is
+    partially paid — remaining records stay untouched.
+
+    Applies the same `mpesa_reference` to every record it touches, so
+    the M-Pesa transaction can be traced back to multiple payroll rows.
+
+    Returns a dict with the list of updated payments and any remainder.
+    """
+    if not mpesa_reference or not str(mpesa_reference).strip():
+        raise ValidationError("An M-Pesa reference is required.")
+
+    try:
+        amount = Decimal(str(amount))
+    except Exception:
+        raise ValidationError("Invalid payment amount.")
+
+    if amount <= 0:
+        raise ValidationError("Payment amount must be greater than zero.")
+
+    profile = getattr(moderator, "staff_profile", None)
+    if not profile or not (profile.mpesa_number or "").strip():
+        raise ValidationError(
+            f"{moderator.get_full_name() or moderator.username} has no M-Pesa "
+            "number on file. Ask the moderator to add it before recording payment."
+        )
+
+    # Load all unpaid records for this moderator, oldest first
+    unpaid = list(
+        ModeratorPayment.objects
+        .select_for_update()
+        .filter(
+            moderator=moderator,
+        )
+        .exclude(status=ModeratorPayment.Status.PAID)
+        .order_by("payment_week_start", "id")
+    )
+
+    if not unpaid:
+        raise ValidationError(
+            f"{moderator.get_full_name() or moderator.username} has no "
+            "unpaid records to settle."
+        )
+
+    total_outstanding = sum(
+        (mp.outstanding_amount or Decimal("0.00")) for mp in unpaid
+    )
+
+    if amount > total_outstanding:
+        raise ValidationError(
+            f"Amount ({amount}) exceeds total outstanding ({total_outstanding})."
+        )
+
+    mpesa_reference = str(mpesa_reference).strip()
+    remaining = amount
+    updated = []
+    notification_list = []
+
+    from notifications.models import Notification
+
+    for mp in unpaid:
+        if remaining <= 0:
+            break
+
+        record_outstanding = mp.outstanding_amount or Decimal("0.00")
+
+        if remaining >= record_outstanding:
+            # Pay this record in full
+            applied = record_outstanding
+            mp.amount_paid = (mp.amount_paid or Decimal("0.00")) + applied
+            mp.outstanding_amount = Decimal("0.00")
+            mp.status = ModeratorPayment.Status.PAID
+        else:
+            # Partial payment on this record
+            applied = remaining
+            mp.amount_paid = (mp.amount_paid or Decimal("0.00")) + applied
+            mp.outstanding_amount = record_outstanding - applied
+            mp.status = ModeratorPayment.Status.PARTIALLY_PAID
+
+        mp.paid_at = timezone.now()
+        mp.paid_by = director
+        mp.mpesa_reference = mpesa_reference
+
+        mp.save(update_fields=[
+            "amount_paid",
+            "outstanding_amount",
+            "status",
+            "paid_at",
+            "paid_by",
+            "mpesa_reference",
+            "updated_at",
+        ])
+
+        updated.append(mp)
+        remaining -= applied
+
+        period = (
+            f"{mp.payment_week_start.strftime('%d %b %Y')} - "
+            f"{mp.payment_week_end.strftime('%d %b %Y')}"
+        )
+        if mp.status == ModeratorPayment.Status.PAID:
+            title = "Payment Received"
+            msg = (
+                f"Your payment of KES {applied} for the period {period} "
+                f"has been recorded. M-Pesa reference: {mpesa_reference}."
+            )
+        else:
+            title = "Partial Payment Received"
+            msg = (
+                f"A partial payment of KES {applied} for the period {period} "
+                f"has been recorded. Remaining outstanding: "
+                f"KES {mp.outstanding_amount}. "
+                f"M-Pesa reference: {mpesa_reference}."
+            )
+
+        notification_list.append(Notification(
+            recipient=moderator,
+            notification_type=Notification.NotificationType.GENERAL,
+            alert_level=Notification.AlertLevel.IMPORTANT,
+            title=title,
+            message=msg,
+        ))
+
+    if notification_list:
+        Notification.objects.bulk_create(notification_list)
+
+    return {
+        "updated": updated,
+        "total_outstanding_before": total_outstanding,
+        "amount_applied": amount - remaining,
+        "amount_remaining": remaining,
+    }
