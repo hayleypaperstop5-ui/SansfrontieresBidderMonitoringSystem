@@ -1,4 +1,4 @@
-﻿from config.celery import app
+from config.celery import app
 
 from .services import determine_daily_moderator_bonuses
 

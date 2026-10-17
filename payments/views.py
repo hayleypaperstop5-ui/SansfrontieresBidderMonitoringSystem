@@ -645,3 +645,52 @@ def download_payment_statement_pdf(request, payment_id):
     response = HttpResponse(buffer.getvalue(), content_type="application/pdf")
     response["Content-Disposition"] = f'attachment; filename="{filename}"'
     return response
+
+@role_required(*RATE_MANAGEMENT_ROLES)
+def export_payments_csv(request):
+    """Export all ModeratorPayment rows as a CSV file for Directors."""
+    import csv
+    from django.http import HttpResponse
+
+    response = HttpResponse(content_type="text/csv")
+    response["Content-Disposition"] = 'attachment; filename="moderator-payments.csv"'
+
+    writer = csv.writer(response)
+    writer.writerow([
+        "Payment ID", "Moderator", "M-Pesa Number",
+        "Period Start", "Period End", "Payable Chats",
+        "Chat Earnings (KES)", "Bonus (KES)", "Total Earned (KES)",
+        "Amount Paid (KES)", "Outstanding (KES)",
+        "Status", "M-Pesa Reference", "Paid At", "Paid By",
+    ])
+
+    payments = (
+        ModeratorPayment.objects
+        .select_related("moderator", "paid_by", "moderator__staff_profile")
+        .order_by("-payment_week_start", "-id")
+    )
+
+    for p in payments:
+        mpesa_number = ""
+        sp = getattr(p.moderator, "staff_profile", None)
+        if sp:
+            mpesa_number = sp.mpesa_number or ""
+        writer.writerow([
+            p.id,
+            p.moderator.get_full_name() or p.moderator.username,
+            mpesa_number,
+            p.payment_week_start.isoformat(),
+            p.payment_week_end.isoformat(),
+            p.payable_chats,
+            p.chat_earnings,
+            p.bonus_earned,
+            p.earned_amount,
+            p.amount_paid or "0.00",
+            p.outstanding_amount or "0.00",
+            p.get_status_display(),
+            p.mpesa_reference or "",
+            p.paid_at.isoformat() if p.paid_at else "",
+            (p.paid_by.get_full_name() or p.paid_by.username) if p.paid_by else "",
+        ])
+
+    return response

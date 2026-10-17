@@ -263,6 +263,11 @@ class ModeratorPayment(models.Model):
                 fields=["moderator", "payment_week_start", "payment_week_end"],
                 name="unique_moderator_payment_week",
             ),
+            models.UniqueConstraint(
+                fields=["mpesa_reference"],
+                condition=models.Q(mpesa_reference__gt=""),
+                name="unique_mpesa_reference_when_set",
+            ),
         ]
         indexes = [
             models.Index(

@@ -1,4 +1,4 @@
-﻿import os
+import os
 from unittest.mock import patch
 
 from django.contrib.messages import get_messages

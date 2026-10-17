@@ -1,4 +1,4 @@
-﻿import os
+import os
 from datetime import timedelta
 from django.conf import settings
 from django.core.mail import send_mass_mail
@@ -150,26 +150,24 @@ def _assign_new_coverage_locked(application, moment):
     )
 
 def _assign_replacement_locked(application, replacement_session, moment):
-    replacement_moderator = application.moderator
-    outgoing_moderator = replacement_session.moderator
-    player = replacement_session.player
+    """
+    DEPRECATED SHIM.
 
-    if getattr(outgoing_moderator, "id", None) == replacement_moderator.id:
+    This function historically duplicated replacement handover logic that
+    now lives in coverage.services.assign_replacement(). It is retained as
+    a delegating shim so existing callers do not break, but all logic is
+    unified in the service function to avoid divergent behavior.
+    """
+    from coverage.services import assign_replacement
+    try:
+        return assign_replacement(
+            session=replacement_session,
+            replacement_moderator=application.moderator,
+            moment=moment,
+        )
+    except Exception:
         return None
 
-    session = CoverageSession.objects.create(
-        moderator=replacement_moderator,
-        player=player,
-        operating_date=replacement_session.operating_date,
-        session_type=replacement_session.session_type,
-        status=CoverageSession.Status.OPEN,
-    )
-
-    replacement_session.replacement_moderator = replacement_moderator
-    replacement_session.replacement_session = session
-    replacement_session.status = CoverageSession.Status.HANDOVER
-    replacement_session.save(update_fields=["replacement_moderator", "replacement_session", "status"])
-    return session
 
 def _competition_seconds():
     """

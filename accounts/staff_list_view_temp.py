@@ -1,4 +1,4 @@
-﻿from django.contrib.auth.decorators import login_required
+from django.contrib.auth.decorators import login_required
 from django.shortcuts import render
 from .decorators import role_required
 from .models import User, StaffProfile
