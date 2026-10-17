@@ -1,4 +1,4 @@
-"""
+﻿"""
 Regression tests for the settlement (Mark as Paid) flow.
 """
 from datetime import date, timedelta
@@ -497,3 +497,116 @@ class GlobalRateFallbackTests(TestCase):
             operating_date=_date.today(),
         )
         self.assertEqual(tier.rate_per_chat, Decimal("5.00"))
+
+class BulkPaymentTests(TestCase):
+    """Verify record_payment_group sequential split logic."""
+
+    def setUp(self):
+        self.director = User.objects.create_user(
+            username="bulk_director",
+            password="testpass123",
+            role=User.Role.DIRECTOR,
+        )
+        self.moderator = User.objects.create_user(
+            username="bulk_moderator",
+            password="testpass123",
+            role=User.Role.MODERATOR,
+        )
+        StaffProfile.objects.create(
+            user=self.moderator,
+            status=StaffProfile.Status.ACTIVE,
+            mpesa_number="0722000111",
+        )
+
+        today = date.today()
+        # Older week
+        self.old_payment = ModeratorPayment.objects.create(
+            moderator=self.moderator,
+            payment_week_start=today - timedelta(days=13),
+            payment_week_end=today - timedelta(days=7),
+            payment_date=today - timedelta(days=7),
+            payable_chats=100,
+            chat_earnings=Decimal("500.00"),
+            earned_amount=Decimal("500.00"),
+            outstanding_amount=Decimal("500.00"),
+            generated_amount=Decimal("500.00"),
+            status=ModeratorPayment.Status.UNPAID,
+        )
+        # Newer week
+        self.new_payment = ModeratorPayment.objects.create(
+            moderator=self.moderator,
+            payment_week_start=today - timedelta(days=6),
+            payment_week_end=today,
+            payment_date=today,
+            payable_chats=200,
+            chat_earnings=Decimal("1000.00"),
+            earned_amount=Decimal("1000.00"),
+            outstanding_amount=Decimal("1000.00"),
+            generated_amount=Decimal("1000.00"),
+            status=ModeratorPayment.Status.UNPAID,
+        )
+
+    def test_bulk_full_payment_marks_all_paid(self):
+        from payments.services import record_payment_group
+        result = record_payment_group(
+            moderator=self.moderator,
+            director=self.director,
+            mpesa_reference="BULK-FULL-001",
+            amount="1500.00",
+        )
+        self.assertEqual(len(result["updated"]), 2)
+        self.old_payment.refresh_from_db()
+        self.new_payment.refresh_from_db()
+        self.assertEqual(self.old_payment.status, ModeratorPayment.Status.PAID)
+        self.assertEqual(self.new_payment.status, ModeratorPayment.Status.PAID)
+        self.assertEqual(self.old_payment.outstanding_amount, Decimal("0.00"))
+        self.assertEqual(self.new_payment.outstanding_amount, Decimal("0.00"))
+        self.assertEqual(self.old_payment.mpesa_reference, "BULK-FULL-001")
+        self.assertEqual(self.new_payment.mpesa_reference, "BULK-FULL-001")
+
+    def test_bulk_partial_payment_pays_oldest_first(self):
+        from payments.services import record_payment_group
+        result = record_payment_group(
+            moderator=self.moderator,
+            director=self.director,
+            mpesa_reference="BULK-PART-001",
+            amount="700.00",
+        )
+        self.old_payment.refresh_from_db()
+        self.new_payment.refresh_from_db()
+
+        # Oldest (500 KES) fully paid
+        self.assertEqual(self.old_payment.status, ModeratorPayment.Status.PAID)
+        self.assertEqual(self.old_payment.outstanding_amount, Decimal("0.00"))
+        # Newest (1000 KES) partially paid — 700 - 500 = 200 applied
+        self.assertEqual(self.new_payment.status, ModeratorPayment.Status.PARTIALLY_PAID)
+        self.assertEqual(self.new_payment.outstanding_amount, Decimal("800.00"))
+
+    def test_bulk_amount_exceeds_total_rejected(self):
+        from payments.services import record_payment_group
+        with self.assertRaisesMessage(ValidationError, "exceeds total outstanding"):
+            record_payment_group(
+                moderator=self.moderator,
+                director=self.director,
+                mpesa_reference="BULK-OVER-001",
+                amount="9999.00",
+            )
+        self.old_payment.refresh_from_db()
+        self.new_payment.refresh_from_db()
+        self.assertEqual(self.old_payment.status, ModeratorPayment.Status.UNPAID)
+        self.assertEqual(self.new_payment.status, ModeratorPayment.Status.UNPAID)
+
+    def test_bulk_payment_blocked_without_mpesa(self):
+        from payments.services import record_payment_group
+        # Clear the moderator's M-Pesa number
+        profile = self.moderator.staff_profile
+        profile.mpesa_number = ""
+        profile.save(update_fields=["mpesa_number"])
+
+        with self.assertRaisesMessage(ValidationError, "no M-Pesa number on file"):
+            record_payment_group(
+                moderator=self.moderator,
+                director=self.director,
+                mpesa_reference="BULK-NOMPESA-001",
+                amount="500.00",
+            )
