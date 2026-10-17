@@ -94,18 +94,35 @@
           <td class="py-3 px-4">
             {{ p.moderator.get_full_name|default:p.moderator.username }}
           </td>
-          <td class="py-3 px-4 font-mono text-xs">
+          <td class="py-3 px-4 text-xs" x-data="{mode: null}">
             {% if p.moderator.staff_profile.mpesa_number %}
-              {{ p.moderator.staff_profile.mpesa_number }}
+              <div class="font-mono">{{ p.moderator.staff_profile.mpesa_number }}</div>
+              <button type="button"
+                      onclick="var r=prompt('Reset M-Pesa for {{ p.moderator.get_full_name|default:p.moderator.username|escapejs }}? Reason (required):'); if(r && r.trim()){var f=document.getElementById('reset-form-{{ p.id }}'); f.querySelector('input[name=reason]').value=r.trim(); f.submit();}"
+                      class="text-red-700 hover:underline">Reset</button>
+              <form id="reset-form-{{ p.id }}" method="post"
+                    action="{% url 'payments:reset_moderator_mpesa' p.moderator.id %}" style="display:none;">
+                {% csrf_token %}
+                <input type="hidden" name="reason" value="">
+              </form>
             {% else %}
               <span class="inline-block text-xs text-red-700 bg-red-50 px-2 py-0.5 rounded">⚠ No M-Pesa</span>
-              <form method="post" action="{% url 'payments:request_mpesa_notification' p.moderator.id %}" style="display:inline-block;margin-left:6px;">
+              <button type="button"
+                      onclick="var n=prompt('Set M-Pesa number for {{ p.moderator.get_full_name|default:p.moderator.username|escapejs }} (e.g. 0712345678):'); if(!n || !n.trim()) return; var r=prompt('Reason (required):'); if(!r || !r.trim()) return; var f=document.getElementById('set-form-{{ p.id }}'); f.querySelector('input[name=mpesa_number]').value=n.trim(); f.querySelector('input[name=reason]').value=r.trim(); f.submit();"
+                      class="text-blue-700 hover:underline font-semibold">Set M-Pesa</button>
+              <form method="post" action="{% url 'payments:request_mpesa_notification' p.moderator.id %}" style="display:inline-block;margin-left:4px;">
                 {% csrf_token %}
                 <button type="submit"
                         class="text-xs text-white bg-amber-600 hover:bg-amber-700 px-2 py-0.5 rounded font-semibold"
                         onclick="return confirm('Send a notification to {{ p.moderator.get_full_name|default:p.moderator.username|escapejs }} asking them to add their M-Pesa number?');">
                   Request
                 </button>
+              </form>
+              <form id="set-form-{{ p.id }}" method="post"
+                    action="{% url 'payments:set_moderator_mpesa' p.moderator.id %}" style="display:none;">
+                {% csrf_token %}
+                <input type="hidden" name="mpesa_number" value="">
+                <input type="hidden" name="reason" value="">
               </form>
             {% endif %}
           </td>

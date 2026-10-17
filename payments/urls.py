@@ -6,6 +6,8 @@ from . import views
 app_name = "payments"
 
 urlpatterns = [
+    path("moderator/<int:moderator_id>/reset-mpesa/", views.reset_moderator_mpesa, name="reset_moderator_mpesa"),
+    path("moderator/<int:moderator_id>/set-mpesa/", views.set_moderator_mpesa, name="set_moderator_mpesa"),
     path("moderator/<int:moderator_id>/request-mpesa/", views.request_mpesa_notification, name="request_mpesa_notification"),
     path("payroll/payments/", views.payment_console, name="payment_console"),
     path("export/payments.csv", views.export_payments_csv, name="export_payments_csv"),

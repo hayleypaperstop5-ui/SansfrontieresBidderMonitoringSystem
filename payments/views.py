@@ -809,3 +809,157 @@ def request_mpesa_notification(request, moderator_id):
         f"Notification sent to {moderator.get_full_name() or moderator.username}.",
     )
     return redirect("payments:payment_console")
+
+@role_required(*RATE_MANAGEMENT_ROLES)
+def set_moderator_mpesa(request, moderator_id):
+    """
+    Director sets a moderator's M-Pesa number with a required reason.
+    Logs the change and sends a CRITICAL notification to the moderator.
+    """
+    from accounts.models import User, MpesaResetLog
+    from notifications.models import Notification
+    import re
+
+    if request.method != "POST":
+        return redirect("payments:payment_console")
+
+    moderator = get_object_or_404(User, pk=moderator_id, role=User.Role.MODERATOR)
+
+    raw_number = request.POST.get("mpesa_number", "").strip()
+    reason = request.POST.get("reason", "").strip()
+
+    if not reason:
+        messages.error(request, "A reason is required when setting an M-Pesa number.")
+        return redirect("payments:payment_console")
+
+    # Normalize
+    normalized = re.sub(r"[\s-]+", "", raw_number)
+    if normalized.startswith("+254"):
+        normalized = normalized[1:]
+    if re.fullmatch(r"0[17]\d{8}", normalized):
+        pass
+    elif re.fullmatch(r"254[17]\d{8}", normalized):
+        pass
+    else:
+        messages.error(
+            request,
+            "Enter a valid Kenyan M-Pesa number (e.g. 0712345678 or 254712345678).",
+        )
+        return redirect("payments:payment_console")
+
+    profile = getattr(moderator, "staff_profile", None)
+    if profile is None:
+        messages.error(request, f"{moderator.username} has no staff profile.")
+        return redirect("payments:payment_console")
+
+    # Uniqueness: ensure no other moderator has this number
+    from accounts.models import StaffProfile
+    conflict = StaffProfile.objects.filter(mpesa_number=normalized).exclude(pk=profile.pk).first()
+    if conflict:
+        messages.error(
+            request,
+            f"This M-Pesa number is already registered to another moderator "
+            f"({conflict.user.username}).",
+        )
+        return redirect("payments:payment_console")
+
+    previous = profile.mpesa_number or ""
+    profile.mpesa_number = normalized
+    profile.save(update_fields=["mpesa_number", "updated_at"])
+
+    MpesaResetLog.objects.create(
+        moderator=moderator,
+        reset_by=request.user,
+        previous_number=previous,
+        new_number=normalized,
+        change_type="SET",
+        reason=reason,
+    )
+
+    moderator_label = moderator.get_full_name() or moderator.username
+    actor_label = request.user.get_full_name() or request.user.username
+
+    Notification.objects.create(
+        recipient=moderator,
+        notification_type=Notification.NotificationType.GENERAL,
+        alert_level=Notification.AlertLevel.CRITICAL,
+        title="M-Pesa Number Set by Management",
+        message=(
+            f"Your M-Pesa number was set to {normalized} by {actor_label} "
+            f"({request.user.role}). Reason: {reason}. "
+            "If this is incorrect, please update your profile immediately "
+            "(/dashboard/profile/)."
+        ),
+    )
+
+    messages.success(
+        request,
+        f"M-Pesa set for {moderator_label}. Notification sent.",
+    )
+    return redirect("payments:payment_console")
+
+
+@role_required(*RATE_MANAGEMENT_ROLES)
+def reset_moderator_mpesa(request, moderator_id):
+    """
+    Director clears a moderator's M-Pesa number with a required reason.
+    Logs the change and sends a CRITICAL notification to the moderator.
+    """
+    from accounts.models import User, MpesaResetLog
+    from notifications.models import Notification
+
+    if request.method != "POST":
+        return redirect("payments:payment_console")
+
+    moderator = get_object_or_404(User, pk=moderator_id, role=User.Role.MODERATOR)
+    reason = request.POST.get("reason", "").strip()
+
+    if not reason:
+        messages.error(request, "A reason is required when resetting an M-Pesa number.")
+        return redirect("payments:payment_console")
+
+    profile = getattr(moderator, "staff_profile", None)
+    if profile is None:
+        messages.error(request, f"{moderator.username} has no staff profile.")
+        return redirect("payments:payment_console")
+
+    previous = profile.mpesa_number or ""
+    if not previous:
+        messages.info(
+            request,
+            f"{moderator.get_full_name() or moderator.username} has no M-Pesa number to reset.",
+        )
+        return redirect("payments:payment_console")
+
+    profile.mpesa_number = ""
+    profile.save(update_fields=["mpesa_number", "updated_at"])
+
+    MpesaResetLog.objects.create(
+        moderator=moderator,
+        reset_by=request.user,
+        previous_number=previous,
+        new_number="",
+        change_type="RESET",
+        reason=reason,
+    )
+
+    moderator_label = moderator.get_full_name() or moderator.username
+    actor_label = request.user.get_full_name() or request.user.username
+
+    Notification.objects.create(
+        recipient=moderator,
+        notification_type=Notification.NotificationType.GENERAL,
+        alert_level=Notification.AlertLevel.CRITICAL,
+        title="M-Pesa Number Reset",
+        message=(
+            f"Your M-Pesa number ({previous}) was reset by {actor_label}. "
+            f"Reason: {reason}. Please enter your correct M-Pesa number in "
+            "your profile (/dashboard/profile/) so payments can be processed."
+        ),
+    )
+
+    messages.success(
+        request,
+        f"M-Pesa reset for {moderator_label}. Notification sent.",
+    )
+    return redirect("payments:payment_console")

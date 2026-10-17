@@ -220,6 +220,18 @@ class MpesaResetLog(models.Model):
 
     previous_number = models.CharField(max_length=30, blank=True, default="")
 
+    new_number = models.CharField(max_length=30, blank=True, default="")
+
+    change_type = models.CharField(
+        max_length=20,
+        choices=[
+            ("RESET", "Reset (cleared)"),
+            ("SET", "Set by Director"),
+        ],
+        default="RESET",
+        help_text="RESET clears the number; SET records a Director-assigned number.",
+    )
+
     reason = models.TextField()
 
     created_at = models.DateTimeField(auto_now_add=True)
