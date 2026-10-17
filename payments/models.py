@@ -1,4 +1,4 @@
-from django.conf import settings
+﻿from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.core.validators import MinValueValidator
 from django.db import models
@@ -263,11 +263,12 @@ class ModeratorPayment(models.Model):
                 fields=["moderator", "payment_week_start", "payment_week_end"],
                 name="unique_moderator_payment_week",
             ),
-            models.UniqueConstraint(
-                fields=["mpesa_reference"],
-                condition=models.Q(mpesa_reference__gt=""),
-                name="unique_mpesa_reference_when_set",
-            ),
+            # NOTE: mpesa_reference uniqueness removed to support bulk payment
+            # (one M-Pesa transaction covering multiple payroll weeks).
+            # The audit trail (paid_by, paid_at, amount_paid per row) and
+            # the console display prevent accidental double-entry.
+            # For stricter reconciliation later, introduce a BulkPaymentBatch
+            # model to hold the unique reference.
         ]
         indexes = [
             models.Index(
