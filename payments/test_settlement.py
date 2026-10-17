@@ -294,3 +294,109 @@ class ModeratorAccessTests(TestCase):
         self.assertEqual(resp.status_code, 200)
         body = resp.content.decode("utf-8", errors="replace")
         self.assertIn("Record Payment", body)
+
+class PdfStatementTests(TestCase):
+    """Verify PDF statement generation and access control."""
+
+    def setUp(self):
+        self.director = User.objects.create_user(
+            username="pdf_director",
+            password="testpass123",
+            role=User.Role.DIRECTOR,
+        )
+        self.moderator = User.objects.create_user(
+            username="pdf_moderator",
+            password="testpass123",
+            role=User.Role.MODERATOR,
+        )
+        self.other_moderator = User.objects.create_user(
+            username="pdf_other",
+            password="testpass123",
+            role=User.Role.MODERATOR,
+        )
+        StaffProfile.objects.create(user=self.moderator, status=StaffProfile.Status.ACTIVE)
+        StaffProfile.objects.create(user=self.other_moderator, status=StaffProfile.Status.ACTIVE)
+
+        today = date.today()
+        self.payment = ModeratorPayment.objects.create(
+            moderator=self.moderator,
+            payment_week_start=today - timedelta(days=6),
+            payment_week_end=today,
+            payment_date=today,
+            payable_chats=500,
+            chat_earnings=Decimal("1500.00"),
+            earned_amount=Decimal("1500.00"),
+            outstanding_amount=Decimal("1500.00"),
+            generated_amount=Decimal("1500.00"),
+            status=ModeratorPayment.Status.UNPAID,
+        )
+
+    def test_director_can_download_pdf(self):
+        c = Client()
+        c.force_login(self.director)
+        url = reverse("payments:download_payment_statement_pdf", args=[self.payment.id])
+        resp = c.get(url)
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp["Content-Type"], "application/pdf")
+        self.assertTrue(resp.content.startswith(b"%PDF-"))
+
+    def test_owner_can_download_own_pdf(self):
+        c = Client()
+        c.force_login(self.moderator)
+        url = reverse("payments:download_payment_statement_pdf", args=[self.payment.id])
+        resp = c.get(url)
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(resp.content.startswith(b"%PDF-"))
+
+    def test_other_moderator_cannot_download(self):
+        c = Client()
+        c.force_login(self.other_moderator)
+        url = reverse("payments:download_payment_statement_pdf", args=[self.payment.id])
+        resp = c.get(url)
+        self.assertEqual(resp.status_code, 302)
+
+
+class PaymentNotificationTests(TestCase):
+    """Verify a notification is created when a payment is recorded."""
+
+    def setUp(self):
+        self.director = User.objects.create_user(
+            username="notif_director",
+            password="testpass123",
+            role=User.Role.DIRECTOR,
+        )
+        self.moderator = User.objects.create_user(
+            username="notif_moderator",
+            password="testpass123",
+            role=User.Role.MODERATOR,
+        )
+        StaffProfile.objects.create(user=self.moderator, status=StaffProfile.Status.ACTIVE)
+
+        today = date.today()
+        self.payment = ModeratorPayment.objects.create(
+            moderator=self.moderator,
+            payment_week_start=today - timedelta(days=6),
+            payment_week_end=today,
+            payment_date=today,
+            payable_chats=500,
+            chat_earnings=Decimal("1500.00"),
+            earned_amount=Decimal("1500.00"),
+            outstanding_amount=Decimal("1500.00"),
+            generated_amount=Decimal("1500.00"),
+            status=ModeratorPayment.Status.UNPAID,
+        )
+
+    def test_notification_created_on_payment(self):
+        from notifications.models import Notification
+        before = Notification.objects.filter(recipient=self.moderator).count()
+        record_payment(
+            payment=self.payment,
+            director=self.director,
+            mpesa_reference="NOTIFTEST1",
+            amount="1500.00",
+        )
+        after = Notification.objects.filter(recipient=self.moderator).count()
+        self.assertEqual(after, before + 1)
+        latest = Notification.objects.filter(recipient=self.moderator).order_by("-created_at").first()
+        self.assertEqual(latest.title, "Payment Received")
+        self.assertIn("NOTIFTEST1", latest.message)
