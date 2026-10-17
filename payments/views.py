@@ -740,17 +740,17 @@ def payment_console(request):
         "paid": all_qs.filter(status=ModeratorPayment.Status.PAID).count(),
     }
 
-    # Determine which payments have a missing M-Pesa number for the template
-    payments_list = list(payments)
-    for p in payments_list:
-        profile = getattr(p.moderator, "staff_profile", None)
-        p._mpesa_present = bool(profile and (profile.mpesa_number or "").strip())
+    # Average per payment
+    from decimal import Decimal
+    total_count = summary_counts["total"] or 0
+    total_earned = summary.get("total_earned") or Decimal("0.00")
+    summary["avg"] = (total_earned / total_count) if total_count else Decimal("0.00")
 
     return render(
         request,
         "payments/payment_console.html",
         {
-            "payments": payments_list,
+            "payments": list(payments),
             "tab": tab,
             "summary": summary,
             "summary_counts": summary_counts,

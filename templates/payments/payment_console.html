@@ -51,10 +51,7 @@
     </div>
     <div class="bg-white rounded-lg shadow p-4">
       <div class="text-xs uppercase tracking-wider text-slate-400">Avg per Payment</div>
-      <div class="text-xl font-bold mt-1">
-        {% if summary_counts.total %}KES {{ summary.total_earned|default:0|floatformat:2|intcomma }}
-        {% else %}KES 0.00{% endif %}
-      </div>
+      <div class="text-xl font-bold mt-1">KES {{ summary.avg|default:0|floatformat:2|intcomma }}</div>
       <div class="text-xs text-slate-500 mt-1">across all records</div>
     </div>
   </div>
@@ -96,7 +93,7 @@
           <td class="py-3 px-4">{{ p.payment_week_start|date:"d M" }} &ndash; {{ p.payment_week_end|date:"d M Y" }}</td>
           <td class="py-3 px-4">
             {{ p.moderator.get_full_name|default:p.moderator.username }}
-            {% if not p._mpesa_present %}
+            {% if not p.moderator.staff_profile.mpesa_number %}
               <span class="ml-1 inline-block text-xs text-red-700 bg-red-50 px-2 py-0.5 rounded" title="No M-Pesa number on file">
                 ⚠ No M-Pesa
               </span>
@@ -118,7 +115,7 @@
           <td class="py-3 px-4 text-right space-x-3">
             <a href="{% url 'payments:settle_payment' p.id %}" class="text-xs text-blue-700 hover:underline">View</a>
             <a href="{% url 'payments:download_payment_statement_pdf' p.id %}" class="text-xs text-blue-700 hover:underline" target="_blank">PDF</a>
-            {% if p.status != 'PAID' and p._mpesa_present %}
+            {% if p.status != 'PAID' and p.moderator.staff_profile.mpesa_number %}
               <a href="{% url 'payments:settle_payment' p.id %}" class="text-xs text-white bg-blue-700 hover:bg-blue-800 px-3 py-1 rounded font-semibold">Pay</a>
             {% endif %}
           </td>
