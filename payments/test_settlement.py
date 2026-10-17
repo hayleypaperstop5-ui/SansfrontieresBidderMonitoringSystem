@@ -16,6 +16,24 @@ from payments.services import record_payment
 
 
 class RecordPaymentServiceTests(TestCase):
+
+    def test_payment_blocked_when_mpesa_missing(self):
+        """The M-Pesa guard must block record_payment when no number is set."""
+        # Clear the moderator's M-Pesa number
+        self.moderator.staff_profile.mpesa_number = ""
+        self.moderator.staff_profile.save(update_fields=["mpesa_number"])
+
+        with self.assertRaisesMessage(ValidationError, "has no M-Pesa number on file"):
+            record_payment(
+                payment=self.payment,
+                director=self.director,
+                mpesa_reference="SHOULD-FAIL",
+                amount="1500.00",
+            )
+
+        self.payment.refresh_from_db()
+        self.assertEqual(self.payment.status, ModeratorPayment.Status.UNPAID)
+
     def setUp(self):
         self.director = User.objects.create_user(
             username="settle_director",
@@ -151,6 +169,7 @@ class SettleViewTests(TestCase):
         StaffProfile.objects.create(
             user=self.moderator_user,
             status=StaffProfile.Status.ACTIVE,
+            mpesa_number="0722000001",
         )
         self.moderator = User.objects.create_user(
             username="other_mod",
@@ -160,6 +179,7 @@ class SettleViewTests(TestCase):
         StaffProfile.objects.create(
             user=self.moderator,
             status=StaffProfile.Status.ACTIVE,
+            mpesa_number="0722000002",
         )
         today = date.today()
         self.payment = ModeratorPayment.objects.create(
@@ -229,10 +249,14 @@ class ModeratorAccessTests(TestCase):
             role=User.Role.MODERATOR,
         )
         StaffProfile.objects.create(
-            user=self.moderator, status=StaffProfile.Status.ACTIVE,
+            user=self.moderator,
+            status=StaffProfile.Status.ACTIVE,
+            mpesa_number="0722000003",
         )
         StaffProfile.objects.create(
-            user=self.other_moderator, status=StaffProfile.Status.ACTIVE,
+            user=self.other_moderator,
+            status=StaffProfile.Status.ACTIVE,
+            mpesa_number="0722000004",
         )
         today = date.today()
         self.payment = ModeratorPayment.objects.create(
@@ -314,8 +338,16 @@ class PdfStatementTests(TestCase):
             password="testpass123",
             role=User.Role.MODERATOR,
         )
-        StaffProfile.objects.create(user=self.moderator, status=StaffProfile.Status.ACTIVE)
-        StaffProfile.objects.create(user=self.other_moderator, status=StaffProfile.Status.ACTIVE)
+        StaffProfile.objects.create(
+            user=self.moderator,
+            status=StaffProfile.Status.ACTIVE,
+            mpesa_number="0722000005",
+        )
+        StaffProfile.objects.create(
+            user=self.other_moderator,
+            status=StaffProfile.Status.ACTIVE,
+            mpesa_number="0722000006",
+        )
 
         today = date.today()
         self.payment = ModeratorPayment.objects.create(
@@ -370,7 +402,11 @@ class PaymentNotificationTests(TestCase):
             password="testpass123",
             role=User.Role.MODERATOR,
         )
-        StaffProfile.objects.create(user=self.moderator, status=StaffProfile.Status.ACTIVE)
+        StaffProfile.objects.create(
+            user=self.moderator,
+            status=StaffProfile.Status.ACTIVE,
+            mpesa_number="0722000007",
+        )
 
         today = date.today()
         self.payment = ModeratorPayment.objects.create(
