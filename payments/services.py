@@ -1374,3 +1374,136 @@ def record_payment_group(*, moderator, director, mpesa_reference, amount):
         "amount_applied": amount - remaining,
         "amount_remaining": remaining,
     }
+
+def recalculate_unpaid_rates(*, moderator=None, apply=True):
+    """
+    Recalculate unpaid ModeratorPayment records using the current
+    ChatRateTier card.
+
+    Args:
+        moderator: limit to one moderator (None = all unpaid records)
+        apply: if True, write changes to DB; if False, preview only
+
+    Returns:
+        dict with:
+            mode: "PREVIEW" | "APPLY"
+            records: list of {id, moderator_username, week_start, week_end, payable_chats, old_rate, new_rate, old_earned, new_earned, changed}
+            total_before: Decimal
+            total_after: Decimal
+            delta: Decimal
+            changed_count: int
+    """
+    qs = (
+        ModeratorPayment.objects
+        .filter(
+            status__in=(
+                ModeratorPayment.Status.UNPAID,
+                ModeratorPayment.Status.PARTIALLY_PAID,
+            )
+        )
+        .select_related("moderator")
+        .order_by("moderator__username", "payment_week_start")
+    )
+
+    if moderator is not None:
+        qs = qs.filter(moderator=moderator)
+
+    records = list(qs)
+
+    total_before = Decimal("0.00")
+    total_after = Decimal("0.00")
+    result_records = []
+
+    for mp in records:
+        # Get the current rate from the global ChatRateTier card
+        try:
+            tier = get_applicable_rate_tier(
+                chats_responded=mp.payable_chats,
+                operating_date=mp.payment_week_end,
+            )
+            new_rate = tier.rate_per_chat
+        except Exception:
+            new_rate = mp.rate_per_chat or Decimal("0.00")
+
+        old_earned = mp.earned_amount or Decimal("0.00")
+        new_earned = (Decimal(mp.payable_chats) * new_rate).quantize(Decimal("0.01"))
+        new_outstanding = (new_earned - (mp.amount_paid or Decimal("0.00"))).quantize(Decimal("0.01"))
+
+        total_before += old_earned
+        total_after += new_earned
+
+        result_records.append({
+            "id": mp.id,
+            "moderator_username": mp.moderator.username,
+            "moderator_id": mp.moderator_id,
+            "week_start": mp.payment_week_start,
+            "week_end": mp.payment_week_end,
+            "payable_chats": mp.payable_chats,
+            "old_rate": mp.rate_per_chat or Decimal("0.00"),
+            "new_rate": new_rate,
+            "old_earned": old_earned,
+            "new_earned": new_earned,
+            "new_outstanding": new_outstanding,
+            "changed": old_earned != new_earned,
+            "_mp": mp,  # hold reference for apply phase
+        })
+
+    changed = [r for r in result_records if r["changed"]]
+
+    if apply and changed:
+        from django.utils import timezone as _tz
+        now = _tz.localtime()
+
+        with transaction.atomic():
+            for r in changed:
+                mp = r["_mp"]
+                existing_log = mp.rate_reconciliation or {}
+                if not isinstance(existing_log, dict):
+                    existing_log = {"entries": existing_log}
+                entries = existing_log.get("entries", [])
+                if not isinstance(entries, list):
+                    entries = []
+                entries.append({
+                    "old_earned": str(r["old_earned"]),
+                    "new_earned": str(r["new_earned"]),
+                    "old_rate": str(r["old_rate"]),
+                    "new_rate": str(r["new_rate"]),
+                    "reason": "recalculated at current ChatRateTier",
+                    "applied_at": now.isoformat(),
+                })
+                existing_log["entries"] = entries
+
+                mp.earned_amount = r["new_earned"]
+                mp.outstanding_amount = r["new_outstanding"]
+                mp.rate_per_chat = r["new_rate"]
+                mp.chat_earnings = r["new_earned"]
+                mp.rate_reconciliation = existing_log
+
+                if r["new_outstanding"] <= Decimal("0.00") and (mp.amount_paid or Decimal("0.00")) > Decimal("0.00"):
+                    mp.outstanding_amount = Decimal("0.00")
+                    mp.status = ModeratorPayment.Status.PAID
+                elif (mp.amount_paid or Decimal("0.00")) > Decimal("0.00"):
+                    mp.status = ModeratorPayment.Status.PARTIALLY_PAID
+
+                mp.save(update_fields=[
+                    "earned_amount",
+                    "outstanding_amount",
+                    "rate_per_chat",
+                    "chat_earnings",
+                    "rate_reconciliation",
+                    "status",
+                    "updated_at",
+                ])
+
+    # Strip the private _mp reference before returning
+    for r in result_records:
+        r.pop("_mp", None)
+
+    return {
+        "mode": "APPLY" if apply else "PREVIEW",
+        "records": result_records,
+        "total_before": total_before,
+        "total_after": total_after,
+        "delta": total_after - total_before,
+        "changed_count": len(changed),
+    }
