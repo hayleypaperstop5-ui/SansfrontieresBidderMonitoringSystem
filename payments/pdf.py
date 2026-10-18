@@ -1,4 +1,4 @@
-"""
+﻿"""
 PDF payment statement generation for ModeratorPayment records.
 
 Uses ReportLab (pure Python) to render a moderated PDF with:
@@ -104,7 +104,7 @@ def build_payment_statement_pdf(payment, rows, breakdown_display, carried_displa
     story.append(Paragraph("Earnings Summary", h2))
     earnings_data = [
         ["Payable Chats", "Chat Earnings", "Bonus", "Total Earned"],
-        [_fmt(payment.payable_chats), f"KES {_fmt(payment.chat_earnings)}",
+        [_fmt(payment.payable_chats), f"KES {_fmt(payment.earned_amount - (payment.bonus_earned or 0))}",
          f"KES {_fmt(payment.bonus_earned)}", f"KES {_fmt(payment.earned_amount)}"],
     ]
     earnings_table = Table(earnings_data, colWidths=[40*mm, 40*mm, 40*mm, 45*mm])
@@ -120,7 +120,39 @@ def build_payment_statement_pdf(payment, rows, breakdown_display, carried_displa
     story.append(earnings_table)
 
     # ---------- Per-Player Breakdown ----------
-    if breakdown_display:
+    # If the payment has been recalculated, the historical player_chat_rate_breakdown
+    # is now stale. Show a single-row breakdown using the current rate instead.
+    has_recalculation = bool(
+        payment.rate_reconciliation and 
+        isinstance(payment.rate_reconciliation, dict) and 
+        payment.rate_reconciliation.get("entries")
+    )
+
+    if has_recalculation:
+        # Show current-rate breakdown
+        story.append(Paragraph("Current Rate Breakdown", h2))
+        bp_data = [["Payable Chats", "Rate", "Subtotal"]]
+        bp_data.append([
+            str(payment.payable_chats),
+            _fmt(payment.rate_per_chat),
+            f"KES {_fmt(payment.earned_amount - (payment.bonus_earned or 0))}",
+        ])
+        bp_table = Table(bp_data, colWidths=[50*mm, 30*mm, 50*mm])
+        bp_table.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#e2e8f0")),
+            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+            ("FONTSIZE", (0, 0), (-1, -1), 9),
+            ("ALIGN", (1, 0), (-1, -1), "RIGHT"),
+            ("GRID", (0, 0), (-1, -1), 0.3, colors.HexColor("#cbd5e1")),
+        ]))
+        story.append(bp_table)
+        story.append(Spacer(1, 6))
+        story.append(Paragraph(
+            "<i>This payment was recalculated at current rates. The original "
+            "per-player breakdown is preserved in the audit log.</i>", 
+            small
+        ))
+    elif breakdown_display:
         story.append(Paragraph("Per-Player Rate Breakdown", h2))
         bp_data = [["Player", "Qualifying Chats", "Rate", "Subtotal"]]
         for r in breakdown_display:

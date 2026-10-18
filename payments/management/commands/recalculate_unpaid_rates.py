@@ -73,67 +73,26 @@ class Command(BaseCommand):
         changes = []
 
         for mp in records:
-            # Get the player's total chats for the record's week (across all moderators)
-            player = mp.player if hasattr(mp, "player") else None
-            # ModeratorPayment doesn't have a direct `player` — get from the consumed records
-            from payments.models import PaymentRecord
-            consumed = PaymentRecord.objects.filter(consumed_by=mp)
-            if not consumed.exists():
-                self.stdout.write(self.style.NOTICE(
-                    f"  Skipping #{mp.id} ({mp.moderator.username}, "
-                    f"{mp.payment_week_start}): no consumed records (historical, cannot recompute rate)"
-                ))
-                continue
+            from payments.services import get_applicable_rate_tier
 
-            # Determine the applicable player from consumed records
-            # If multiple players were consumed, use the aggregate — but for our rate
-            # system, the player-specific total matters. This block simplifies:
-            # if all consumed records are for the same player, use that; otherwise
-            # use a default of "moderator's total chats in the week".
-            players_involved = set(pr.coverage_session.player_id for pr in consumed.select_related("coverage_session"))
-            if len(players_involved) == 1:
-                player_id = players_involved.pop()
-                player = Player.objects.filter(pk=player_id).first()
-                if not player:
-                    self.stdout.write(self.style.WARNING(f"  Skipping #{mp.id}: player not found"))
-                    continue
-                # Get player's total chats that week
-                week_total = (
-                    PaymentRecord.objects
-                    .filter(
-                        coverage_session__player=player,
-                        coverage_session__operating_date__gte=mp.payment_week_start,
-                        coverage_session__operating_date__lte=mp.payment_week_end,
-                    )
-                    .aggregate(total=__import__("django.db.models", fromlist=["Sum"]).Sum("chats_responded"))
-                    ["total"] or 0
+            # Rate is always based on the chats being paid for this record,
+            # looked up against the global ChatRateTier card. This matches
+            # the "higher chats = higher rate" design without requiring
+            # per-player rate differentiation.
+            try:
+                tier = get_applicable_rate_tier(
+                    chats_responded=mp.payable_chats,
+                    operating_date=mp.payment_week_end,
                 )
-                try:
-                    tier = get_applicable_player_chat_rate_tier(
-                        player=player,
-                        chats_responded=week_total,
-                        operating_date=mp.payment_week_end,
-                    )
-                    new_rate = tier.rate_per_chat
-                except Exception as exc:
-                    self.stdout.write(self.style.WARNING(
-                        f"  Skipping #{mp.id}: rate lookup failed ({exc})"
-                    ))
-                    continue
-            else:
-                # Multi-player records — recompute using aggregate = payable_chats
-                try:
-                    from payments.services import get_applicable_rate_tier
-                    tier = get_applicable_rate_tier(
-                        chats_responded=mp.payable_chats,
-                        operating_date=mp.payment_week_end,
-                    )
-                    new_rate = tier.rate_per_chat
-                except Exception as exc:
-                    self.stdout.write(self.style.WARNING(
-                        f"  Skipping #{mp.id}: rate lookup failed ({exc})"
-                    ))
-                    continue
+                new_rate = tier.rate_per_chat
+                rate_basis = f"global (payable_chats={mp.payable_chats})"
+            except Exception as exc:
+                new_rate = mp.rate_per_chat or Decimal("0.00")
+                rate_basis = f"stored fallback ({exc})"
+
+            if new_rate is None:
+                new_rate = Decimal("0.00")
+                rate_basis = "unresolved (rate 0.00)"
 
             old_earned = mp.earned_amount or Decimal("0.00")
             old_rate = mp.rate_per_chat or Decimal("0.00")
@@ -149,7 +108,8 @@ class Command(BaseCommand):
             self.stdout.write(
                 f"      {mp.payable_chats} chats: {old_rate} → {new_rate} "
                 f"| earned {old_earned} → {new_earned} "
-                f"| outstanding → {new_outstanding}"
+                f"| outstanding → {new_outstanding} "
+                f"| basis: {rate_basis}"
             )
 
             if old_earned != new_earned:
@@ -191,6 +151,11 @@ class Command(BaseCommand):
                 mp.earned_amount = new_earned
                 mp.outstanding_amount = new_outstanding
                 mp.rate_per_chat = new_rate
+                mp.chat_earnings = new_earned  # keep chat_earnings in sync with earned_amount
+                # Note: player_chat_rate_breakdown is preserved as historical record
+                # of what rates applied when the payment was originally computed.
+                # The PDF should display the CURRENT rate from rate_per_chat, not the
+                # historical breakdown, to reflect the recalculated state.
                 mp.rate_reconciliation = existing_log
 
                 # If fully paid after recompute, mark PAID
@@ -204,6 +169,7 @@ class Command(BaseCommand):
                     "earned_amount",
                     "outstanding_amount",
                     "rate_per_chat",
+                    "chat_earnings",
                     "rate_reconciliation",
                     "status",
                     "updated_at",
