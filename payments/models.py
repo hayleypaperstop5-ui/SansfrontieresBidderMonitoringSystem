@@ -153,6 +153,16 @@ class ModeratorPayment(models.Model):
         help_text="M-Pesa transaction reference entered by the Director.",
     )
 
+    rate_reconciliation = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text=(
+            "Audit trail of rate recalculations applied to this payment. "
+            "Each entry records old/new earned amounts, old/new rates, "
+            "reason, and timestamp."
+        ),
+    )
+
     amount_paid = models.DecimalField(
         max_digits=12,
         decimal_places=2,

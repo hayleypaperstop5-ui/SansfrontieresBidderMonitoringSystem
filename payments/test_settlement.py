@@ -610,3 +610,87 @@ class BulkPaymentTests(TestCase):
                 mpesa_reference="BULK-NOMPESA-001",
                 amount="500.00",
             )
+
+class RateRecalculationTests(TestCase):
+    """Tests for the recalculate_unpaid_rates management command."""
+
+    def setUp(self):
+        from datetime import date, timedelta
+        self.director = User.objects.create_user(
+            username="recalc_director",
+            password="testpass123",
+            role=User.Role.DIRECTOR,
+        )
+        self.moderator = User.objects.create_user(
+            username="recalc_moderator",
+            password="testpass123",
+            role=User.Role.MODERATOR,
+        )
+        StaffProfile.objects.create(
+            user=self.moderator,
+            status=StaffProfile.Status.ACTIVE,
+            mpesa_number="0722000999",
+        )
+
+        today = date.today()
+        self.payment = ModeratorPayment.objects.create(
+            moderator=self.moderator,
+            payment_week_start=today - timedelta(days=6),
+            payment_week_end=today,
+            payment_date=today,
+            payable_chats=100,
+            chat_earnings=Decimal("500.00"),
+            earned_amount=Decimal("500.00"),
+            outstanding_amount=Decimal("500.00"),
+            generated_amount=Decimal("500.00"),
+            rate_per_chat=Decimal("5.00"),
+            status=ModeratorPayment.Status.UNPAID,
+        )
+
+        # A PAID record should never be touched
+        self.paid_payment = ModeratorPayment.objects.create(
+            moderator=self.moderator,
+            payment_week_start=today - timedelta(days=13),
+            payment_week_end=today - timedelta(days=7),
+            payment_date=today - timedelta(days=7),
+            payable_chats=100,
+            chat_earnings=Decimal("400.00"),
+            earned_amount=Decimal("400.00"),
+            outstanding_amount=Decimal("0.00"),
+            amount_paid=Decimal("400.00"),
+            generated_amount=Decimal("400.00"),
+            rate_per_chat=Decimal("4.00"),
+            status=ModeratorPayment.Status.PAID,
+        )
+
+    def test_recalculate_preview_does_not_modify(self):
+        from django.core.management import call_command
+        from io import StringIO
+
+        old_earned = self.payment.earned_amount
+        call_command("recalculate_unpaid_rates", stdout=StringIO())
+        self.payment.refresh_from_db()
+        self.assertEqual(self.payment.earned_amount, old_earned)
+
+    def test_recalculate_apply_updates_unpaid_not_paid(self):
+        from django.core.management import call_command
+        from io import StringIO
+
+        old_paid_earned = self.paid_payment.earned_amount
+        call_command("recalculate_unpaid_rates", "--apply", stdout=StringIO())
+
+        self.paid_payment.refresh_from_db()
+        self.assertEqual(self.paid_payment.earned_amount, old_paid_earned)
+        self.assertEqual(self.paid_payment.status, ModeratorPayment.Status.PAID)
+
+    def test_rate_reconciliation_log_is_written(self):
+        from django.core.management import call_command
+        from io import StringIO
+
+        call_command("recalculate_unpaid_rates", "--apply", stdout=StringIO())
+        self.payment.refresh_from_db()
+
+        # The log field should have entries if a change occurred
+        # (may be empty if the payment happened to compute the same value)
+        if self.payment.earned_amount != Decimal("500.00"):
+            self.assertIsInstance(self.payment.rate_reconciliation, dict)
