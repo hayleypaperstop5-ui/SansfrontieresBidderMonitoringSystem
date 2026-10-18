@@ -1,4 +1,4 @@
-﻿{% load static humanize %}
+{% load static humanize %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -41,26 +41,34 @@
 
   {# Summary cards #}
   <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-    <div class="bg-white rounded-lg shadow p-4">
-      <div class="text-xs uppercase tracking-wider text-slate-400">Total Earned</div>
-      <div class="text-xl font-bold mt-1">KES {{ summary.total_earned|default:0|floatformat:2|intcomma }}</div>
-      <div class="text-xs text-slate-500 mt-1">{{ summary_counts.total }} payments</div>
-    </div>
-    <div class="bg-white rounded-lg shadow p-4">
-      <div class="text-xs uppercase tracking-wider text-slate-400">Total Paid</div>
-      <div class="text-xl font-bold mt-1 text-green-700">KES {{ summary.total_paid|default:0|floatformat:2|intcomma }}</div>
-      <div class="text-xs text-slate-500 mt-1">{{ summary_counts.paid }} paid</div>
-    </div>
-    <div class="bg-white rounded-lg shadow p-4">
-      <div class="text-xs uppercase tracking-wider text-slate-400">Outstanding</div>
-      <div class="text-xl font-bold mt-1 text-red-700">KES {{ summary.total_outstanding|default:0|floatformat:2|intcomma }}</div>
-      <div class="text-xs text-slate-500 mt-1">{{ summary_counts.unpaid }} unpaid</div>
-    </div>
-    <div class="bg-white rounded-lg shadow p-4">
-      <div class="text-xs uppercase tracking-wider text-slate-400">Avg per Payment</div>
-      <div class="text-xl font-bold mt-1">KES {{ summary.avg|default:0|floatformat:2|intcomma }}</div>
-      <div class="text-xs text-slate-500 mt-1">across all records</div>
-    </div>
+    <a href="?tab=all" style="text-decoration:none;color:inherit;">
+      <div class="bg-white rounded-lg shadow p-4 hover:shadow-md transition cursor-pointer">
+        <div class="text-xs uppercase tracking-wider text-slate-400">Total Earned</div>
+        <div class="text-xl font-bold mt-1">KES {{ summary.total_earned|default:0|floatformat:2|intcomma }}</div>
+        <div class="text-xs text-slate-500 mt-1">{{ summary_counts.total }} payments</div>
+      </div>
+    </a>
+    <a href="?tab=paid" style="text-decoration:none;color:inherit;">
+      <div class="bg-white rounded-lg shadow p-4 hover:shadow-md transition cursor-pointer">
+        <div class="text-xs uppercase tracking-wider text-slate-400">Total Paid</div>
+        <div class="text-xl font-bold mt-1 text-green-700">KES {{ summary.total_paid|default:0|floatformat:2|intcomma }}</div>
+        <div class="text-xs text-slate-500 mt-1">{{ summary_counts.paid }} paid</div>
+      </div>
+    </a>
+    <a href="?tab=unpaid" style="text-decoration:none;color:inherit;">
+      <div class="bg-white rounded-lg shadow p-4 hover:shadow-md transition cursor-pointer">
+        <div class="text-xs uppercase tracking-wider text-slate-400">Outstanding</div>
+        <div class="text-xl font-bold mt-1 text-red-700">KES {{ summary.total_outstanding|default:0|floatformat:2|intcomma }}</div>
+        <div class="text-xs text-slate-500 mt-1">{{ summary_counts.unpaid }} unpaid</div>
+      </div>
+    </a>
+    <a href="?tab=all" style="text-decoration:none;color:inherit;">
+      <div class="bg-white rounded-lg shadow p-4 hover:shadow-md transition cursor-pointer">
+        <div class="text-xs uppercase tracking-wider text-slate-400">Avg per Payment</div>
+        <div class="text-xl font-bold mt-1">KES {{ summary.avg|default:0|floatformat:2|intcomma }}</div>
+        <div class="text-xs text-slate-500 mt-1">across all records</div>
+      </div>
+    </a>
   </div>
 
   {# Tabs #}
