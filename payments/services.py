@@ -1210,12 +1210,15 @@ def record_payment(*, payment, director, mpesa_reference, amount):
         f"{payment.payment_week_start.strftime('%d %b %Y')} - "
         f"{payment.payment_week_end.strftime('%d %b %Y')}"
     )
+    pdf_url = f"/payments/payroll/settle/{payment.id}/pdf/"
+
     if payment.status == ModeratorPayment.Status.PAID:
         title = "Payment Received"
         message = (
             f"Your payment of KES {payment.amount_paid} for the period "
             f"{period} has been recorded. "
-            f"M-Pesa reference: {payment.mpesa_reference}."
+            f"M-Pesa reference: {payment.mpesa_reference}. "
+            f"Download your statement: {pdf_url}"
         )
     else:
         title = "Partial Payment Received"
@@ -1223,7 +1226,8 @@ def record_payment(*, payment, director, mpesa_reference, amount):
             f"A partial payment of KES {amount} for the period {period} "
             f"has been recorded. Remaining outstanding: "
             f"KES {payment.outstanding_amount}. "
-            f"M-Pesa reference: {payment.mpesa_reference}."
+            f"M-Pesa reference: {payment.mpesa_reference}. "
+            f"Download your statement: {pdf_url}"
         )
 
     Notification.objects.create(
@@ -1342,11 +1346,14 @@ def record_payment_group(*, moderator, director, mpesa_reference, amount):
             f"{mp.payment_week_start.strftime('%d %b %Y')} - "
             f"{mp.payment_week_end.strftime('%d %b %Y')}"
         )
+        pdf_url = f"/payments/payroll/settle/{mp.id}/pdf/"
+
         if mp.status == ModeratorPayment.Status.PAID:
             title = "Payment Received"
             msg = (
                 f"Your payment of KES {applied} for the period {period} "
-                f"has been recorded. M-Pesa reference: {mpesa_reference}."
+                f"has been recorded. M-Pesa reference: {mpesa_reference}. "
+                f"Download your statement: {pdf_url}"
             )
         else:
             title = "Partial Payment Received"
@@ -1354,7 +1361,8 @@ def record_payment_group(*, moderator, director, mpesa_reference, amount):
                 f"A partial payment of KES {applied} for the period {period} "
                 f"has been recorded. Remaining outstanding: "
                 f"KES {mp.outstanding_amount}. "
-                f"M-Pesa reference: {mpesa_reference}."
+                f"M-Pesa reference: {mpesa_reference}. "
+                f"Download your statement: {pdf_url}"
             )
 
         notification_list.append(Notification(

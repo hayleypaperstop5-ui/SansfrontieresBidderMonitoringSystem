@@ -81,7 +81,10 @@
       </tbody>
     </table>
     {% else %}
-    <p class="text-slate-500 text-sm">No unpaid records. All settled!</p>
+    <div style="padding:16px;background:#ecfdf5;border:1px solid #a7f3d0;border-radius:8px;">
+      <p style="color:#065f46;font-weight:600;margin:0;">No unpaid records. All settled!</p>
+      <p style="color:#065f46;font-size:14px;margin:8px 0 0 0;">View paid records or download a settlement receipt below.</p>
+    </div>
     {% endif %}
   </div>
 
@@ -91,6 +94,15 @@
        style="display:inline-block;background:#059669;color:#fff;text-decoration:none;padding:10px 20px;border-radius:10px;font-weight:700;font-size:14px;box-shadow:0 2px 6px rgba(5,150,105,0.25);"
        target="_blank">
       Download Consolidated Statement (PDF)
+    </a>
+  </div>
+  {% else %}
+  <div style="margin: 16px 0;">
+    <p style="color:#64748b;font-size:14px;margin:0 0 8px 0;">All records are paid. Download the settlement receipts:</p>
+    <a href="{% url 'payments:download_moderator_statement_pdf' moderator.id %}"
+       style="display:inline-block;background:#059669;color:#fff;text-decoration:none;padding:10px 20px;border-radius:10px;font-weight:700;font-size:14px;box-shadow:0 2px 6px rgba(5,150,105,0.25);"
+       target="_blank">
+      Download Statement (PDF)
     </a>
   </div>
   {% endif %}

@@ -223,22 +223,75 @@ def build_payment_statement_pdf(payment, rows, breakdown_display, carried_displa
         ]))
         story.append(cf_table)
 
-    # ---------- Payment Record ----------
-    story.append(Paragraph("Payment Record", h2))
-    if payment.status in ("PAID", "PARTIALLY_PAID"):
+    # ---------- Payment Record / Settlement ----------
+    from payments.models import PaymentSettings as _PS
+    from datetime import date as _date_cls, timedelta as _td
+
+    # Compute "next pay day" — only shown when this moderator has no other unpaid records
+    other_unpaid_exists = False
+    if payment.status == "PAID":
+        # Check if the moderator has OTHER unpaid records
+        other_unpaid_exists = (
+            type(payment).objects
+            .filter(moderator=payment.moderator)
+            .exclude(pk=payment.pk)
+            .exclude(status="PAID")
+            .exists()
+        )
+
+    settings_obj = _PS.objects.first()
+    pay_day_num = settings_obj.payment_day if settings_obj else 3
+    _weekday_names = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+
+    def _next_pay_day(from_date):
+        days_ahead = (pay_day_num - from_date.weekday()) % 7
+        if days_ahead == 0:
+            days_ahead = 7
+        return from_date + _td(days=days_ahead)
+
+    if payment.status == "PAID":
+        # Full settlement receipt
+        story.append(Paragraph("Payment Settlement (Paid in Full)", h2))
+        next_pd = _next_pay_day(_date_cls.today())
         pay_data = [
             ["Amount Paid", f"KES {_fmt(payment.amount_paid)}"],
-            ["Outstanding", f"KES {_fmt(payment.outstanding_amount)}"],
             ["M-Pesa Reference", payment.mpesa_reference or "—"],
-            ["Recorded At", _datetime_str(payment.paid_at)],
-            ["Recorded By", (payment.paid_by.get_full_name() or payment.paid_by.username) if payment.paid_by else "—"],
+            ["Paid On", _datetime_str(payment.paid_at)],
+            ["Paid By", (payment.paid_by.get_full_name() or payment.paid_by.username) if payment.paid_by else "—"],
+            ["Status", "PAID"],
+            ["Outstanding on this record", "KES 0.00"],
         ]
+        if other_unpaid_exists:
+            pay_data.append(["Note", "You have other unpaid records — see your consolidated statement."])
+        else:
+            pay_data.append(["Next Pay Day", f"{_weekday_names[next_pd.weekday()]}, {next_pd.strftime('%d %b %Y')}"])
+
+    elif payment.status == "PARTIALLY_PAID":
+        # Partial settlement receipt
+        story.append(Paragraph("Payment Settlement (Partially Paid)", h2))
+        next_pd = _next_pay_day(_date_cls.today())
+        pay_data = [
+            ["Amount Paid", f"KES {_fmt(payment.amount_paid)}"],
+            ["M-Pesa Reference", payment.mpesa_reference or "—"],
+            ["Paid On", _datetime_str(payment.paid_at)],
+            ["Paid By", (payment.paid_by.get_full_name() or payment.paid_by.username) if payment.paid_by else "—"],
+            ["Status", "PARTIALLY PAID"],
+            ["Pending Amount", f"KES {_fmt(payment.outstanding_amount)}"],
+        ]
+        if other_unpaid_exists:
+            pay_data.append(["Note", "You have additional unpaid records — see your consolidated statement."])
+        else:
+            pay_data.append(["Next Pay Day", f"{_weekday_names[next_pd.weekday()]}, {next_pd.strftime('%d %b %Y')}"])
+
     else:
+        # Not yet paid — keep the original presentation
+        story.append(Paragraph("Payment Record", h2))
         pay_data = [
             ["Outstanding", f"KES {_fmt(payment.outstanding_amount)}"],
             ["Status", "Not yet paid"],
         ]
-    pay_table = Table(pay_data, colWidths=[50*mm, 115*mm])
+
+    pay_table = Table(pay_data, colWidths=[55*mm, 110*mm])
     pay_table.setStyle(TableStyle([
         ("FONTNAME", (0, 0), (0, -1), "Helvetica-Bold"),
         ("FONTSIZE", (0, 0), (-1, -1), 10),
