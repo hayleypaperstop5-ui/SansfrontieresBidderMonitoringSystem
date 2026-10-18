@@ -1066,11 +1066,21 @@ def download_moderator_statement_pdf(request, moderator_id):
         .order_by("payment_week_start", "id")
     )
 
-    if not unpaid:
-        messages.info(request, "This moderator has no unpaid records.")
+    # If there are no unpaid records, fall back to the most recent paid records
+    if unpaid:
+        statement_records = unpaid
+    else:
+        statement_records = list(
+            ModeratorPayment.objects
+            .filter(moderator=moderator, status=ModeratorPayment.Status.PAID)
+            .order_by("-payment_week_start", "-id")[:10]
+        )
+
+    if not statement_records:
+        messages.info(request, "This moderator has no payment records.")
         return redirect("payments:settle_moderator_payments", moderator_id=moderator.id)
 
-    buffer = build_moderator_statement_pdf(moderator, unpaid)
+    buffer = build_moderator_statement_pdf(moderator, statement_records)
     filename = f"payment-statement-{moderator.username}.pdf"
     response = HttpResponse(buffer.getvalue(), content_type="application/pdf")
     response["Content-Disposition"] = f'attachment; filename="{filename}"'
