@@ -659,7 +659,6 @@ def director_dashboard(request):
     current_rate = None
 
     try:
-        from coverage.models import CoverageSession
         from players.models import PlayerChatRateTier
         from payments.services import get_applicable_player_chat_rate_tier
         from django.db.models import F, Sum as _Sum
