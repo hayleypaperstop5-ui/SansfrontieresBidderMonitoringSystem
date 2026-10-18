@@ -258,3 +258,277 @@ def build_payment_statement_pdf(payment, rows, breakdown_display, carried_displa
     doc.build(story)
     buffer.seek(0)
     return buffer
+
+def build_moderator_statement_pdf(moderator, unpaid_payments):
+    """
+    Build a single consolidated PDF for all UNPAID / PARTIALLY_PAID
+    ModeratorPayment records for one moderator.
+    """
+    from io import BytesIO
+    from reportlab.lib import colors
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib.units import mm
+    from reportlab.platypus import (
+        SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer,
+    )
+    from decimal import Decimal
+    from datetime import date as _date
+
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=A4,
+        leftMargin=18*mm,
+        rightMargin=18*mm,
+        topMargin=18*mm,
+        bottomMargin=18*mm,
+        title=f"Payment Statement for {moderator.get_full_name() or moderator.username}",
+    )
+
+    styles = getSampleStyleSheet()
+    h1 = ParagraphStyle("h1", parent=styles["Heading1"], fontSize=16, spaceAfter=4, alignment=1)
+    h2 = ParagraphStyle("h2", parent=styles["Heading2"], fontSize=12, spaceBefore=10, spaceAfter=6)
+    small = ParagraphStyle("small", parent=styles["Normal"], fontSize=9, textColor=colors.grey)
+
+    story = []
+
+    mod_name = moderator.get_full_name() or moderator.username
+    profile = getattr(moderator, "staff_profile", None)
+    mpesa = (profile.mpesa_number or "") if profile else ""
+
+    # Header
+    story.append(Paragraph("Sansfrontieres Chat Moderations Payment Statement", h1))
+    subtitle_style = ParagraphStyle("subtitle", parent=small, alignment=1, spaceAfter=8)
+    story.append(Paragraph(
+        f"Statement for {mod_name} &nbsp;|&nbsp; Issued {_date.today().strftime('%d %b %Y')}",
+        subtitle_style,
+    ))
+    story.append(Spacer(1, 8))
+
+    header_data = [
+        ["Moderator", mod_name],
+        ["Username", moderator.username],
+        ["M-Pesa Number", mpesa or "Not set"],
+        ["Statement Covers", f"{len(unpaid_payments)} unpaid record(s)"],
+    ]
+    header_table = Table(header_data, colWidths=[45*mm, 120*mm])
+    header_table.setStyle(TableStyle([
+        ("FONTNAME", (0, 0), (0, -1), "Helvetica-Bold"),
+        ("FONTSIZE", (0, 0), (-1, -1), 10),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+        ("TOPPADDING", (0, 0), (-1, -1), 4),
+    ]))
+    story.append(header_table)
+
+    # Summary
+    total_chats = sum((mp.payable_chats or 0) for mp in unpaid_payments)
+    total_earned = sum((mp.earned_amount or Decimal("0.00")) for mp in unpaid_payments)
+    total_paid = sum((mp.amount_paid or Decimal("0.00")) for mp in unpaid_payments)
+    total_outstanding = sum((mp.outstanding_amount or Decimal("0.00")) for mp in unpaid_payments)
+
+    story.append(Paragraph("Summary", h2))
+    summary_data = [
+        ["Total Records", "Total Chats", "Total Earned", "Total Paid", "Outstanding"],
+        [
+            str(len(unpaid_payments)),
+            _fmt(total_chats),
+            f"KES {_fmt(total_earned)}",
+            f"KES {_fmt(total_paid)}",
+            f"KES {_fmt(total_outstanding)}",
+        ],
+    ]
+    summary_table = Table(summary_data, colWidths=[30*mm, 30*mm, 40*mm, 35*mm, 35*mm])
+    summary_table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#e2e8f0")),
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("FONTSIZE", (0, 0), (-1, -1), 9),
+        ("ALIGN", (0, 0), (-1, -1), "RIGHT"),
+        ("GRID", (0, 0), (-1, -1), 0.3, colors.HexColor("#cbd5e1")),
+        ("TOPPADDING", (0, 0), (-1, -1), 5),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+    ]))
+    story.append(summary_table)
+
+    # Per-record breakdown
+    story.append(Paragraph("Per-Record Breakdown", h2))
+    record_data = [["Period", "Payable Chats", "Rate", "Earned", "Paid", "Outstanding"]]
+    for mp in unpaid_payments:
+        record_data.append([
+            f"{mp.payment_week_start.strftime('%d %b')} – {mp.payment_week_end.strftime('%d %b %Y')}",
+            str(mp.payable_chats),
+            _fmt(mp.rate_per_chat),
+            f"KES {_fmt(mp.earned_amount)}",
+            f"KES {_fmt(mp.amount_paid)}",
+            f"KES {_fmt(mp.outstanding_amount)}",
+        ])
+    record_table = Table(record_data, colWidths=[48*mm, 22*mm, 18*mm, 27*mm, 25*mm, 30*mm])
+    record_table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#e2e8f0")),
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("FONTSIZE", (0, 0), (-1, -1), 8),
+        ("ALIGN", (1, 0), (-1, -1), "RIGHT"),
+        ("GRID", (0, 0), (-1, -1), 0.3, colors.HexColor("#cbd5e1")),
+        ("TOPPADDING", (0, 0), (-1, -1), 3),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+    ]))
+    story.append(record_table)
+
+    # ---------- Source Sessions ----------
+    from payments.models import PaymentRecord
+    from coverage.models import EndOfSessionReport
+    from players.models import Player
+    from payments.models import PaymentSettings
+
+    payment_ids = [mp.id for mp in unpaid_payments]
+    source_records_qs = (
+        PaymentRecord.objects
+        .filter(consumed_by_id__in=payment_ids)
+        .select_related("coverage_session", "coverage_session__player")
+        .order_by("coverage_session__operating_date", "coverage_session__id")
+    )
+    source_records = list(source_records_qs)
+
+    session_ids = [pr.coverage_session_id for pr in source_records]
+    submitted_map = dict(
+        EndOfSessionReport.objects
+        .filter(coverage_session_id__in=session_ids)
+        .values_list("coverage_session_id", "submitted_at")
+    )
+
+    # Detect which payments lack consumed_by (historical)
+    payments_with_sessions = set(
+        pr.consumed_by_id for pr in source_records
+    )
+    historical_payments = [
+        mp for mp in unpaid_payments if mp.id not in payments_with_sessions
+    ]
+
+    if source_records:
+        story.append(Paragraph("Source Sessions", h2))
+        sess_data = [["Session Code", "Player", "Operating Date", "Submitted", "Chats", "Processed"]]
+        for pr in source_records:
+            session = pr.coverage_session
+            submitted_at = submitted_map.get(session.id)
+            sess_data.append([
+                session.session_code or str(session.id),
+                str(session.player),
+                f"{session.operating_date.strftime('%d %b %Y')} ({session.get_session_type_display()})",
+                submitted_at.strftime("%d %b %Y %H:%M") if submitted_at else "—",
+                str(pr.chats_responded),
+                str(pr.payroll_processed_chats),
+            ])
+        sess_table = Table(sess_data, colWidths=[22*mm, 30*mm, 40*mm, 32*mm, 18*mm, 20*mm])
+        sess_table.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#e2e8f0")),
+            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+            ("FONTSIZE", (0, 0), (-1, -1), 8),
+            ("ALIGN", (4, 0), (-1, -1), "RIGHT"),
+            ("GRID", (0, 0), (-1, -1), 0.3, colors.HexColor("#cbd5e1")),
+            ("TOPPADDING", (0, 0), (-1, -1), 3),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+        ]))
+        story.append(sess_table)
+        story.append(Spacer(1, 6))
+
+    if historical_payments:
+        historical_ids = ", ".join(f"#{mp.id}" for mp in historical_payments)
+        story.append(Paragraph(
+            f"<i>Source session details not available for historical record(s): "
+            f"{historical_ids} (created before session linkage).</i>",
+            small,
+        ))
+        story.append(Spacer(1, 6))
+
+    # ---------- Chats Carried Forward ----------
+    # Per distinct player from source records: submitted this week, accumulated unpaid, threshold
+    settings_obj = PaymentSettings.objects.first()
+    threshold = settings_obj.minimum_chats_per_player if settings_obj else 700
+
+    if source_records:
+        player_ids = list(set(pr.coverage_session.player_id for pr in source_records))
+        players = {p.id: p for p in Player.objects.filter(id__in=player_ids)}
+
+        # Determine the "this week" bounds from the most recent unpaid record
+        max_week_end = max(mp.payment_week_end for mp in unpaid_payments)
+        from datetime import timedelta as _td
+        min_week_start = max_week_end - _td(days=6)
+
+        carried_data = [["Player", "Submitted This Week", "Accumulated Unpaid", "Threshold", "Remaining"]]
+        from django.db.models import Sum as _Sum, F as _F
+        for pid in player_ids:
+            player = players.get(pid)
+            if not player:
+                continue
+            week_agg = (
+                PaymentRecord.objects
+                .filter(
+                    coverage_session__player_id=pid,
+                    coverage_session__operating_date__gte=min_week_start,
+                    coverage_session__operating_date__lte=max_week_end,
+                )
+                .aggregate(total=_Sum("chats_responded"))
+            )
+            submitted_this_week = week_agg["total"] or 0
+
+            unpaid_agg = (
+                PaymentRecord.objects
+                .filter(
+                    coverage_session__player_id=pid,
+                    chats_responded__gt=_F("payroll_processed_chats"),
+                )
+                .aggregate(total=_Sum(_F("chats_responded") - _F("payroll_processed_chats")))
+            )
+            accumulated = unpaid_agg["total"] or 0
+
+            carried_data.append([
+                str(player),
+                str(submitted_this_week),
+                str(accumulated),
+                str(threshold),
+                str(max(0, threshold - accumulated)),
+            ])
+
+        story.append(Paragraph("Chats Carried Forward", h2))
+        carried_table = Table(carried_data, colWidths=[55*mm, 30*mm, 30*mm, 20*mm, 25*mm])
+        carried_table.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#e2e8f0")),
+            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+            ("FONTSIZE", (0, 0), (-1, -1), 9),
+            ("ALIGN", (1, 0), (-1, -1), "RIGHT"),
+            ("GRID", (0, 0), (-1, -1), 0.3, colors.HexColor("#cbd5e1")),
+            ("TOPPADDING", (0, 0), (-1, -1), 4),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+        ]))
+        story.append(carried_table)
+
+    # Rate reconciliation notes
+    reconciliation_notes = []
+    for mp in unpaid_payments:
+        log = mp.rate_reconciliation or {}
+        entries = log.get("entries", []) if isinstance(log, dict) else []
+        for entry in entries:
+            reconciliation_notes.append(
+                f"Record #{mp.id} ({mp.payment_week_start.strftime('%d %b')} – {mp.payment_week_end.strftime('%d %b %Y')}): "
+                f"rate {entry.get('old_rate')} -> {entry.get('new_rate')}, "
+                f"earned {entry.get('old_earned')} -> {entry.get('new_earned')}"
+            )
+
+    if reconciliation_notes:
+        story.append(Paragraph("Rate Reconciliation Notes", h2))
+        for note in reconciliation_notes:
+            story.append(Paragraph(f"&bull; {note}", small))
+            story.append(Spacer(1, 4))
+
+    # Footer
+    story.append(Spacer(1, 12))
+    story.append(Paragraph(
+        "This statement covers all unpaid payroll records for this moderator. "
+        "Computer-generated at the time of download.",
+        small,
+    ))
+
+    doc.build(story)
+    buffer.seek(0)
+    return buffer
