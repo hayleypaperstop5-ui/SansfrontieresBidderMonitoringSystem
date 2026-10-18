@@ -312,6 +312,24 @@ def build_payment_statement_pdf(payment, rows, breakdown_display, carried_displa
     buffer.seek(0)
     return buffer
 
+def _record_count_label(records):
+    """Return a status-aware count label, e.g. '3 unpaid record(s)' or '2 paid record(s)'."""
+    if not records:
+        return "0 records"
+    unpaid = [r for r in records if r.status not in ("PAID", "PARTIALLY_PAID")]
+    paid = [r for r in records if r.status == "PAID"]
+    partial = [r for r in records if r.status == "PARTIALLY_PAID"]
+    parts = []
+    if unpaid:
+        parts.append(f"{len(unpaid)} unpaid")
+    if partial:
+        parts.append(f"{len(partial)} partially paid")
+    if paid:
+        parts.append(f"{len(paid)} paid")
+    label = " + ".join(parts) if parts else f"{len(records)}"
+    return f"{label} record(s)"
+
+
 def build_moderator_statement_pdf(moderator, unpaid_payments):
     """
     Build a single consolidated PDF for all UNPAID / PARTIALLY_PAID
@@ -363,7 +381,7 @@ def build_moderator_statement_pdf(moderator, unpaid_payments):
         ["Moderator", mod_name],
         ["Username", moderator.username],
         ["M-Pesa Number", mpesa or "Not set"],
-        ["Statement Covers", f"{len(unpaid_payments)} unpaid record(s)"],
+        ["Statement Covers", _record_count_label(unpaid_payments)],
     ]
     header_table = Table(header_data, colWidths=[45*mm, 120*mm])
     header_table.setStyle(TableStyle([
@@ -576,11 +594,25 @@ def build_moderator_statement_pdf(moderator, unpaid_payments):
 
     # Footer
     story.append(Spacer(1, 12))
-    story.append(Paragraph(
-        "This statement covers all unpaid payroll records for this moderator. "
-        "Computer-generated at the time of download.",
-        small,
-    ))
+    has_unpaid = any(r.status not in ("PAID", "PARTIALLY_PAID") for r in unpaid_payments)
+    has_paid = any(r.status == "PAID" for r in unpaid_payments)
+    has_partial = any(r.status == "PARTIALLY_PAID" for r in unpaid_payments)
+    if has_unpaid and (has_paid or has_partial):
+        footer_text = (
+            "This statement covers all selected payroll records for this moderator "
+            "(unpaid and paid). Computer-generated at the time of download."
+        )
+    elif has_paid:
+        footer_text = (
+            "This statement covers paid payroll records for this moderator. "
+            "Computer-generated at the time of download."
+        )
+    else:
+        footer_text = (
+            "This statement covers all unpaid payroll records for this moderator. "
+            "Computer-generated at the time of download."
+        )
+    story.append(Paragraph(footer_text, small))
 
     doc.build(story)
     buffer.seek(0)
