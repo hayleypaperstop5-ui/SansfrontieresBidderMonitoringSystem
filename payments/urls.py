@@ -6,6 +6,9 @@ from . import views
 app_name = "payments"
 
 urlpatterns = [
+    path("recalculate-rates/", views.recalculate_unpaid_rates_view, name="recalculate_rates_all"),
+    path("recalculate-rates/<int:moderator_id>/", views.recalculate_unpaid_rates_view, name="recalculate_rates_moderator"),
+    path("payroll/moderator/<int:moderator_id>/statement.pdf", views.download_moderator_statement_pdf, name="download_moderator_statement_pdf"),
     path("payroll/settle-moderator/<int:moderator_id>/", views.settle_moderator_payments, name="settle_moderator_payments"),
     path("moderator/<int:moderator_id>/reset-mpesa/", views.reset_moderator_mpesa, name="reset_moderator_mpesa"),
     path("moderator/<int:moderator_id>/set-mpesa/", views.set_moderator_mpesa, name="set_moderator_mpesa"),

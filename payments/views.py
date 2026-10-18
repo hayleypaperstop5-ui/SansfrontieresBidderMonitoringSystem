@@ -1049,3 +1049,71 @@ def settle_moderator_payments(request, moderator_id):
             "total_outstanding": total_outstanding,
         },
     )
+
+@role_required(*RATE_MANAGEMENT_ROLES)
+def download_moderator_statement_pdf(request, moderator_id):
+    """Download a consolidated PDF for all unpaid ModeratorPayment records for one moderator."""
+    from django.http import HttpResponse
+    from accounts.models import User
+    from payments.pdf import build_moderator_statement_pdf
+
+    moderator = get_object_or_404(User, pk=moderator_id, role=User.Role.MODERATOR)
+
+    unpaid = list(
+        ModeratorPayment.objects
+        .filter(moderator=moderator)
+        .exclude(status=ModeratorPayment.Status.PAID)
+        .order_by("payment_week_start", "id")
+    )
+
+    if not unpaid:
+        messages.info(request, "This moderator has no unpaid records.")
+        return redirect("payments:settle_moderator_payments", moderator_id=moderator.id)
+
+    buffer = build_moderator_statement_pdf(moderator, unpaid)
+    filename = f"payment-statement-{moderator.username}.pdf"
+    response = HttpResponse(buffer.getvalue(), content_type="application/pdf")
+    response["Content-Disposition"] = f'attachment; filename="{filename}"'
+    return response
+
+@role_required(*RATE_MANAGEMENT_ROLES)
+def recalculate_unpaid_rates_view(request, moderator_id=None):
+    """
+    Recalculate unpaid records at current rates.
+
+    POST-only. If moderator_id is provided, only that moderator's
+    records are recalculated. Otherwise, all unpaid records are.
+    """
+    from django.http import HttpResponseNotAllowed
+    from accounts.models import User
+    from .services import recalculate_unpaid_rates as _recalc_service
+
+    if request.method != "POST":
+        return HttpResponseNotAllowed(["POST"])
+
+    moderator = None
+    target_label = "all moderators"
+    if moderator_id is not None:
+        moderator = get_object_or_404(User, pk=moderator_id, role=User.Role.MODERATOR)
+        target_label = moderator.get_full_name() or moderator.username
+
+    result = _recalc_service(moderator=moderator, apply=True)
+
+    if result["changed_count"] == 0:
+        messages.info(
+            request,
+            f"No changes needed for {target_label}. "
+            "All unpaid records already match current rates.",
+        )
+    else:
+        messages.success(
+            request,
+            f"Recalculated {result['changed_count']} record(s) for {target_label}. "
+            f"Total: KES {result['total_before']:.2f} → KES {result['total_after']:.2f} "
+            f"(change: {result['delta']:+.2f}).",
+        )
+
+    # Redirect back to context
+    if moderator_id is not None:
+        return redirect("payments:settle_moderator_payments", moderator_id=moderator_id)
+    return redirect("payments:payment_console")

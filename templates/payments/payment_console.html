@@ -13,6 +13,14 @@
   <div class="mb-6" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;">
     <a href="{% url 'payments:payroll_review' %}" style="display:inline-block;background:#4f46e5;color:#fff;text-decoration:none;padding:10px 20px;border-radius:10px;font-weight:700;font-size:14px;box-shadow:0 2px 6px rgba(79,70,229,0.25);">Payroll Review</a>
     <a href="{% url 'payments:export_payments_csv' %}" style="display:inline-block;background:#059669;color:#fff;text-decoration:none;padding:10px 20px;border-radius:10px;font-weight:700;font-size:14px;box-shadow:0 2px 6px rgba(5,150,105,0.25);">Download CSV</a>
+    <form method="post" action="{% url 'payments:recalculate_rates_all' %}" style="display:inline-block;margin-left:8px;"
+          onsubmit="return confirm('This will recompute ALL unpaid records at current rates. Old values are preserved in the audit log. Proceed?');">
+      {% csrf_token %}
+      <button type="submit"
+              style="display:inline-block;background:#ea580c;color:#fff;text-decoration:none;padding:10px 20px;border-radius:10px;font-weight:700;font-size:14px;border:none;cursor:pointer;box-shadow:0 2px 6px rgba(234,88,12,0.25);">
+        Recalculate All at Current Rates
+      </button>
+    </form>
   </div>
 
   <div class="mb-6">
