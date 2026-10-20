@@ -1,0 +1,59 @@
+﻿{% extends "base.html" %}
+{% load static %}
+
+{% block content %}
+<div style="max-width:1100px;margin:40px auto;padding:0 20px;">
+    <h1 style="font-size:28px;margin-bottom:8px;">My Reports</h1>
+    <p style="color:#64748b;margin-bottom:24px;">All End-of-Session Reports you have submitted.</p>
+
+    {% if reports %}
+    <div style="background:#fff;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,0.08);overflow:hidden;">
+        <table style="width:100%;border-collapse:collapse;">
+            <thead style="background:#f8fafc;text-align:left;">
+                <tr>
+                    <th style="padding:12px 16px;font-size:12px;text-transform:uppercase;color:#64748b;">Date</th>
+                    <th style="padding:12px 16px;font-size:12px;text-transform:uppercase;color:#64748b;">Player</th>
+                    <th style="padding:12px 16px;font-size:12px;text-transform:uppercase;color:#64748b;">Session</th>
+                    <th style="padding:12px 16px;font-size:12px;text-transform:uppercase;color:#64748b;">Chats</th>
+                    <th style="padding:12px 16px;font-size:12px;text-transform:uppercase;color:#64748b;">Rating</th>
+                    <th style="padding:12px 16px;font-size:12px;text-transform:uppercase;color:#64748b;">Evidence</th>
+                    <th style="padding:12px 16px;font-size:12px;text-transform:uppercase;color:#64748b;">Submitted</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for report in reports %}
+                <tr style="border-top:1px solid #e2e8f0;">
+                    <td style="padding:12px 16px;font-size:14px;">{{ report.coverage_session.operating_date|date:"d M Y" }}</td>
+                    <td style="padding:12px 16px;font-size:14px;">{{ report.coverage_session.player }}</td>
+                    <td style="padding:12px 16px;font-size:14px;">{{ report.coverage_session.get_session_type_display }}</td>
+                    <td style="padding:12px 16px;font-size:14px;font-weight:600;">{{ report.chats_responded }}</td>
+                    <td style="padding:12px 16px;font-size:14px;">{{ report.account_rating }}</td>
+                    <td style="padding:12px 16px;font-size:14px;">
+                        {% if report.screenshot %}
+                            <a href="{% url 'coverage:download_report_evidence' report.id %}" style="color:#1e40af;text-decoration:underline;">Download</a>
+                        {% else %}
+                            <span style="color:#94a3b8;">None</span>
+                        {% endif %}
+                    </td>
+                    <td style="padding:12px 16px;font-size:14px;color:#64748b;">{{ report.submitted_at|date:"d M Y H:i" }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div style="background:#fff;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,0.08);padding:40px;text-align:center;">
+        <p style="color:#64748b;">You have not submitted any reports yet.</p>
+    </div>
+    {% endif %}
+
+    <div style="margin-top:24px;">
+        <a href="{% url 'dashboard:home' %}"
+           style="display:inline-block;padding:12px 24px;background:#059669;color:white;text-decoration:none;border-radius:8px;font-weight:600;font-size:14px;transition:background 0.2s;"
+           onmouseover="this.style.background='#047857'"
+           onmouseout="this.style.background='#059669'">
+            Back to Dashboard
+        </a>
+    </div>
+</div>
+{% endblock %}

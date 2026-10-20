@@ -1,0 +1,77 @@
+﻿{% if pending_continuation_prompt %}
+<div id="continuation-popup-backdrop" style="position:fixed;inset:0;background:rgba(15,23,42,0.7);z-index:9998;display:flex;align-items:center;justify-content:center;padding:20px;">
+  <div style="background:#fff;border-radius:12px;max-width:540px;width:100%;box-shadow:0 20px 60px rgba(15,23,42,0.4);overflow:hidden;z-index:9999;">
+    <div style="background:#d97706;color:#fff;padding:16px 20px;">
+      <h2 style="margin:0;font-size:18px;font-weight:600;">Continue covering {{ pending_continuation_prompt.player }}?</h2>
+      <p style="margin:4px 0 0 0;font-size:13px;opacity:0.95;">
+        Your current session is approaching its hard boundary at
+        <strong>{{ pending_continuation_prompt.continuation_deadline_at|date:"d M Y, H:i" }}</strong>.
+      </p>
+    </div>
+    <div style="padding:20px;">
+      <p style="margin:0 0 12px 0;font-size:14px;color:#374151;">
+        Choose <strong>YES</strong> to continue covering this Player, or <strong>NO</strong> to end the current session.
+      </p>
+      {% if pending_continuation_prompt.session_type == "DAY" %}
+      <div style="padding:12px;background:#fef3c7;border:1px solid #fde68a;border-radius:8px;font-size:13px;color:#92400e;margin-bottom:16px;">
+        <strong>Morning continuation:</strong> If you choose YES, you must submit your End-of-Session Report before 09:00. If you don't respond or don't submit the report, you will be signed out automatically.
+      </div>
+      {% else %}
+      <div style="padding:12px;background:#dbeafe;border:1px solid #bfdbfe;border-radius:8px;font-size:13px;color:#1e40af;margin-bottom:16px;">
+        <strong>Evening continuation:</strong> If you choose YES, you'll continue covering the Player with no report needed. If you choose NO, an End-of-Session Report is required.
+      </div>
+      {% endif %}
+    </div>
+    <div style="padding:14px 20px;background:#f8fafc;border-top:1px solid #e2e8f0;display:flex;justify-content:flex-end;gap:10px;">
+      <button type="button" id="continuation-no"
+              data-url="{% url 'coverage:respond_to_continuation' session_id=pending_continuation_prompt.id response='no' %}"
+              style="background:#fff;color:#991b1b;border:1px solid #fecaca;padding:10px 20px;border-radius:6px;font-size:14px;font-weight:600;cursor:pointer;">
+        NO, end session
+      </button>
+      <button type="button" id="continuation-yes"
+              data-url="{% url 'coverage:respond_to_continuation' session_id=pending_continuation_prompt.id response='yes' %}"
+              style="background:#059669;color:#fff;border:none;padding:10px 20px;border-radius:6px;font-size:14px;font-weight:600;cursor:pointer;">
+        YES, continue covering
+      </button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function() {
+  function sendResponse(btn, url) {
+    var csrf = (document.cookie.match(/csrftoken=([^;]+)/) || [])[1] || "";
+    var buttons = document.querySelectorAll("#continuation-yes, #continuation-no");
+    buttons.forEach(function(b) { b.disabled = true; });
+    btn.textContent = "Submitting...";
+
+    fetch(url, {
+      method: "POST",
+      headers: { "X-CSRFToken": csrf, "X-Requested-With": "XMLHttpRequest" },
+      credentials: "same-origin"
+    }).then(function(r) {
+      return r.json().then(function(data) {
+        if (r.ok) {
+          var backdrop = document.getElementById("continuation-popup-backdrop");
+          if (backdrop) backdrop.remove();
+          if (data.redirect_url) window.location.href = data.redirect_url;
+          else window.location.reload();
+        } else {
+          alert("Error: " + (data.error || "Could not submit response"));
+          buttons.forEach(function(b) { b.disabled = false; });
+          btn.textContent = "Retry";
+        }
+      });
+    }).catch(function() {
+      alert("Network error. Please try again.");
+      buttons.forEach(function(b) { b.disabled = false; });
+    });
+  }
+
+  var yes = document.getElementById("continuation-yes");
+  var no = document.getElementById("continuation-no");
+  if (yes) yes.addEventListener("click", function() { sendResponse(yes, yes.getAttribute("data-url")); });
+  if (no) no.addEventListener("click", function() { sendResponse(no, no.getAttribute("data-url")); });
+})();
+</script>
+{% endif %}
