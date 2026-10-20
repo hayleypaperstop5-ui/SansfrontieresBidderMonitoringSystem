@@ -1,4 +1,4 @@
-from .models import Notification
+﻿from .models import Notification
 
 
 def notification_context(request):
@@ -37,3 +37,38 @@ def pending_credential_disclosure(request):
     )
 
     return {"pending_credential_disclosure": disclosure}
+
+def pending_continuation_prompt(request):
+    """
+    Provide the first CONTINUATION_PENDING coverage session for the logged-in
+    moderator, so a continuation YES/NO popup can be rendered on any page.
+    """
+    from coverage.models import CoverageSession
+
+    if not request.user.is_authenticated:
+        return {}
+
+    role = getattr(request.user, "role", None)
+    if role != "MODERATOR":
+        return {}
+
+    session = (
+        CoverageSession.objects
+        .filter(
+            moderator=request.user,
+            status="CONTINUATION_PENDING",
+            continuation_prompted_at__isnull=False,
+            continuation_response="",
+        )
+        .select_related("player")
+        .order_by("-continuation_prompted_at")
+        .first()
+    )
+
+    return {"pending_continuation_prompt": session}
+
+def current_year(request):
+    """Provide the current year to every template (e.g., for footers)."""
+    from django.utils import timezone
+    return {"current_year": timezone.localtime().year}
+

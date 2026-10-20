@@ -1,13 +1,21 @@
+﻿{% load static %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sansfrontieres Monitoring System</title>
+    <title>Sansfrontieres Chat Moderation</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="icon" type="image/png" href="{% static 'img/logo.png' %}">
 </head>
 <body class="bg-slate-50 text-slate-900 font-sans antialiased">
     {% block content %}
     {% endblock %}
+
+{% if pending_continuation_prompt %}
+  {% include "coverage/continuation_popup.html" %}
+{% endif %}
+
+    {% include "includes/footer.html" %}
 </body>
 </html>

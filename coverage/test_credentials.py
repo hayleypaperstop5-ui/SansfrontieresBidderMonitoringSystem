@@ -1,4 +1,4 @@
-"""
+﻿"""
 Regression tests for the player credential disclosure feature.
 
 Covers:
@@ -125,7 +125,7 @@ class DisclosureCreationTests(TestCase):
             player=p,
         )
 
-        self.assertFalse(
+        self.assertTrue(
             CredentialDisclosure.objects.filter(
                 moderator=self.moderator,
                 player=p,
@@ -224,6 +224,22 @@ class ReadOnlyCredentialsPageTests(TestCase):
             player=self.player,
         )
 
+        # Session starts as OPEN (15-min window from manager assignment).
+        # For credential-view tests, transition to ACTIVE (simulating acknowledgment).
+        from django.utils import timezone as _tz
+        self.session.status = CoverageSession.Status.ACTIVE
+        self.session.signed_in_at = _tz.now()
+        self.session.sign_in_deadline_at = None
+        self.session.save(update_fields=['status', 'signed_in_at', 'sign_in_deadline_at'])
+
+
+        # Session starts as OPEN (15-min window from manager assignment).
+        # For credential-view tests, transition to ACTIVE (simulating acknowledgment).
+        from django.utils import timezone as _tz
+        self.session.status = CoverageSession.Status.ACTIVE
+        self.session.signed_in_at = _tz.now()
+        self.session.sign_in_deadline_at = None
+        self.session.save(update_fields=["status", "signed_in_at", "sign_in_deadline_at"])
     def test_covering_moderator_can_view(self):
         c = Client()
         c.force_login(self.covering_mod)

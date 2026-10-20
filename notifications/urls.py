@@ -1,4 +1,4 @@
-from django.urls import path
+﻿from django.urls import path
 
 from . import views
 
@@ -6,6 +6,9 @@ from . import views
 app_name = "notifications"
 
 urlpatterns = [
+    path("delete/", views.delete_notifications, name="delete_selected"),
+    path("delete-all/", views.delete_all_notifications, name="delete_all"),
+
     path(
         "status/",
         views.notification_status,

@@ -1,3 +1,5 @@
+﻿from django.shortcuts import redirect
+from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.http import HttpResponseRedirect, JsonResponse
 from django.shortcuts import get_object_or_404, render
@@ -80,4 +82,35 @@ def notification_status(request):
             ],
         }
     )
+
+
+@login_required
+def delete_notifications(request):
+    """Delete selected notifications belonging to the current user."""
+    if request.method != "POST":
+        return redirect("notifications:list")
+
+    ids = request.POST.getlist("notification_ids")
+    if ids:
+        deleted = Notification.objects.filter(
+            recipient=request.user,
+            id__in=ids,
+        ).delete()
+        messages.success(request, f"Deleted {deleted[0]} notification(s).")
+    else:
+        messages.info(request, "No notifications selected.")
+
+    return redirect("notifications:list")
+
+
+@login_required
+def delete_all_notifications(request):
+    """Delete all notifications belonging to the current user."""
+    if request.method != "POST":
+        return redirect("notifications:list")
+
+    count = Notification.objects.filter(recipient=request.user).count()
+    Notification.objects.filter(recipient=request.user).delete()
+    messages.success(request, f"Deleted all {count} notification(s).")
+    return redirect("notifications:list")
 

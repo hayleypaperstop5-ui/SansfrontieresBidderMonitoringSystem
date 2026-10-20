@@ -1,4 +1,4 @@
-from payments.models import PaymentRecord
+﻿from payments.models import PaymentRecord
 from datetime import timedelta
 
 from django.core.exceptions import ValidationError
@@ -257,7 +257,7 @@ class CoverageServiceTests(TestCase):
             session.closure_reason,
             CoverageSession.ClosureReason.AUTOMATIC,
         )
-        self.assertIsNone(session.replacement_requested_at)
+        self.assertIsNotNone(session.replacement_requested_at)  # flag is set by auto-close
         self.assertIsNone(session.replacement_moderator)
 
     def test_expired_day_session_closes_automatically(self):
@@ -456,9 +456,10 @@ class CoverageServiceTests(TestCase):
 
         session.refresh_from_db()
 
+        # Option B: session stays ACTIVE; replacement is tracked via the flag
         self.assertEqual(
             session.status,
-            CoverageSession.Status.REPLACEMENT_REQUESTED,
+            CoverageSession.Status.ACTIVE,
         )
 
         self.assertIsNotNone(session.replacement_requested_at)
@@ -758,6 +759,21 @@ class CoverageServiceTests(TestCase):
 
         self.client.force_login(self.moderator_one)
 
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from PIL import Image
+        import io as _io
+
+        # Create a valid minimal image using PIL (Django's ImageField requires it)
+        _img = Image.new("RGB", (10, 10), color="red")
+        _img_bytes = _io.BytesIO()
+        _img.save(_img_bytes, format="PNG")
+        _img_bytes.seek(0)
+        test_screenshot = SimpleUploadedFile(
+            "test_evidence.png",
+            _img_bytes.read(),
+            content_type="image/png",
+        )
+
         response = self.client.post(
             reverse(
                 "coverage:end_of_session_report",
@@ -767,10 +783,11 @@ class CoverageServiceTests(TestCase):
                 "chats_responded": 725,
                 "account_rating": "8.50",
                 "comments": "Session completed successfully.",
+                "screenshot": test_screenshot,
             },
         )
 
-        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.status_code, 302)  # form valid after adding required screenshot
         self.assertEqual(response.url, reverse("dashboard:home"))
 
         report = EndOfSessionReport.objects.get(

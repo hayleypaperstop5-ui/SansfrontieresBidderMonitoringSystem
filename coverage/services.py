@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+﻿from datetime import datetime, timedelta
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
@@ -245,10 +245,10 @@ def assign_coverage_session(
         moderator=moderator,
         operating_date=operating_date,
         session_type=session_type,
-        signed_in_at=moment,
-        sign_in_deadline_at=None,
+        signed_in_at=None,
+        sign_in_deadline_at=moment + timedelta(minutes=15),
         scheduled_close_at=scheduled_close_at,
-        status=CoverageSession.Status.ACTIVE,
+        status=CoverageSession.Status.OPEN,
         notes=f"Coverage assigned by {manager.get_full_name() or manager.username}.",
     )
 
@@ -257,12 +257,11 @@ def assign_coverage_session(
 
     # Disclose the player's login credentials to the assigned moderator.
     from players.models import CredentialDisclosure
-    if player.login_username and player.login_password_encrypted:
-        CredentialDisclosure.objects.create(
-            moderator=moderator,
-            player=player,
-            coverage_session=session,
-        )
+    CredentialDisclosure.objects.create(
+        moderator=moderator,
+        player=player,
+        coverage_session=session,
+    )
 
     moderator_name = (
         moderator.get_full_name()
@@ -275,9 +274,11 @@ def assign_coverage_session(
         alert_level=Notification.AlertLevel.IMPORTANT,
         title="New Player Coverage Assignment",
         message=(
-            f"Hello {moderator_name}, please note that you've been assigned "
-            f"{player} for active coverage. Your coverage session is now "
-            "active and has been recorded from the time of assignment."
+            f"Hello {moderator_name}, you have been assigned {player} for "
+            "coverage. Please acknowledge the credential popup within "
+            "15 minutes to confirm your sign-in. If you do not acknowledge "
+            "in time, the assignment will be marked MISSED and the Player "
+            "will be released for reassignment."
         ),
     )
 
@@ -325,11 +326,9 @@ def request_replacement(
             "A replacement can only be requested for an active coverage session."
         )
 
-    session.status = CoverageSession.Status.REPLACEMENT_REQUESTED
     session.replacement_requested_at = moment
     session.save(
         update_fields=[
-            "status",
             "replacement_requested_at",
             "updated_at",
         ]
@@ -369,8 +368,11 @@ def request_replacement(
         title="Replacement Request Submitted",
         message=(
             f"Your replacement request for Player {session.player} has been "
-            "submitted. Management has been notified. Please continue "
-            "covering the Player until a replacement is confirmed."
+            "submitted. Other eligible moderators have been notified "
+            "and can apply. If another moderator is assigned, you will "
+            "be signed out automatically and required to submit your "
+            "End-of-Session Report. Please continue covering the Player "
+            "in the meantime."
         ),
         alert_level=Notification.AlertLevel.IMPORTANT,
     )
@@ -478,6 +480,92 @@ def prompt_coverage_continuation(
 
 
 @transaction.atomic
+
+
+
+# ==============================================================
+# CONTINUATION TIMEOUT - no response at deadline
+# ==============================================================
+
+@transaction.atomic
+def handle_continuation_timeout(*, session, moment=None):
+    """
+    Called by the 09:00 / 21:00 enforcement task when a session
+    is still CONTINUATION_PENDING past its deadline.
+
+    Behaviour:
+      - If the moderator responded YES but did not submit a report,
+        sign out and require report.
+      - If the moderator has not responded at all,
+        sign out and require report.
+
+    Returns the session for logging.
+    """
+    if moment is None:
+        moment = timezone.localtime()
+
+    if session.status != CoverageSession.Status.CONTINUATION_PENDING:
+        return session
+
+    if session.continuation_deadline_at is None:
+        return session
+
+    if moment < session.continuation_deadline_at:
+        return session
+
+    session.status = CoverageSession.Status.EXPIRED
+    session.closure_reason = CoverageSession.ClosureReason.AUTOMATIC
+    session.signed_out_at = moment
+    session.continuation_response = session.continuation_response or ""
+
+    session.save(
+        update_fields=[
+            "status",
+            "closure_reason",
+            "signed_out_at",
+            "continuation_response",
+            "updated_at",
+        ]
+    )
+
+    create_report_compliance(
+        session=session,
+        signed_out_at=moment,
+    )
+
+    moderator = session.moderator
+    moderator_name = (
+        moderator.get_full_name()
+        or moderator.username
+    )
+
+    if session.continuation_response == "":
+        reason = "did not respond to the continuation prompt"
+    else:
+        reason = "responded to continue but did not submit the End-of-Session Report"
+
+    _notify_moderator(
+        moderator=moderator,
+        title="Coverage Signed Out Automatically",
+        message=(
+            f"You were signed out from {session.player} because you "
+            f"{reason}. You must submit an End-of-Session Report "
+            "before being assigned another Player."
+        ),
+        alert_level=Notification.AlertLevel.IMPORTANT,
+    )
+
+    _notify_management_team(
+        title="Coverage Signed Out Automatically",
+        message=(
+            f"{moderator_name} {reason} for {session.player}. "
+            f"The session has been closed. Player is now uncovered."
+        ),
+        alert_level=Notification.AlertLevel.IMPORTANT,
+    )
+
+    return session
+
 
 @transaction.atomic
 def respond_to_coverage_continuation(
@@ -591,6 +679,49 @@ def respond_to_coverage_continuation(
             alert_level=Notification.AlertLevel.IMPORTANT,
         )
 
+        return session
+
+    # YES: NIGHT/evening sessions auto-continue without a report;
+    # DAY/morning sessions require the report first.
+    if session.session_type == CoverageSession.SessionType.NIGHT:
+        session.continuation_response = response
+        session.continuation_responded_at = moment
+        session.continuation_deadline_at = None
+        session.status = CoverageSession.Status.COMPLETED
+        session.signed_out_at = moment
+        session.closure_reason = CoverageSession.ClosureReason.NORMAL
+        session.save(
+            update_fields=[
+                "status", "signed_out_at", "closure_reason",
+                "continuation_response", "continuation_responded_at",
+                "continuation_deadline_at", "updated_at",
+            ]
+        )
+        new_session = _create_continuation_session(
+            previous_session=session,
+            moment=moment,
+        )
+        moderator_name = (
+            moderator.get_full_name()
+            or moderator.username
+        )
+        _notify_moderator(
+            moderator=moderator,
+            title="Coverage Continued",
+            message=(
+                f"You will continue covering {session.player}. "
+                "The new session has been created automatically."
+            ),
+            alert_level=Notification.AlertLevel.IMPORTANT,
+        )
+        _notify_management_team(
+            title="Coverage Continued",
+            message=(
+                f"{moderator_name} will continue covering "
+                f"{session.player}. New session created."
+            ),
+            alert_level=Notification.AlertLevel.IMPORTANT,
+        )
         return session
 
     # YES: never extend the old session.
@@ -1031,7 +1162,7 @@ def assign_replacement(
     if moment is None:
         moment = timezone.localtime()
 
-    if session.status != CoverageSession.Status.REPLACEMENT_REQUESTED:
+    if session.replacement_requested_at is None:
         raise ValidationError(
             "A replacement can only be assigned to a session with a pending replacement request."
         )
@@ -1118,12 +1249,11 @@ def assign_replacement(
 
     # Disclose the player's login credentials to the replacement moderator.
     from players.models import CredentialDisclosure
-    if session.player.login_username and session.player.login_password_encrypted:
-        CredentialDisclosure.objects.create(
-            moderator=replacement_moderator,
-            player=session.player,
-            coverage_session=new_session,
-        )
+    CredentialDisclosure.objects.create(
+        moderator=replacement_moderator,
+        player=session.player,
+        coverage_session=new_session,
+    )
 
     replacement_moderator_name = (
         replacement_moderator.get_full_name()

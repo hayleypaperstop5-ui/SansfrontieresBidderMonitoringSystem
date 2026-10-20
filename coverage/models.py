@@ -1,4 +1,4 @@
-import uuid
+﻿import uuid
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.core.validators import MinValueValidator, MaxValueValidator
@@ -187,6 +187,38 @@ class CoverageSession(models.Model):
             return f"{prefix}{number:03d}"
 
     def save(self, *args, **kwargs):
+        # [auto_void_stale_won] if this session is being moved to a terminal
+        # status, mark its WON application as LOST so it can't block future applicants.
+        if self.pk:
+            _old = type(self).objects.filter(pk=self.pk).values_list('status', flat=True).first()
+            _terminal = ('CANCELLED', 'EXPIRED', 'COMPLETED', 'MISSED')
+            if _old not in _terminal and self.status in _terminal:
+                try:
+                    from coverage.models import CoverageApplication
+                    CoverageApplication.objects.filter(
+                        resulting_session_id=self.pk,
+                        status=CoverageApplication.Status.WON,
+                    ).update(status=CoverageApplication.Status.LOST)
+                except Exception:
+                    pass
+
+        # Auto-compute scheduled_close_at if missing
+        if self.scheduled_close_at is None and self.session_type and self.operating_date:
+            from datetime import datetime, time, timedelta
+            from django.utils import timezone as _tz
+            if self.session_type == 'NIGHT':
+                _close_date = self.operating_date + timedelta(days=1)
+                _close_time = time(9, 0)  # 09:00 EAT next day
+            elif self.session_type == 'DAY':
+                _close_date = self.operating_date
+                _close_time = time(21, 0)  # 21:00 EAT same day
+            else:
+                _close_date = self.operating_date
+                _close_time = time(21, 0)
+            self.scheduled_close_at = _tz.make_aware(
+                datetime.combine(_close_date, _close_time),
+                _tz.get_current_timezone(),
+            )
         if not self.session_code:
             self.session_code = self._generate_session_code()
 
@@ -315,7 +347,7 @@ class EndOfSessionReport(models.Model):
 
     screenshot = models.ImageField(
         upload_to="coverage_reports/%Y/%m/%d/",
-        blank=True,
+        blank=False,
         null=True,
     )
 

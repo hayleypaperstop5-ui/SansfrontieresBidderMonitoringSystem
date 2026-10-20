@@ -1,9 +1,10 @@
+﻿{% load static %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Edit Player | Sansfrontieres</title>
+    <title>Sansfrontieres Chat Moderation</title>
 
     <style>
         * {
@@ -173,7 +174,7 @@
 <body>
 
     <div class="topbar">
-        <div class="brand">Sansfrontieres</div>
+        <div class="brand" style="display:flex;align-items:center;"><img src="{% static 'img/logo.png' %}" alt="Sansfrontieres Chat Moderation" style="height:36px;width:36px;border-radius:10px;object-fit:cover;vertical-align:middle;margin-right:10px;"><span>Sansfrontieres Chat Moderation</span></div>
         <div class="system-name">Chat Moderation Management System</div>
     </div>
 
@@ -222,6 +223,40 @@
                         <div class="error">{{ error }}</div>
                     {% endfor %}
                 </div>
+
+                <div class="field">
+                    {{ form.login_username.label_tag }}
+                    {{ form.login_username }}
+
+                    {% for error in form.login_username.errors %}
+                        <div class="error">{{ error }}</div>
+                    {% endfor %}
+                </div>
+
+                <div class="field">
+                    {{ form.login_password.label_tag }}
+                    {{ form.login_password }}
+
+                    {% if player.login_password_encrypted %}
+                        <p style="margin: 6px 0 0; color: #6b7280; font-size: 13px;">
+                            A password is already stored. Leave blank to keep the existing password unchanged.
+                        </p>
+                    {% endif %}
+
+                    {% for error in form.login_password.errors %}
+                        <div class="error">{{ error }}</div>
+                    {% endfor %}
+                </div>
+
+                <div class="field">
+                    {{ form.login_notes.label_tag }}
+                    {{ form.login_notes }}
+
+                    {% for error in form.login_notes.errors %}
+                        <div class="error">{{ error }}</div>
+                    {% endfor %}
+                </div>
+
 
                 {% if form.non_field_errors %}
                     <div class="error">

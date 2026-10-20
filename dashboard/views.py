@@ -156,19 +156,37 @@ def dashboard(request):
         )
     )
 
+    # "Chats Today" = calendar today's work (still useful for daily tracking).
     chats_today = sum(
         report.end_of_session_report.chats_responded
         for report in reports
         if report.operating_date == today
     )
 
-    week_start = today - timedelta(days=today.weekday())
-
-    chats_this_week = sum(
-        report.end_of_session_report.chats_responded
-        for report in reports
-        if week_start <= report.operating_date <= today
+    # "Chats This Week" — shown to the moderator as "chats since last payroll".
+    # This is what actually matters to them: how much work is pending payment.
+    # Implementation: count every report whose session has NOT been payroll-processed.
+    # When payroll runs, payroll_processed_chats increases and these reports drop out.
+    # The label in the template should reflect this — see the template fix below.
+    from payments.models import PaymentRecord as _PR
+    chats_since_last_payroll = 0
+    _processed_session_ids = set(
+        _PR.objects.filter(
+            moderator=request.user,
+            payroll_processed_chats__gte=models.F("chats_responded"),
+        ).values_list("coverage_session_id", flat=True)
     )
+    for _r in _PR.objects.filter(moderator=request.user).select_related("coverage_session"):
+        # Skip fully processed payments
+        if _r.coverage_session_id in _processed_session_ids:
+            continue
+        _unprocessed = (_r.chats_responded or 0) - (getattr(_r, "payroll_processed_chats", 0) or 0)
+        if _unprocessed > 0:
+            chats_since_last_payroll += _unprocessed
+
+    # Keep `chats_this_week` as an alias so existing template variables still work,
+    # but they now represent "unpaid chats" rather than "chats in the calendar week".
+    chats_this_week = chats_since_last_payroll
 
     month_start = today.replace(day=1)
 
@@ -251,11 +269,28 @@ def dashboard(request):
         Decimal("0.00"),
     )
 
+    # Bonus earned: sum of BonusAward records in the current week (Mon-Sun).
+    # Previously this read from ModeratorPayment.bonus_earned, which is 0 when
+    # the award hasn't been linked to a payment record. Reading directly from
+    # BonusAward is the authoritative source.
+    from bonuses.models import BonusAward as _BonusAward
+    week_start_date = today - timedelta(days=today.weekday())
+    week_end_date = week_start_date + timedelta(days=6)
+
+    week_bonus_awards = _BonusAward.objects.filter(
+        moderator=request.user,
+        bonus_date__gte=week_start_date,
+        bonus_date__lte=week_end_date,
+    )
     payroll_bonus_earned = sum(
-        (
-            payment.bonus_earned
-            for payment in moderator_payroll
-        ),
+        (award.bonus_amount for award in week_bonus_awards),
+        Decimal("0.00"),
+    )
+
+    # Also compute total (all-time) bonus for reference
+    all_bonus_awards = _BonusAward.objects.filter(moderator=request.user)
+    total_bonus_earned = sum(
+        (award.bonus_amount for award in all_bonus_awards),
         Decimal("0.00"),
     )
 
@@ -284,10 +319,35 @@ def dashboard(request):
         Decimal("0.00"),
     )
 
+    # Compute unprocessed work value from PaymentRecords
+    from payments.models import PaymentRecord as _PR
+    from payments.services import get_applicable_rate_tier as _get_rate
+
+    _unprocessed_value = Decimal("0.00")
+    _unprocessed_chats = 0
+    for _rec in _PR.objects.filter(moderator=request.user).select_related("coverage_session"):
+        _chats = _rec.chats_responded or 0
+        _processed = getattr(_rec, "payroll_processed_chats", 0) or 0
+        _unproc = _chats - _processed
+        if _unproc <= 0:
+            continue
+        _unprocessed_chats += _unproc
+        try:
+            _tier = _get_rate(
+                chats_responded=_chats,
+                operating_date=_rec.coverage_session.operating_date,
+            )
+            _rate = _tier.rate_per_chat if _tier else Decimal("3.46")
+        except Exception:
+            _rate = Decimal("3.46")
+        _unprocessed_value += Decimal(str(_unproc)) * Decimal(str(_rate))    # Amount Earned: only counts PROCESSED payroll (ModeratorPayment records)
+    # Work that hasn't been payroll-processed yet is tracked separately as "pending_payroll"
     total_earnings = payroll_earned
     amount_earned = payroll_earned
     paid_amount = payroll_paid
-    outstanding_amount = payroll_outstanding
+    # Outstanding: what the moderator is owed but hasn't been paid yet
+    # Includes unprocessed work + unpaid payroll + unpaid bonus
+    outstanding_amount = payroll_outstanding + _unprocessed_value
     bonus_earned = payroll_bonus_earned
 
     next_action = {
@@ -325,7 +385,7 @@ def dashboard(request):
                     "or NO to end this coverage session and submit your report."
                 ),
                 "button_label": "Respond to Continuation",
-                "button_url": "dashboard:my_shifts",
+                "button_url": None,  # Popup handles the response — no redirect needed
                 "tone": "warning",
             }
 
@@ -344,6 +404,63 @@ def dashboard(request):
                 "button_args": [current_session.id],
                 "tone": "warning",
             }
+
+        elif (
+
+
+            current_session.status == CoverageSession.Status.ACTIVE
+
+
+            and getattr(current_session, "replacement_requested_at", None)
+
+
+            is not None
+
+
+        ):
+
+
+            next_action = {
+
+
+                "title": "Replacement Requested",
+
+
+                "message": (
+
+
+                    "Your replacement request has been sent. "
+
+
+                    "Another eligible Moderator can now be assigned. "
+
+
+                    "Keep covering the Player until the replacement "
+
+
+                    "is confirmed. You will be signed out automatically "
+
+
+                    "and required to submit your End-of-Session Report."
+
+
+                ),
+
+
+                "button_label": "Manage Coverage",
+
+
+                "button_url": "coverage:moderator_coverage",
+
+
+                "tone": "warning",
+
+
+            }
+
+
+        
+
 
         elif (
             current_session.status
@@ -419,6 +536,9 @@ def dashboard(request):
             "recent_reports": recent_reports,
             "unpaid_chats": unpaid_chats,
             "amount_earned": amount_earned,
+            "pending_payroll": _unprocessed_value,
+            "anticipated_pay": _unprocessed_value,
+            "unprocessed_chats": _unprocessed_chats,
             "paid_amount": paid_amount,
             "paid_chats": paid_chats,
             "outstanding_amount": outstanding_amount,
@@ -1120,153 +1240,15 @@ def coverage_history(request):
 
 @login_required(login_url="/login/")
 def my_shifts(request):
-    if request.user.role != User.Role.MODERATOR:
-        return render(
-            request,
-            "dashboard/my_shifts.html",
-            {
-                "coverage_sessions": [],
-                "message": (
-                    "My Shifts is available to Moderators only."
-                ),
-            },
-        )
+    """
+    Redirect to dashboard. The My Shifts page has been replaced by the
+    continuation popup on the dashboard, which handles YES/NO responses
+    and redirects to the report form when appropriate.
 
-    if request.method == "POST":
-
-        session_id = request.POST.get("session_id")
-
-        action = request.POST.get("action")
-
-        session = (
-            CoverageSession.objects
-            .filter(
-                id=session_id,
-                moderator=request.user,
-            )
-            .first()
-        )
-
-        if session is None:
-            return render(
-                request,
-                "dashboard/my_shifts.html",
-                {
-                    "coverage_sessions": (
-                        CoverageSession.objects
-                        .filter(
-                            moderator=request.user,
-                        )
-                        .select_related(
-                            "player",
-                            "replacement_moderator",
-                        )
-                    ),
-                    "message": (
-                        "The requested coverage session "
-                        "could not be found."
-                    ),
-                },
-            )
-
-        try:
-
-            if action == "request_replacement":
-
-                request_replacement(
-                    session=session,
-                    moderator=request.user,
-                )
-
-
-            elif action == "respond_continuation":
-
-                form = ContinuationResponseForm(request.POST)
-
-                if not form.is_valid():
-                    raise ValueError("Select YES or NO to continue.")
-
-                respond_to_coverage_continuation(
-                    session=session,
-                    moderator=request.user,
-                    response=form.cleaned_data["response"],
-                )
-        except Exception as exc:
-
-            messages.error(
-                request,
-                str(exc),
-            )
-
-        else:
-
-            if action == "request_replacement":
-
-                messages.success(
-                    request,
-                    (
-                        "Replacement requested. Please continue "
-                        "covering the Player until the replacement "
-                        "is secured."
-                    ),
-                )
-
-
-            elif action == "respond_continuation":
-
-                response = request.POST.get("response")
-
-                if response == "YES":
-                    messages.success(
-                        request,
-                        "Continuation confirmed. You will continue covering the same Player for the next coverage period.",
-                    )
-
-                elif response == "NO":
-                    messages.success(
-                        request,
-                        "Coverage ended. Submit your End-of-Session Report within 30 minutes.",
-                    )
-        return redirect(
-            "dashboard:my_shifts"
-        )
-
-    close_expired_coverage_sessions(
-        moment=timezone.localtime(),
-    )
-
-    coverage_sessions = (
-        CoverageSession.objects
-        .select_related(
-            "player",
-            "replacement_moderator",
-        )
-        .filter(
-            moderator=request.user,
-        )
-        .order_by(
-            "-operating_date",
-            "-created_at",
-        )
-    )
-
-    return render(
-        request,
-        "dashboard/my_shifts.html",
-        {
-            "coverage_sessions": coverage_sessions,
-        },
-    )
-
-
-
-
-
-
-
-
-
-
-
+    Kept as a redirect only so existing links/redirects to this URL
+    still work without errors.
+    """
+    from django.shortcuts import redirect
+    return redirect("dashboard:home")
 
 

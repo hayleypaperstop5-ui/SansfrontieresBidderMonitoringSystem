@@ -1,9 +1,10 @@
+﻿{% load static %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Staff Management | Sansfrontieres</title>
+    <title>Sansfrontieres Chat Moderation</title>
 
     <style>
         * { box-sizing: border-box; }
@@ -297,7 +298,7 @@
             <a href="{% url 'dashboard:home' %}">Dashboard</a>
             <a href="{% url 'accounts:staff_list' %}" class="active">Staff Management</a>
             <a href="{% url 'players:player_list' %}">Player Management</a>
-            <a href="{% url 'shifts:shift_list' %}">Shifts &amp; Coverage</a>
+            <a href="{% url 'coverage:manager_coverage_alerts' %}">Shifts &amp; Coverage</a>
         </div>
 
         <div class="section-title">Finance</div>

@@ -9,10 +9,10 @@
     <div>
       <div class="p-6 border-b border-slate-800 flex items-center space-x-3">
         <div class="h-10 w-10 rounded-xl bg-gradient-to-tr from-indigo-600 to-violet-500 flex items-center justify-center text-white font-black text-xl shadow-lg shadow-indigo-500/30">
-          SF
-        </div>
+                <img src="{% static 'img/logo.png' %}" alt="Sansfrontieres" class="h-10 w-10 rounded-xl object-cover">
+              </div>
         <div>
-          <h1 class="font-bold text-white text-base tracking-tight leading-tight">Sansfrontieres</h1>
+          <h1 class="font-bold text-white text-base tracking-tight leading-tight">Sansfrontieres Chat Moderation</h1>
           <p class="text-xs text-slate-400 font-medium">Chat Moderation Management</p>
         </div>
       </div>
@@ -33,7 +33,7 @@
               <svg class="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg>
               <span>Player Management</span>
             </a>
-            <a href="{% url 'dashboard:coverage_history' %}" class="flex items-center space-x-3 px-3 py-2.5 rounded-lg text-slate-400 hover:text-slate-100 hover:bg-slate-800/60 transition">
+            <a href="{% url 'coverage:manager_coverage_alerts' %}" class="flex items-center space-x-3 px-3 py-2.5 rounded-lg text-slate-400 hover:text-slate-100 hover:bg-slate-800/60 transition">
               <svg class="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
               <span>Shifts & Coverage</span>
             </a>
@@ -211,29 +211,29 @@
         </div>
 
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-          <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+          <a href="/payments/payroll/payments/?tab=paid" style="text-decoration:none;color:inherit;display:block;" class="cursor-pointer"><div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
             <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Payable Chats</p>
             <p class="mt-2 text-2xl font-bold text-slate-900">{{ payable_chats }}</p>
             <p class="mt-1 text-xs text-slate-500">{{ qualifying_player_count }} qualified Player{{ qualifying_player_count|pluralize }}</p>
-          </div>
+          </div></a>
 
-          <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+          <a href="/payments/payroll/payments/?tab=all" style="text-decoration:none;color:inherit;display:block;" class="cursor-pointer"><div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
             <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Payment Records</p>
             <p class="mt-2 text-2xl font-bold text-slate-900">{{ total_payment_records }}</p>
             <p class="mt-1 text-xs text-slate-500">Recorded Moderator payments</p>
-          </div>
+          </div></a>
 
-          <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+          <a href="/payments/payroll/payments/?tab=all" style="text-decoration:none;color:inherit;display:block;" class="cursor-pointer"><div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
             <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Generated</p>
             <p class="mt-2 text-2xl font-bold text-slate-900">KES {{ generated_amount|floatformat:2 }}</p>
             <p class="mt-1 text-xs text-slate-500">Total earned amount</p>
-          </div>
+          </div></a>
 
-          <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+          <a href="/payments/payroll/payments/?tab=unpaid" style="text-decoration:none;color:inherit;display:block;" class="cursor-pointer"><div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
             <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Outstanding</p>
             <p class="mt-2 text-2xl font-bold text-rose-600">KES {{ outstanding_amount|floatformat:2 }}</p>
             <p class="mt-1 text-xs text-slate-500">{{ unpaid_payment_records }} unpaid record{{ unpaid_payment_records|pluralize }}</p>
-          </div>
+          </div></a>
         </div>
 
         <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
@@ -370,10 +370,9 @@
         </div>
       </section>
 
-      <footer class="mt-12 pt-6 border-t border-slate-200 flex flex-col md:flex-row items-center justify-between text-xs text-slate-400">
-        <p>Sansfrontieres Chat Moderation Management System · Director Portal</p>
-        <p class="mt-2 md:mt-0">Enterprise Edition</p>
-      </footer>
+      <footer style="text-align:center;padding:20px 10px;font-size:12px;color:#94a3b8;border-top:1px solid #e2e8f0;margin-top:40px;">
+    &copy; Sansfrontieres Chat Moderation {{ current_year }}
+</footer>
     </div>
   {% if messages %}
 <div style="max-width:1200px;margin:16px auto;padding:0 16px;">
@@ -391,3 +390,17 @@
 </main>
 </div>
 {% endblock %}
+
+<script>/* auto-fix: force-navigate payroll cards */
+document.addEventListener('click', function(e){
+  var a = e.target.closest && e.target.closest('a[href*="?tab="]');
+  if (a && a.closest('.payroll-card, [data-payroll-card], h2, h3')) {
+    /* only for cards on this dashboard */
+  }
+  if (a && /Payable Chats|Payment Records|Generated|Outstanding/.test(a.textContent)) {
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    window.location.href = a.getAttribute('href');
+  }
+}, true);
+</script>

@@ -1,4 +1,5 @@
-from django.db import transaction
+﻿from django.db import transaction
+from django.db.models import Q
 from django.shortcuts import redirect, render
 from pathlib import Path
 from django.contrib import messages
@@ -55,15 +56,30 @@ def moderator_coverage(request):
                 .first()
             )
 
-        if action == "request_replacement" and session is not None:
-            request_replacement(
-                session=session,
-                moderator=request.user,
-            )
-            messages.success(
-                request,
-                "Your replacement request has been submitted.",
-            )
+        if action == "request_replacement":
+            if session is None:
+                # Fallback: use the user's active session
+                session = CoverageSession.objects.filter(
+                    moderator=request.user,
+                    status="ACTIVE",
+                ).first()
+            if session is None:
+                messages.error(request, "No active session found.")
+                return redirect("coverage:moderator_coverage")
+            try:
+                request_replacement(
+                    session=session,
+                    moderator=request.user,
+                )
+                messages.success(
+                    request,
+                    "Your replacement request has been submitted.",
+                )
+            except Exception as exc:
+                messages.error(
+                    request,
+                    f"Could not request replacement: {exc}",
+                )
             return redirect("coverage:moderator_coverage")
 
     sessions = (
@@ -373,12 +389,27 @@ def manager_coverage_alerts(request):
         .order_by("player__player_number", "-created_at")
     )
 
+    # Build sets of already-assigned moderators and covered players.
+    # Combine OPEN (manager-assigned, awaiting sign-in) and ACTIVE/HANDOVER
+    # (currently covering) sessions so both dropdowns exclude in-use entries.
+    _live_sessions = CoverageSession.objects.filter(
+        status__in=(
+            CoverageSession.Status.ACTIVE,
+            CoverageSession.Status.HANDOVER,
+            CoverageSession.Status.REPLACEMENT_REQUESTED,
+        )
+    )
+
     assigned_player_ids = set(
         open_assignments.values_list("player_id", flat=True)
+    ) | set(
+        _live_sessions.values_list("player_id", flat=True)
     )
 
     assigned_moderator_ids = set(
         open_assignments.values_list("moderator_id", flat=True)
+    ) | set(
+        _live_sessions.values_list("moderator_id", flat=True)
     )
 
     active_players = (
@@ -387,6 +418,17 @@ def manager_coverage_alerts(request):
         .order_by("player_number")
     )
 
+    # Build a set of moderators with outstanding reports (AWAITING_REPORT status).
+    # These are excluded from the "Assign Player Coverage" dropdown because the
+    # service (assign_coverage_session) will reject them anyway.
+    awaiting_report_moderator_ids = set(
+        CoverageSession.objects
+        .filter(status=CoverageSession.Status.AWAITING_REPORT)
+        .values_list("moderator_id", flat=True)
+    )
+
+    excluded_moderator_ids = assigned_moderator_ids | awaiting_report_moderator_ids
+
     available_eligible_moderators = (
         User.objects
         .filter(
@@ -394,7 +436,7 @@ def manager_coverage_alerts(request):
             is_active=True,
             staff_profile__status="ACTIVE",
         )
-        .exclude(id__in=assigned_moderator_ids)
+        .exclude(id__in=excluded_moderator_ids)
         .order_by("first_name", "last_name", "username")
     )
 
@@ -415,6 +457,24 @@ def manager_coverage_alerts(request):
         .order_by("-created_at")
     )
 
+    # Replacement requests: sessions where the moderator has asked for a replacement
+    # but the player is still covered (Option B: status stays ACTIVE, flag is set).
+    # These are NOT coverage alerts (the player is covered) but managers need to see them.
+    replacement_request_sessions = (
+        CoverageSession.objects
+        .select_related("player", "moderator")
+        .filter(
+            replacement_requested_at__isnull=False,
+        )
+        .filter(
+            Q(status__in=(
+                CoverageSession.Status.ACTIVE,
+                CoverageSession.Status.REPLACEMENT_REQUESTED,
+            ))
+        )
+        .order_by("-replacement_requested_at")
+    )
+
     active_sessions = (
         CoverageSession.objects
         .select_related(
@@ -425,8 +485,8 @@ def manager_coverage_alerts(request):
         .filter(
             status__in=(
                 CoverageSession.Status.ACTIVE,
-                CoverageSession.Status.REPLACEMENT_REQUESTED,
                 CoverageSession.Status.HANDOVER,
+                CoverageSession.Status.REPLACEMENT_REQUESTED,
             )
         )
         .order_by("player__player_number", "-signed_in_at")
@@ -545,6 +605,7 @@ def manager_coverage_alerts(request):
         request,
         "coverage/manager_alerts.html",
         {
+        "replacement_request_sessions": replacement_request_sessions,
             "alerts": alerts,
             "active_sessions": active_sessions,
             "open_assignments": open_assignments,
@@ -609,6 +670,60 @@ def apply_for_coverage(request, player_id):
     return redirect("coverage:opportunities")
 
 @login_required
+@login_required
+def respond_to_continuation(request, session_id, response):
+    """
+    Handle the moderator's YES/NO response to a continuation prompt.
+    POST-only. URL: /coverage/continuation/<session_id>/respond/<yes|no>/
+    """
+    from django.http import JsonResponse
+    from .models import CoverageSession
+    from .services import respond_to_coverage_continuation
+
+    if request.method != "POST":
+        return JsonResponse({"error": "POST required"}, status=405)
+
+    if getattr(request.user, "role", None) != "MODERATOR":
+        return JsonResponse({"error": "Moderator only"}, status=403)
+
+    session = (
+        CoverageSession.objects
+        .filter(id=session_id, moderator=request.user, status="CONTINUATION_PENDING")
+        .first()
+    )
+    if not session:
+        return JsonResponse({"error": "No pending continuation for this session"}, status=404)
+
+    response_upper = (response or "").upper()
+    if response_upper not in ("YES", "NO"):
+        return JsonResponse({"error": "response must be yes or no"}, status=400)
+
+    try:
+        respond_to_coverage_continuation(
+            session=session,
+            moderator=request.user,
+            response=response_upper,
+            moment=timezone.localtime(),
+        )
+    except Exception as exc:
+        return JsonResponse({"error": str(exc)}, status=400)
+
+    if response_upper == "NO":
+        redirect_url = reverse("coverage:end_of_session_report", args=[session.id])
+    else:
+        if session.session_type == "DAY":
+            redirect_url = reverse("coverage:end_of_session_report", args=[session.id])
+        else:
+            redirect_url = "/dashboard/"
+
+    return JsonResponse({
+        "status": "success",
+        "response": response_upper,
+        "session_status": session.status,
+        "redirect_url": redirect_url,
+    })
+
+
 def acknowledge_credential(request, disclosure_id):
     """
     Mark a CredentialDisclosure as acknowledged by its recipient.
@@ -636,10 +751,43 @@ def acknowledge_credential(request, disclosure_id):
         disclosure.acknowledged_at = tz.now()
         disclosure.save(update_fields=["acknowledged_at"])
 
+    # Transition the linked session from OPEN to ACTIVE (acknowledgement = sign-in)
+    session = disclosure.coverage_session
+    was_open = session is not None and session.status == "OPEN"
+    if was_open:
+        session.status = "ACTIVE"
+        session.signed_in_at = tz.now()
+        session.sign_in_deadline_at = None
+        session.save(update_fields=["status", "signed_in_at", "sign_in_deadline_at"])
+
+    # Notify management when a manager-assigned moderator successfully signs in.
+    # This gives the manager confirmation that the assignment is live.
+    if was_open:
+        try:
+            from coverage.services import _notify_management_team
+            from notifications.models import Notification as _Notif
+            moderator_name = (
+                disclosure.moderator.get_full_name()
+                or disclosure.moderator.username
+            )
+            _notify_management_team(
+                title="Moderator Signed In",
+                message=(
+                    f"{moderator_name} has acknowledged the credentials and "
+                    f"signed in to cover {disclosure.player}. "
+                    f"Session {session.session_code or session.id} is now ACTIVE."
+                ),
+                alert_level=_Notif.AlertLevel.IMPORTANT,
+            )
+        except Exception:
+            # Never block the acknowledge response on notification failure
+            pass
+
     return JsonResponse({
         "ok": True,
         "disclosure_id": disclosure.id,
         "acknowledged_at": disclosure.acknowledged_at.isoformat(),
+        "session_status": session.status if session else None,
     })
 
 @login_required
@@ -666,10 +814,14 @@ def player_credentials_view(request, player_id):
         has_active_session = CoverageSession.objects.filter(
             player=player,
             moderator=request.user,
-            status__in=(
-                CoverageSession.Status.ACTIVE,
-                CoverageSession.Status.REPLACEMENT_REQUESTED,
-                CoverageSession.Status.HANDOVER,
+        ).filter(
+            # Active/Handover sessions, OR any session with a replacement flag
+            (
+                Q(status__in=(
+                    CoverageSession.Status.ACTIVE,
+                    CoverageSession.Status.HANDOVER,
+                ))
+                | Q(replacement_requested_at__isnull=False)
             ),
         ).exists()
 
@@ -691,3 +843,101 @@ def player_credentials_view(request, player_id):
             "player": player,
         },
     )
+
+
+@login_required
+def assign_replacement_view(request):
+    """
+    Manager/Director assigns a replacement moderator to a session with
+    a pending replacement request. The replacement moderator's session
+    starts as OPEN with a 15-min sign-in window (acknowledge credentials).
+    The outgoing moderator is signed out to HANDOVER and must submit a report.
+    """
+    from .models import CoverageSession
+    from .services import assign_replacement
+
+    if request.method != "POST":
+        messages.error(request, "POST required.")
+        return redirect("coverage:manager_coverage_alerts")
+
+    role = getattr(request.user, "role", None)
+    if role not in ("MANAGER", "DIRECTOR", "ADMIN"):
+        messages.error(request, "Only managers, directors, or admins can assign replacements.")
+        return redirect("coverage:manager_coverage_alerts")
+
+    action = request.POST.get("action")
+    session_id = request.POST.get("session_id")
+    replacement_moderator_id = request.POST.get("replacement_moderator_id")
+
+    if action != "assign_replacement":
+        messages.error(request, "Invalid action.")
+        return redirect("coverage:manager_coverage_alerts")
+
+    if not session_id or not replacement_moderator_id:
+        messages.error(request, "Session and replacement moderator are required.")
+        return redirect("coverage:manager_coverage_alerts")
+
+    session = CoverageSession.objects.filter(id=session_id).first()
+    if session is None:
+        messages.error(request, "Session not found.")
+        return redirect("coverage:manager_coverage_alerts")
+
+    from accounts.models import User
+    replacement_moderator = User.objects.filter(
+        id=replacement_moderator_id,
+        role=User.Role.MODERATOR,
+        is_active=True,
+    ).first()
+    if replacement_moderator is None:
+        messages.error(request, "Replacement moderator not found or not eligible.")
+        return redirect("coverage:manager_coverage_alerts")
+
+    try:
+        new_session = assign_replacement(
+            session=session,
+            replacement_moderator=replacement_moderator,
+            moment=timezone.localtime(),
+        )
+    except Exception as exc:
+        messages.error(request, f"Could not assign replacement: {exc}")
+        return redirect("coverage:manager_coverage_alerts")
+
+    moderator_name = (
+        replacement_moderator.get_full_name()
+        or replacement_moderator.username
+    )
+    messages.success(
+        request,
+        f"{moderator_name} has been assigned as the replacement. "
+        "They must acknowledge the credential popup within 15 minutes. "
+        "If they do not acknowledge, the assignment will be marked MISSED "
+        "and the Player will be released for reassignment.",
+    )
+    return redirect("coverage:manager_coverage_alerts")
+
+
+@login_required
+def my_reports(request):
+    """
+    List all End-of-Session Reports submitted by the logged-in moderator.
+    Shows date, player, session, chats, rating, and evidence download link.
+    """
+    from .models import EndOfSessionReport
+    from django.utils import timezone
+
+    reports = (
+        EndOfSessionReport.objects
+        .filter(coverage_session__moderator=request.user)
+        .select_related("coverage_session", "coverage_session__player")
+        .order_by("-submitted_at", "-id")
+    )
+
+    return render(
+        request,
+        "coverage/my_reports.html",
+        {
+            "reports": reports,
+            "total_reports": reports.count(),
+        },
+    )
+

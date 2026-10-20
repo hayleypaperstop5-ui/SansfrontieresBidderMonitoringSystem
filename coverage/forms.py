@@ -1,4 +1,4 @@
-from django import forms
+﻿from django import forms
 
 from .models import EndOfSessionReport
 
@@ -10,7 +10,11 @@ class EndOfSessionReportForm(forms.ModelForm):
     )
 
     screenshot = forms.ImageField(
-        required=False,
+        required=True,
+        error_messages={
+            "required": "Screenshot / evidence is required to submit this report.",
+            "invalid_image": "Please upload a valid image file (JPG, PNG, etc).",
+        },
     )
 
     class Meta:

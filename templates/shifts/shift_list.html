@@ -1,11 +1,11 @@
-{% load static %}
+﻿{% load static %}
 
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Shift Management | Sansfrontieres</title>
+    <title>Sansfrontieres Chat Moderation</title>
 
     <style>
         body {
@@ -212,7 +212,7 @@
 <body>
 
     <div class="topbar">
-        <div class="brand">Sansfrontieres</div>
+        <div class="brand" style="display:flex;align-items:center;"><img src="{% static 'img/logo.png' %}" alt="Sansfrontieres Chat Moderation" style="height:36px;width:36px;border-radius:10px;object-fit:cover;vertical-align:middle;margin-right:10px;"><span>Sansfrontieres Chat Moderation</span></div>
     </div>
 
     <main class="container">
@@ -396,9 +396,12 @@
 
         <div class="bottom-actions">
 
-            <a href="{% url 'dashboard:home' %}">
-                Back to Dashboard
-            </a>
+            <a href="{% url 'dashboard:home' %}"
+           style="display:inline-block;padding:12px 24px;background:#059669;color:white;text-decoration:none;border-radius:8px;font-weight:600;font-size:14px;transition:background 0.2s;"
+           onmouseover="this.style.background='#047857'"
+           onmouseout="this.style.background='#059669'">
+            Back to Dashboard
+        </a>
 
         </div>
 

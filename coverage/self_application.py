@@ -1,9 +1,9 @@
-import os
+﻿import os
 from datetime import timedelta
 from django.conf import settings
 from django.core.mail import send_mass_mail
 from django.db import transaction
-from django.db.models import Sum
+from django.db.models import Sum, Q
 from django.utils import timezone
 
 from accounts.models import StaffProfile, User
@@ -67,9 +67,19 @@ def moderator_is_eligible(moderator, moment=None):
     if profile.status != StaffProfile.Status.ACTIVE:
         return False
 
-    return not CoverageSession.objects.filter(
+    # Exclude moderators with active/covering sessions
+    if CoverageSession.objects.filter(
         moderator=moderator, status__in=ACTIVE_COVERAGE_STATUSES
-    ).exists()
+    ).exists():
+        return False
+
+    # Also exclude moderators who owe an End-of-Session Report
+    if CoverageSession.objects.filter(
+        moderator=moderator, status=CoverageSession.Status.AWAITING_REPORT
+    ).exists():
+        return False
+
+    return True
 
 def _new_coverage_players(moment):
     covered_ids = set(
@@ -87,7 +97,12 @@ def _new_coverage_players(moment):
 
 def _replacement_players(moment):
     return CoverageSession.objects.filter(
-        status=CoverageSession.Status.REPLACEMENT_REQUESTED,
+        # Replacement requested (new style: ACTIVE + flag)
+        # OR legacy REPLACEMENT_REQUESTED status
+        (
+            Q(status=CoverageSession.Status.ACTIVE, replacement_requested_at__isnull=False)
+            | Q(status=CoverageSession.Status.REPLACEMENT_REQUESTED)
+        ),
         player__status=Player.Status.ACTIVE,
     ).select_related("player", "moderator").order_by("player__player_number", "id")
 
@@ -663,6 +678,19 @@ def apply_for_player(
                 ),
             )
 
+            # [self_apply_new_player_disclosure] create the credential
+            # disclosure for the self-applied moderator.
+            try:
+                from players.models import CredentialDisclosure
+                CredentialDisclosure.objects.get_or_create(
+                    moderator=winner.moderator,
+                    player=locked_player,
+                    coverage_session=session,
+                    defaults={'disclosed_at': moment},
+                )
+            except Exception:
+                pass
+
             return (
                 winner,
                 session,
@@ -678,7 +706,14 @@ def apply_for_player(
             .select_for_update()
             .filter(
                 player=locked_player,
-                status=CoverageSession.Status.REPLACEMENT_REQUESTED,
+            )
+            .filter(
+                # New style: ACTIVE + replacement flag.
+                # Legacy: REPLACEMENT_REQUESTED status.
+                (
+                    Q(status=CoverageSession.Status.ACTIVE, replacement_requested_at__isnull=False)
+                    | Q(status=CoverageSession.Status.REPLACEMENT_REQUESTED)
+                ),
             )
             .order_by("-created_at", "-id")
             .first()
@@ -799,12 +834,24 @@ def apply_for_player(
 
         # Disclose the player's login credentials to the incoming moderator.
         from players.models import CredentialDisclosure
-        if locked_player.login_username and locked_player.login_password_encrypted:
-            CredentialDisclosure.objects.create(
+        CredentialDisclosure.objects.create(
+            moderator=winner.moderator,
+            player=locked_player,
+            coverage_session=new_session,
+        )
+
+        # [self_apply_new_player_disclosure] create the credential
+        # disclosure for the self-applied moderator.
+        try:
+            from players.models import CredentialDisclosure
+            CredentialDisclosure.objects.get_or_create(
                 moderator=winner.moderator,
                 player=locked_player,
                 coverage_session=new_session,
+                defaults={'disclosed_at': moment},
             )
+        except Exception:
+            pass
 
         winner.status = CoverageApplication.Status.WON
         winner.resulting_session = new_session

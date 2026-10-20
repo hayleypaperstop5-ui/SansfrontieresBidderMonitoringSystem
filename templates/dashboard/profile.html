@@ -1,10 +1,11 @@
+﻿{% load static %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-    <title>Sansfrontieres | My Profile</title>
+    <title>Sansfrontieres Chat Moderation | My Profile</title>
 
     <style>
         :root {
@@ -469,16 +470,15 @@
 
 <header class="topbar">
     <a class="brand" href="{% url 'dashboard:home' %}">
-        Sansfrontieres
+        <span style="display:flex;align-items:center;"><img src="{% static 'img/logo.png' %}" alt="Sansfrontieres Chat Moderation" style="height:36px;width:36px;border-radius:10px;object-fit:cover;vertical-align:middle;margin-right:10px;"><span>Sansfrontieres Chat Moderation</span></span>
     </a>
 
-    <a
-        class="topbar-link"
-        href="{% url 'dashboard:home' %}"
-        aria-label="Back to Dashboard"
-    >
-        Back to Dashboard
-    </a>
+    <a href="{% url 'dashboard:home' %}"
+           style="display:inline-block;padding:12px 24px;background:#059669;color:white;text-decoration:none;border-radius:8px;font-weight:600;font-size:14px;transition:background 0.2s;"
+           onmouseover="this.style.background='#047857'"
+           onmouseout="this.style.background='#059669'">
+            Back to Dashboard
+        </a>
 </header>
 
 <main class="page-shell">
@@ -725,12 +725,12 @@
                         </a>
                         </button>
 
-                        <a
-                            href="{% url 'dashboard:home' %}"
-                            class="button secondary"
-                        >
-                            Back to Dashboard
-                        </a>
+                        <a href="{% url 'dashboard:home' %}"
+           style="display:inline-block;padding:12px 24px;background:#059669;color:white;text-decoration:none;border-radius:8px;font-weight:600;font-size:14px;transition:background 0.2s;"
+           onmouseover="this.style.background='#047857'"
+           onmouseout="this.style.background='#059669'">
+            Back to Dashboard
+        </a>
 
                         <a
                             href="{% url 'accounts:logout' %}"

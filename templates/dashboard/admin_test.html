@@ -1,9 +1,9 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Admin Access Test</title>
+    <title>Sansfrontieres Chat Moderation</title>
 </head>
 
 <body>
@@ -18,7 +18,12 @@
         If you can see this page, the role-based access control is working.
     </p>
 
-    <a href="{% url 'dashboard:home' %}">Back to Dashboard</a>
+    <a href="{% url 'dashboard:home' %}"
+           style="display:inline-block;padding:12px 24px;background:#059669;color:white;text-decoration:none;border-radius:8px;font-weight:600;font-size:14px;transition:background 0.2s;"
+           onmouseover="this.style.background='#047857'"
+           onmouseout="this.style.background='#059669'">
+            Back to Dashboard
+        </a>
 
 </body>
 </html>

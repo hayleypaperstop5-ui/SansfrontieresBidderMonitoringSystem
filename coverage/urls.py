@@ -1,4 +1,4 @@
-from django.urls import path
+﻿from django.urls import path
 from . import views
 
 app_name = "coverage"
@@ -31,5 +31,23 @@ urlpatterns = [
         "players/<int:player_id>/credentials/",
         views.player_credentials_view,
         name="player_credentials",
+    ),
+
+    path(
+        "continuation/<int:session_id>/respond/<str:response>/",
+        views.respond_to_continuation,
+        name="respond_to_continuation",
+    ),
+
+    path(
+        "assign-replacement/",
+        views.assign_replacement_view,
+        name="assign_replacement_view",
+    ),
+
+    path(
+        "my-reports/",
+        views.my_reports,
+        name="my_reports",
     ),
 ]

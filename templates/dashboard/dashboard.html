@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-    <title>Sansfrontieres | Dashboard</title>
+    <title>Sansfrontieres Chat Moderation | Dashboard</title>
 
     <style>
         * {
@@ -1153,7 +1153,7 @@
 {% if request.user.role == "MODERATOR" %}
 
 <header class="topbar">
-    <div class="brand">Sansfrontieres</div>
+    <div class="brand" style="display:flex;align-items:center;"><img src="{% static 'img/logo.png' %}" alt="Sansfrontieres Chat Moderation" style="height:36px;width:36px;border-radius:10px;object-fit:cover;vertical-align:middle;margin-right:10px;"><span>Sansfrontieres Chat Moderation</span></div>
 
     <div class="topbar-right">
         <a href="{% url 'notifications:list' %}" class="top-link">
@@ -1174,7 +1174,10 @@
 <div class="layout">
 
     <aside class="sidebar">
+        
 
+
+        
         <a href="{% url 'dashboard:home' %}" class="nav-link active">
             <span class="nav-icon">&#127968;</span>
             Dashboard
@@ -1185,7 +1188,7 @@
             My Coverage
         </a>
 
-        <a href="{% url 'dashboard:coverage_history' %}" class="nav-link">
+        <a href="{% url 'coverage:my_reports' %}" class="nav-link">
             <span class="nav-icon">&#128196;</span>
             Reports
         </a>
@@ -1313,7 +1316,11 @@
                                 </p>
                             </div>
 
-                            {% if current_session.status == "ACTIVE" %}
+                            {% if current_session.status == "ACTIVE" and current_session.replacement_requested_at %}
+                                <span class="status status-warning">
+                                    Replacement Requested
+                                </span>
+                            {% elif current_session.status == "ACTIVE" %}
                                 <span class="status status-success">
                                     Active
                                 </span>
@@ -1338,6 +1345,13 @@
                         </div>
 
                         <div class="coverage-grid">
+
+                            <div class="coverage-item">
+                                <span>Session Code</span>
+                                <strong>
+                                    {{ current_session.session_code|default:"—" }}
+                                </strong>
+                            </div>
 
                             <div class="coverage-item">
                                 <span>Session</span>
@@ -1446,13 +1460,8 @@
                     </div>
 
                     <div class="metric-card">
-                        <div class="metric-label">Chats This Week</div>
-                        <div class="metric-value">{{ chats_this_week }}</div>
-                    </div>
-
-                    <div class="metric-card">
                         <div class="metric-label">Unpaid Chats</div>
-                        <div class="metric-value">{{ unpaid_chats }}</div>
+                        <div class="metric-value">{{ chats_this_week }}</div>
                     </div>
 
                     <div class="metric-card">
@@ -1461,14 +1470,22 @@
                     </div>
 
                     <div class="metric-card money">
-                        <div class="metric-label">Amount Earned</div>
+                        <div class="metric-label">Amount Earned (Processed)</div>
                         <div class="metric-value">
                             KES {{ amount_earned|floatformat:2 }}
                         </div>
                     </div>
 
+                    <div class="metric-card money" style="background:#fef3c7;border-color:#fde68a;">
+                        <div class="metric-label">Anticipated Pay</div>
+                        <div class="metric-note" style="font-size:11px;color:#92400e;margin-top:-4px;">at current rates</div>
+                        <div class="metric-value">
+                            KES {{ anticipated_pay|floatformat:2 }}
+                        </div>
+                    </div>
+
                     <div class="metric-card money">
-                        <div class="metric-label">Outstanding</div>
+                        <div class="metric-label">Total Owed</div>
                         <div class="metric-value">
                             KES {{ outstanding_amount|floatformat:2 }}
                         </div>
@@ -1525,7 +1542,7 @@
                     {% else %}
                         <div class="panel-row">
                             <span>Weekly Payroll</span>
-                            <strong>No payroll records yet</strong>
+                            <strong>No payroll run has been initiated yet. Your anticipated pay is based on previous chat rates from your last payment. The final amount will be confirmed when the Director processes payroll (rates may be adjusted).</strong>
                         </div>
                     {% endif %}
 
@@ -1533,7 +1550,12 @@
 
             
     <div class="mt-4">
-      <a href="{% url 'payments:my_payments' %}" class="text-sm text-blue-700 hover:underline font-semibold">View All Payments &rarr;</a>
+      <a href="{% url 'payments:my_payments' %}"
+   style="display:inline-block;padding:12px 24px;background:#059669;color:white;text-decoration:none;border-radius:8px;font-weight:600;font-size:14px;transition:background 0.2s;"
+   onmouseover="this.style.background='#047857'"
+   onmouseout="this.style.background='#059669'">
+    View All Payments
+</a>
     </div>
   </section>
 
@@ -1555,6 +1577,11 @@
                         <strong>
                             KES {{ payroll_chat_earnings|floatformat:2 }}
                         </strong>
+                    </div>
+
+                    <div class="panel-row" style="background:#fef3c7;border-radius:6px;padding:8px 12px;margin:4px 0;">
+                        <span style="color:#92400e;font-weight:500;">Pending Payroll ({{ unprocessed_chats }} chats)</span>
+                        <strong style="color:#92400e;">KES {{ pending_payroll }}</strong>
                     </div>
 
                     <div class="panel-row">
@@ -1669,7 +1696,7 @@
                         </a>
 
                         <a
-                            href="{% url 'dashboard:coverage_history' %}"
+                            href="{% url 'coverage:my_reports' %}"
                             class="quick-action"
                         >
                             <span class="quick-icon">&#128196;</span>
@@ -1752,8 +1779,7 @@
                 <div class="section-heading">
                     <h2>Recent Session Activity</h2>
 
-                    <a href="{% url 'dashboard:coverage_history' %}">
-                        View all reports
+                    <a href="{% url 'coverage:my_reports' %}">View all reports
                     </a>
                 </div>
 
@@ -1816,9 +1842,7 @@
 {% if request.user.role == "MANAGER" %}
 
 <header class="topbar">
-    <div class="brand">
-        Sansfrontieres
-    </div>
+    <div class="brand" style="display:flex;align-items:center;"><img src="{% static 'img/logo.png' %}" alt="Sansfrontieres Chat Moderation" style="height:36px;width:36px;border-radius:10px;object-fit:cover;vertical-align:middle;margin-right:10px;"><span>Sansfrontieres Chat Moderation</span></div>
 
     <div class="topbar-right">
         <a href="{% url 'notifications:list' %}" class="top-link">
@@ -1870,7 +1894,7 @@
         </a>
 
         <a
-            href="{% url 'coverage:manager_coverage_alerts' %}"
+            href="{% url 'coverage:my_reports' %}"
             class="nav-link"
         >
             <span class="nav-icon">&#128737;</span>
@@ -2009,7 +2033,7 @@
                         </p>
 
                         <a
-                            href="{% url 'coverage:manager_coverage_alerts' %}"
+                            href="{% url 'coverage:my_reports' %}"
                             class="management-link"
                         >
                             Manage Coverage
@@ -2158,6 +2182,11 @@
   {% endfor %}
 </div>
 {% endif %}
+{% if pending_continuation_prompt %}
+  {% include "coverage/continuation_popup.html" %}
+{% endif %}
+
+    {% include "includes/footer.html" %}
 </body>
 </html>
 
