@@ -1,4 +1,5 @@
-﻿<!DOCTYPE html>
+{% load static %}
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -45,11 +46,42 @@
         @media (max-width: 800px) { .form-grid, .rate-methods { grid-template-columns: 1fr; } .form-group.full-width { grid-column: auto; } }
         @media (max-width: 700px) { .settings-page { padding: 25px 14px; } .settings-header, .settings-body { padding: 25px 20px; } .settings-header h1 { font-size: 25px; } .actions { flex-direction: column; align-items: stretch; } .primary-button, .secondary-button { text-align: center; } }
     </style>
+  <script src="https://cdn.tailwindcss.com"></script>
+
+<style>
+    /* Premium Form Styling */
+    body { background-color: #f8fafc !important; color: #1e293b !important; }
+    .panel, .card, form > div { 
+        background: white !important; 
+        border-radius: 16px !important; 
+        box-shadow: 0 4px 20px rgba(15, 23, 42, 0.04) !important; 
+        border: 1px solid #e2e8f0 !important; 
+        padding: 24px !important; 
+        margin-bottom: 24px !important; 
+    }
+    h1, h2, h3 { color: #0f172a !important; font-weight: 800 !important; }
+    label, .label { font-weight: 600 !important; color: #475569 !important; display: block; margin-bottom: 6px; }
+    input[type="text"], input[type="number"], select, textarea {
+        width: 100% !important; padding: 10px 14px !important; border: 1px solid #cbd5e1 !important; border-radius: 8px !important; outline: none !important; transition: border-color 0.2s !important;
+    }
+    input:focus, select:focus { border-color: #3b82f6 !important; box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1) !important; }
+    .btn-primary, button[type="submit"] {
+        background: #1e293b !important; color: white !important; padding: 12px 24px !important; border-radius: 8px !important; font-weight: 600 !important; border: none !important; cursor: pointer !important; transition: background 0.2s !important;
+    }
+    .btn-primary:hover, button[type="submit"]:hover { background: #0f172a !important; }
+</style>
+
 </head>
 <body>
+
+    <!-- Branded Header -->
+    <div class="flex items-center gap-4 mb-8 border-b border-slate-200 pb-4">
+        <img src="{% static 'img/logo.png' %}" alt="Sansfrontieres" style="height: 48px; width: auto;">
+        <h1 class="text-2xl font-bold text-slate-900" style="margin: 0; line-height: 1.2;">Sansfrontieres Chat Moderation System</h1>
+    </div>
 <div class="settings-page">
     <div class="settings-container">
-        <a class="top-link" href="/dashboard/">Director Dashboard</a>
+        <a href="/dashboard/" class="inline-flex items-center justify-center px-6 py-2.5 bg-green-600 hover:bg-green-700 text-white font-bold rounded-lg shadow-sm transition-colors duration-200" style="text-decoration: none; display: inline-block; margin-bottom: 16px;">Back to Dashboard</a>
         <div class="settings-card">
             <div class="settings-header">
                 <h1>Moderator Payment Settings</h1>
