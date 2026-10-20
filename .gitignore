@@ -68,3 +68,6 @@ templates/**/*.before_*
 staticfiles/
 payment-statement-*.pdf
 *.pdf.tmp
+.automation_backups/
+.session_backups/
+*.html.disabled
