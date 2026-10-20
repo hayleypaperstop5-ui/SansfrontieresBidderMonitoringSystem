@@ -713,6 +713,130 @@ def export_payments_csv(request):
 
     return response
 
+def _build_console_charts():
+    """
+    Build aggregated chart data for the payment console.
+
+    Returns:
+      {
+        "prev_cycle":  {label, earned, paid, outstanding} or None
+        "curr_cycle":  {label, earned, paid, outstanding} or None
+        "per_moderator": [ {name, prev, curr, delta, delta_pct, kind}, ... ]
+        "weekly":      [ {label, earned, paid, outstanding, moderators}, ... ]
+      }
+    All Decimal values; the template uses floatformat.
+    """
+    from decimal import Decimal
+    from django.db.models import Sum, Count
+
+    def _round0(v):
+        return (v or Decimal("0.00")).quantize(Decimal("0.01"))
+
+    # Aggregate per payment_week_end
+    weekly_qs = (
+        ModeratorPayment.objects
+        .values("payment_week_end")
+        .annotate(
+            earned=Sum("earned_amount"),
+            paid=Sum("amount_paid"),
+            outstanding=Sum("outstanding_amount"),
+            moderators=Count("moderator", distinct=True),
+        )
+        .order_by("-payment_week_end")
+    )
+    weekly = []
+    for row in weekly_qs:
+        weekly.append({
+            "week_end": row["payment_week_end"],
+            "label": row["payment_week_end"].strftime("%d %b %Y"),
+            "earned": _round0(row["earned"]),
+            "paid": _round0(row["paid"]),
+            "outstanding": _round0(row["outstanding"]),
+            "moderators": row["moderators"] or 0,
+        })
+
+    prev_cycle = weekly[1] if len(weekly) >= 2 else None
+    curr_cycle = weekly[0] if weekly else None
+
+    # Per-moderator: earned per week_end, restricted to prev & curr cycles
+    per_mod = []
+    if curr_cycle:
+        prev_we = prev_cycle["week_end"] if prev_cycle else None
+        curr_we = curr_cycle["week_end"]
+
+        relevant_weeks = [curr_we]
+        if prev_we:
+            relevant_weeks.append(prev_we)
+
+        per_mod_qs = (
+            ModeratorPayment.objects
+            .filter(payment_week_end__in=relevant_weeks)
+            .values("moderator__id", "moderator__username",
+                    "moderator__first_name", "moderator__last_name",
+                    "payment_week_end")
+            .annotate(earned=Sum("earned_amount"))
+        )
+        mod_map = {}
+        for row in per_mod_qs:
+            mid = row["moderator__id"]
+            name = (
+                ((row["moderator__first_name"] or "") + " " +
+                 (row["moderator__last_name"] or "")).strip()
+                or row["moderator__username"]
+            )
+            mod_map.setdefault(mid, {"name": name, "prev": Decimal("0.00"),
+                                     "curr": Decimal("0.00")})
+            amt = _round0(row["earned"])
+            if row["payment_week_end"] == curr_we:
+                mod_map[mid]["curr"] += amt
+            elif prev_we and row["payment_week_end"] == prev_we:
+                mod_map[mid]["prev"] += amt
+
+        for mid, d in mod_map.items():
+            prev_amt = d["prev"]
+            curr_amt = d["curr"]
+            delta = curr_amt - prev_amt
+            if prev_amt == 0 and curr_amt > 0:
+                kind = "NEW"
+                pct = None
+            elif curr_amt == 0 and prev_amt > 0:
+                kind = "STOPPED"
+                pct = Decimal("-100")
+            elif prev_amt == 0 and curr_amt == 0:
+                kind = "FLAT"
+                pct = Decimal("0")
+            else:
+                pct = (delta / prev_amt * Decimal("100")).quantize(Decimal("0.1"))
+                kind = "UP" if delta > 0 else ("DOWN" if delta < 0 else "FLAT")
+            per_mod.append({
+                "name": d["name"],
+                "prev": prev_amt,
+                "curr": curr_amt,
+                "delta": delta,
+                "pct": pct,
+                "kind": kind,
+            })
+        per_mod.sort(key=lambda r: (r["curr"], r["prev"]), reverse=True)
+
+    # Calculate deltas for Chart B (Previous vs Present)
+    if prev_cycle and curr_cycle:
+        curr_cycle["delta_earned"] = curr_cycle["earned"] - prev_cycle["earned"]
+        curr_cycle["delta_paid"] = curr_cycle["paid"] - prev_cycle["paid"]
+        curr_cycle["delta_outstanding"] = curr_cycle["outstanding"] - prev_cycle["outstanding"]
+        
+        # Calculate percentages (avoid division by zero)
+        curr_cycle["pct_earned"] = (curr_cycle["delta_earned"] / prev_cycle["earned"] * 100) if prev_cycle["earned"] else 0
+        curr_cycle["pct_paid"] = (curr_cycle["delta_paid"] / prev_cycle["paid"] * 100) if prev_cycle["paid"] else 0
+        curr_cycle["pct_outstanding"] = (curr_cycle["delta_outstanding"] / prev_cycle["outstanding"] * 100) if prev_cycle["outstanding"] else 0
+
+    return {
+        "prev_cycle": prev_cycle,
+        "curr_cycle": curr_cycle,
+        "per_moderator": per_mod,
+        "weekly": weekly[:8],
+    }
+
+
 @role_required(*RATE_MANAGEMENT_ROLES)
 def payment_console(request):
     """
@@ -817,6 +941,7 @@ def payment_console(request):
             "tab": tab,
             "summary": summary,
             "summary_counts": summary_counts,
+            "charts": _build_console_charts(),
         },
     )
 @role_required(*RATE_MANAGEMENT_ROLES)

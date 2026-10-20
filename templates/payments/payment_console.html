@@ -180,6 +180,440 @@
     {% endif %}
   </div>
 
+<!-- ============================================================ -->
+<!-- payment_console_charts — Previous vs Present comparison charts -->
+<!-- ============================================================ -->
+{% if charts.curr_cycle or charts.per_moderator %}
+<div class="mt-8 space-y-6" id="payment_console_charts">
+
+  <!-- ====================================================== -->
+  <!-- Chart B — Previous vs Present cycle -->
+  {% if charts.prev_cycle or charts.curr_cycle %}
+  <div class="bg-white rounded-2xl shadow-sm p-6">
+    <h2 class="text-lg font-bold text-slate-800 mb-1">Previous vs Present Payroll Cycle</h2>
+    <p class="text-sm text-slate-500 mb-6">
+      {% if charts.prev_cycle and charts.curr_cycle %}
+        Comparing <strong>{{ charts.prev_cycle.label }}</strong> (previous) with <strong>{{ charts.curr_cycle.label }}</strong> (present).
+      {% elif charts.curr_cycle %}
+        Present cycle: <strong>{{ charts.curr_cycle.label }}</strong>. No previous cycle to compare against yet.
+      {% endif %}
+    </p>
+
+    <svg viewBox="0 0 640 260" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:800px;height:auto;display:block;margin:0 auto;">
+      <!-- Gridlines -->
+      <line x1="60" y1="20" x2="620" y2="20" stroke="#e2e8f0" stroke-width="1"/>
+      <line x1="60" y1="60" x2="620" y2="60" stroke="#e2e8f0" stroke-width="1"/>
+      <line x1="60" y1="100" x2="620" y2="100" stroke="#e2e8f0" stroke-width="1"/>
+      <line x1="60" y1="140" x2="620" y2="140" stroke="#e2e8f0" stroke-width="1"/>
+      <line x1="60" y1="180" x2="620" y2="180" stroke="#e2e8f0" stroke-width="1"/>
+      <line x1="60" y1="220" x2="620" y2="220" stroke="#cbd5e1" stroke-width="1"/>
+
+      <!-- Empty groups that JS will fill -->
+      <g id="chart-b-bars"></g>
+      <g id="chart-b-labels"></g>
+
+      <!-- Legend -->
+      <rect x="60" y="30" width="10" height="10" fill="#1e293b"/>
+      <text x="75" y="39" font-size="11" fill="#475569">Earned</text>
+      <rect x="130" y="30" width="10" height="10" fill="#059669"/>
+      <text x="145" y="39" font-size="11" fill="#475569">Paid</text>
+      <rect x="185" y="30" width="10" height="10" fill="#d97706"/>
+      <text x="200" y="39" font-size="11" fill="#475569">Outstanding</text>
+    </svg>
+
+    <!-- Data Grid -->
+    <table class="w-full text-sm mt-4">
+      <thead>
+        <tr class="text-xs uppercase text-slate-500 border-b">
+          <th class="text-left py-2 pr-3">Metric</th>
+          <th class="text-right py-2 px-3">Previous</th>
+          <th class="text-right py-2 px-3">Present</th>
+          <th class="text-right py-2 px-3">Δ</th>
+          <th class="text-right py-2 pl-3">Δ%</th>
+        </tr>
+      </thead>
+      <tbody class="text-slate-700">
+        <tr class="border-b">
+          <td class="py-2 pr-3 font-semibold">Earned</td>
+          <td class="text-right py-2 px-3 font-mono">KES {{ charts.prev_cycle.earned|default:0|floatformat:2|intcomma }}</td>
+          <td class="text-right py-2 px-3 font-mono">KES {{ charts.curr_cycle.earned|default:0|floatformat:2|intcomma }}</td>
+          <td class="text-right py-2 px-3 font-mono {% if charts.curr_cycle.delta_earned < 0 %}text-red-600{% else %}text-green-600{% endif %}">
+            {{ charts.curr_cycle.delta_earned|default:0|floatformat:2|intcomma }}
+          </td>
+          <td class="text-right py-2 pl-3 font-mono">{{ charts.curr_cycle.pct_earned|default:0|floatformat:1 }}%</td>
+        </tr>
+        <tr class="border-b">
+          <td class="py-2 pr-3 font-semibold">Paid</td>
+          <td class="text-right py-2 px-3 font-mono text-green-700">KES {{ charts.prev_cycle.paid|default:0|floatformat:2|intcomma }}</td>
+          <td class="text-right py-2 px-3 font-mono text-green-700">KES {{ charts.curr_cycle.paid|default:0|floatformat:2|intcomma }}</td>
+          <td class="text-right py-2 px-3 font-mono {% if charts.curr_cycle.delta_paid < 0 %}text-red-600{% else %}text-green-600{% endif %}">
+            {{ charts.curr_cycle.delta_paid|default:0|floatformat:2|intcomma }}
+          </td>
+          <td class="text-right py-2 pl-3 font-mono">{{ charts.curr_cycle.pct_paid|default:0|floatformat:1 }}%</td>
+        </tr>
+        <tr>
+          <td class="py-2 pr-3 font-semibold">Outstanding</td>
+          <td class="text-right py-2 px-3 font-mono text-amber-700">KES {{ charts.prev_cycle.outstanding|default:0|floatformat:2|intcomma }}</td>
+          <td class="text-right py-2 px-3 font-mono text-amber-700">KES {{ charts.curr_cycle.outstanding|default:0|floatformat:2|intcomma }}</td>
+          <td class="text-right py-2 px-3 font-mono {% if charts.curr_cycle.delta_outstanding > 0 %}text-red-600{% else %}text-green-600{% endif %}">
+            {{ charts.curr_cycle.delta_outstanding|default:0|floatformat:2|intcomma }}
+          </td>
+          <td class="text-right py-2 pl-3 font-mono">{{ charts.curr_cycle.pct_outstanding|default:0|floatformat:1 }}%</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+
+  <!-- ====================================================== -->
+  <!-- Chart C — Per-moderator comparison -->
+  <!-- ====================================================== -->
+  {% if charts.per_moderator %}
+  <div class="bg-white rounded-2xl shadow-sm p-6">
+    <h2 class="text-lg font-bold text-slate-800 mb-1">Per-Moderator Comparison</h2>
+    <p class="text-sm text-slate-500 mb-6">
+      Previous vs present earnings per moderator, sorted by present earnings.
+    </p>
+
+    <svg viewBox="0 0 800 260" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:1000px;height:auto;display:block;margin:0 auto;">
+      <line x1="40" y1="20" x2="780" y2="20" stroke="#e2e8f0" stroke-width="1"/>
+      <line x1="40" y1="60" x2="780" y2="60" stroke="#e2e8f0" stroke-width="1"/>
+      <line x1="40" y1="100" x2="780" y2="100" stroke="#e2e8f0" stroke-width="1"/>
+      <line x1="40" y1="140" x2="780" y2="140" stroke="#e2e8f0" stroke-width="1"/>
+      <line x1="40" y1="180" x2="780" y2="180" stroke="#e2e8f0" stroke-width="1"/>
+      <line x1="40" y1="220" x2="780" y2="220" stroke="#cbd5e1" stroke-width="1"/>
+
+      {% for m in charts.per_moderator %}
+        {% widthratio forloop.counter0 1 1 as _unused %}
+        {# Each moderator gets 100px horizontal slot starting at x=60 #}
+        <rect data-chart="mod-prev-{{ forloop.counter0 }}" x="{{ 80|add:forloop.counter0|add:'0' }}" y="220" width="0" height="0" fill="#94a3b8" rx="2" data-x-base="{{ forloop.counter0 }}"/>
+        {# The actual widths are set by JS below; placeholder rects here #}
+      {% endfor %}
+
+      {# We render the per-moderator bars via a small JS block below the SVG to compute positions from data #}
+      <g id="chart-c-bars"></g>
+      <g id="chart-c-labels"></g>
+    </svg>
+
+    {# --- Data grid --- #}
+    <table class="w-full text-sm mt-4">
+      <thead>
+        <tr class="text-xs uppercase text-slate-500 border-b">
+          <th class="text-left py-2 pr-3">Moderator</th>
+          <th class="text-right py-2 px-3">Previous</th>
+          <th class="text-right py-2 px-3">Present</th>
+          <th class="text-right py-2 px-3">Δ</th>
+          <th class="text-right py-2 pl-3">Δ%</th>
+        </tr>
+      </thead>
+      <tbody class="text-slate-700">
+        {% for m in charts.per_moderator %}
+        <tr class="border-b">
+          <td class="py-2 pr-3 font-semibold">{{ m.name }}</td>
+          <td class="text-right py-2 px-3 font-mono">KES {{ m.prev|floatformat:2|intcomma }}</td>
+          <td class="text-right py-2 px-3 font-mono">
+            {% if m.kind == 'UP' %}<span class="text-green-700">▲</span>{% elif m.kind == 'DOWN' %}<span class="text-red-700">▼</span>{% elif m.kind == 'NEW' %}<span class="text-blue-700">NEW</span>{% elif m.kind == 'STOPPED' %}<span class="text-red-700">STOPPED</span>{% endif %}
+            KES {{ m.curr|floatformat:2|intcomma }}
+          </td>
+          <td class="text-right py-2 px-3 font-mono">KES {{ m.delta|floatformat:2|intcomma }}</td>
+          <td class="text-right py-2 pl-3 font-mono">
+            {% if m.pct is None %}—{% else %}{{ m.pct }}%{% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+
+  <!-- ====================================================== -->
+  <!-- Chart D — Weekly trend -->
+  <!-- ====================================================== -->
+  {% if charts.weekly %}
+  <div class="bg-white rounded-2xl shadow-sm p-6">
+    <h2 class="text-lg font-bold text-slate-800 mb-1">Weekly Payroll Trend</h2>
+    <p class="text-sm text-slate-500 mb-6">
+      Total earned, paid and outstanding per payroll cycle (most recent first).
+    </p>
+
+    <svg viewBox="0 0 800 260" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:1000px;height:auto;display:block;margin:0 auto;">
+      <line x1="40" y1="20" x2="780" y2="20" stroke="#e2e8f0" stroke-width="1"/>
+      <line x1="40" y1="60" x2="780" y2="60" stroke="#e2e8f0" stroke-width="1"/>
+      <line x1="40" y1="100" x2="780" y2="100" stroke="#e2e8f0" stroke-width="1"/>
+      <line x1="40" y1="140" x2="780" y2="140" stroke="#e2e8f0" stroke-width="1"/>
+      <line x1="40" y1="180" x2="780" y2="180" stroke="#e2e8f0" stroke-width="1"/>
+      <line x1="40" y1="220" x2="780" y2="220" stroke="#cbd5e1" stroke-width="1"/>
+
+      <g id="chart-d-lines"></g>
+      <g id="chart-d-points"></g>
+      <g id="chart-d-labels"></g>
+    </svg>
+
+    {# --- Data grid --- #}
+    <table class="w-full text-sm mt-4">
+      <thead>
+        <tr class="text-xs uppercase text-slate-500 border-b">
+          <th class="text-left py-2 pr-3">Week</th>
+          <th class="text-right py-2 px-3">Moderators</th>
+          <th class="text-right py-2 px-3">Earned</th>
+          <th class="text-right py-2 px-3">Paid</th>
+          <th class="text-right py-2 pl-3">Outstanding</th>
+        </tr>
+      </thead>
+      <tbody class="text-slate-700">
+        {% for w in charts.weekly %}
+        <tr class="border-b">
+          <td class="py-2 pr-3 font-semibold">{{ w.label }}</td>
+          <td class="text-right py-2 px-3">{{ w.moderators }}</td>
+          <td class="text-right py-2 px-3 font-mono">KES {{ w.earned|floatformat:2|intcomma }}</td>
+          <td class="text-right py-2 px-3 font-mono text-green-700">KES {{ w.paid|floatformat:2|intcomma }}</td>
+          <td class="text-right py-2 pl-3 font-mono text-amber-700">KES {{ w.outstanding|floatformat:2|intcomma }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+
+</div>
+{% endif %}
+
+{# ============================================================ #}
+{# Chart rendering script — reads JSON from the view, computes #}
+{# bar positions and heights, populates the SVG groups above.  #}
+{# ============================================================ #}
+{{ charts|json_script:"payment-console-chart-data" }}
+<script>
+(function () {
+  var data = JSON.parse(document.getElementById("payment-console-chart-data").textContent);
+  if (!data) return;
+
+  var SVG_NS = "http://www.w3.org/2000/svg";
+
+  function num(v) { return v == null ? 0 : parseFloat(v) || 0; }
+  function fmt(v) {
+    var n = num(v);
+    if (n === 0) return "0";
+    return n.toLocaleString(undefined, {maximumFractionDigits: 0});
+  }
+
+  // -------- Chart B: Previous vs Present grouped columns --------
+  (function () {
+    var prev = data.prev_cycle || {earned: 0, paid: 0, outstanding: 0};
+    var curr = data.curr_cycle || {earned: 0, paid: 0, outstanding: 0};
+    var barsG = document.getElementById("chart-b-bars");
+    var labelsG = document.getElementById("chart-b-labels");
+    if (!barsG) return;
+
+    var series = [
+      {label: "PREVIOUS", x: 200, vals: [
+        {v: prev.earned, color: "#1e293b"},
+        {v: prev.paid, color: "#059669"},
+        {v: prev.outstanding, color: "#d97706"}
+      ]},
+      {label: "PRESENT", x: 480, vals: [
+        {v: curr.earned, color: "#1e293b"},
+        {v: curr.paid, color: "#059669"},
+        {v: curr.outstanding, color: "#d97706"}
+      ]}
+    ];
+
+    var allVals = [];
+    series.forEach(function (s) { s.vals.forEach(function (it) { allVals.push(num(it.v)); }); });
+    var maxVal = Math.max.apply(null, allVals.concat([1]));
+    var baseY = 220;
+    var barW = 45;
+    var gap = 10;
+    var labelNames = ["Earned", "Paid", "Out"];
+
+    series.forEach(function (s) {
+      // Header text
+      var header = document.createElementNS(SVG_NS, "text");
+      header.setAttribute("x", s.x);
+      header.setAttribute("y", 15);
+      header.setAttribute("text-anchor", "middle");
+      header.setAttribute("font-size", "11");
+      header.setAttribute("font-weight", "700");
+      header.setAttribute("fill", "#64748b");
+      header.textContent = s.label;
+      labelsG.appendChild(header);
+
+      var totalW = barW * 3 + gap * 2;
+      var startX = s.x - totalW / 2;
+
+      s.vals.forEach(function (item, i) {
+        var val = num(item.v);
+        var h = Math.max(2, (val / maxVal) * 190); // min height 2 so 0 values are visible
+        var x = startX + i * (barW + gap);
+
+        // Bar
+        var rect = document.createElementNS(SVG_NS, "rect");
+        rect.setAttribute("x", x);
+        rect.setAttribute("y", baseY - h);
+        rect.setAttribute("width", barW);
+        rect.setAttribute("height", h);
+        rect.setAttribute("fill", item.color);
+        rect.setAttribute("rx", 2);
+        barsG.appendChild(rect);
+
+        // Value label
+        var lbl = document.createElementNS(SVG_NS, "text");
+        lbl.setAttribute("x", x + barW / 2);
+        lbl.setAttribute("y", baseY - h - 6);
+        lbl.setAttribute("text-anchor", "middle");
+        lbl.setAttribute("font-size", "10");
+        lbl.setAttribute("font-weight", "700");
+        lbl.setAttribute("fill", item.color);
+        lbl.textContent = fmt(val);
+        labelsG.appendChild(lbl);
+
+        // Category label
+        var cat = document.createElementNS(SVG_NS, "text");
+        cat.setAttribute("x", x + barW / 2);
+        cat.setAttribute("y", baseY + 15);
+        cat.setAttribute("text-anchor", "middle");
+        cat.setAttribute("font-size", "9");
+        cat.setAttribute("fill", "#94a3b8");
+        cat.textContent = labelNames[i];
+        labelsG.appendChild(cat);
+      });
+    });
+  })();
+
+  // -------- Chart C: Per-moderator grouped columns --------
+  (function () {
+    var mods = data.per_moderator || [];
+    if (!mods.length) return;
+    var bars = document.getElementById("chart-c-bars");
+    var labels = document.getElementById("chart-c-labels");
+    if (!bars) return;
+
+    var maxVal = 1;
+    mods.forEach(function (m) {
+      maxVal = Math.max(maxVal, num(m.prev), num(m.curr));
+    });
+    var heightFor = function (v) { return Math.max(0, (num(v) / maxVal) * 190); };
+
+    var slotW = Math.min(100, 720 / Math.max(1, mods.length));
+    var baseY = 220;
+    var startX = 60 + (720 - slotW * mods.length) / 2;
+
+    mods.forEach(function (m, i) {
+      var x0 = startX + i * slotW;
+      var barW = Math.max(15, slotW * 0.3);
+      var gap = slotW * 0.1;
+
+      // Previous (grey)
+      var hPrev = heightFor(m.prev);
+      var r1 = document.createElementNS(SVG_NS, "rect");
+      r1.setAttribute("x", x0 + gap);
+      r1.setAttribute("y", baseY - hPrev);
+      r1.setAttribute("width", barW);
+      r1.setAttribute("height", hPrev);
+      r1.setAttribute("fill", "#94a3b8");
+      r1.setAttribute("rx", 2);
+      bars.appendChild(r1);
+
+      // Present (green if delta >= 0, red if down)
+      var hCurr = heightFor(m.curr);
+      var color = num(m.curr) >= num(m.prev) ? "#059669" : "#dc2626";
+      var r2 = document.createElementNS(SVG_NS, "rect");
+      r2.setAttribute("x", x0 + gap + barW + gap);
+      r2.setAttribute("y", baseY - hCurr);
+      r2.setAttribute("width", barW);
+      r2.setAttribute("height", hCurr);
+      r2.setAttribute("fill", color);
+      r2.setAttribute("rx", 2);
+      bars.appendChild(r2);
+
+      // Label above present bar
+      var t1 = document.createElementNS(SVG_NS, "text");
+      t1.setAttribute("x", x0 + gap + barW + gap + barW / 2);
+      t1.setAttribute("y", baseY - hCurr - 4);
+      t1.setAttribute("text-anchor", "middle");
+      t1.setAttribute("font-size", "9");
+      t1.setAttribute("fill", color);
+      t1.textContent = fmt(m.curr);
+      labels.appendChild(t1);
+
+      // Moderator name below
+      var t2 = document.createElementNS(SVG_NS, "text");
+      t2.setAttribute("x", x0 + slotW / 2);
+      t2.setAttribute("y", baseY + 15);
+      t2.setAttribute("text-anchor", "middle");
+      t2.setAttribute("font-size", "10");
+      t2.setAttribute("fill", "#475569");
+      t2.textContent = m.name.length > 12 ? m.name.slice(0, 11) + "…" : m.name;
+      labels.appendChild(t2);
+    });
+  })();
+
+  // -------- Chart D: Weekly line --------
+  (function () {
+    var weekly = (data.weekly || []).slice().reverse();  // oldest first for line
+    if (!weekly.length) return;
+    var linesG = document.getElementById("chart-d-lines");
+    var pointsG = document.getElementById("chart-d-points");
+    var labelsG = document.getElementById("chart-d-labels");
+    if (!linesG) return;
+
+    var maxVal = 1;
+    weekly.forEach(function (w) { maxVal = Math.max(maxVal, num(w.earned)); });
+    var heightFor = function (v) { return Math.max(0, (num(v) / maxVal) * 190); };
+
+    var startX = 80, endX = 760;
+    var baseY = 220;
+    var stepX = weekly.length > 1 ? (endX - startX) / (weekly.length - 1) : 0;
+
+    var points = [];
+    weekly.forEach(function (w, i) {
+      var x = startX + stepX * i;
+      var y = baseY - heightFor(w.earned);
+      points.push({x: x, y: y, w: w});
+
+      var circle = document.createElementNS(SVG_NS, "circle");
+      circle.setAttribute("cx", x);
+      circle.setAttribute("cy", y);
+      circle.setAttribute("r", 4);
+      circle.setAttribute("fill", "#1e293b");
+      pointsG.appendChild(circle);
+
+      var lbl = document.createElementNS(SVG_NS, "text");
+      lbl.setAttribute("x", x);
+      lbl.setAttribute("y", y - 8);
+      lbl.setAttribute("text-anchor", "middle");
+      lbl.setAttribute("font-size", "10");
+      lbl.setAttribute("fill", "#1e293b");
+      lbl.textContent = fmt(w.earned);
+      labelsG.appendChild(lbl);
+
+      var xlbl = document.createElementNS(SVG_NS, "text");
+      xlbl.setAttribute("x", x);
+      xlbl.setAttribute("y", baseY + 15);
+      xlbl.setAttribute("text-anchor", "middle");
+      xlbl.setAttribute("font-size", "9");
+      xlbl.setAttribute("fill", "#64748b");
+      xlbl.textContent = w.label;
+      labelsG.appendChild(xlbl);
+    });
+
+    if (points.length > 1) {
+      var pathD = "M " + points[0].x + " " + points[0].y;
+      for (var i = 1; i < points.length; i++) {
+        pathD += " L " + points[i].x + " " + points[i].y;
+      }
+      var path = document.createElementNS(SVG_NS, "path");
+      path.setAttribute("d", pathD);
+      path.setAttribute("stroke", "#1e293b");
+      path.setAttribute("stroke-width", "2");
+      path.setAttribute("fill", "none");
+      linesG.appendChild(path);
+    }
+  })();
+})();
+</script>
+<!-- ============================================================ -->
+
 </div>
 </body>
 </html>
