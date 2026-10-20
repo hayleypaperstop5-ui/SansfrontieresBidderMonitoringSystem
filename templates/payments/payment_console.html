@@ -1,4 +1,4 @@
-﻿{% load static humanize %}
+{% load static humanize %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -154,8 +154,7 @@
           </td>
           <td class="py-3 px-4 text-right space-x-2">
             <a href="{% url 'payments:download_moderator_statement_pdf' row.moderator.id %}"
-               class="text-blue-700 hover:underline"
-               download="payment-statement-{{ row.moderator.username }}.pdf">Download PDF</a>
+               class="text-blue-700 hover:underline">Download PDF</a>
             &nbsp;·&nbsp;
             <a href="{% url 'payments:settle_moderator_payments' row.moderator.id %}"
                class="text-xs text-blue-700 hover:underline">View records</a>

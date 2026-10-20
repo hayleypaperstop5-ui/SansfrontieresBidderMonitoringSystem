@@ -1085,7 +1085,7 @@ def download_moderator_statement_pdf(request, moderator_id):
     """Download a consolidated PDF for all unpaid ModeratorPayment records for one moderator."""
     from django.http import HttpResponse
     from accounts.models import User
-    from payments.pdf import build_moderator_statement_pdf
+    from payments.pdf import build_moderator_statement_pdf, safe_pdf_filename
 
     moderator = get_object_or_404(User, pk=moderator_id, role=User.Role.MODERATOR)
 
@@ -1111,7 +1111,10 @@ def download_moderator_statement_pdf(request, moderator_id):
         return redirect("payments:settle_moderator_payments", moderator_id=moderator.id)
 
     buffer = build_moderator_statement_pdf(moderator, statement_records)
-    filename = f"payment-statement-{moderator.username}.pdf"
+    _mod_handle = safe_pdf_filename(
+        moderator.username or moderator.get_full_name() or f"moderator-{moderator.id}"
+    )
+    filename = f"payment-statement-{_mod_handle}.pdf"
     response = HttpResponse(buffer.getvalue(), content_type="application/pdf")
     response["Content-Disposition"] = f'attachment; filename="{filename}"'
     return response

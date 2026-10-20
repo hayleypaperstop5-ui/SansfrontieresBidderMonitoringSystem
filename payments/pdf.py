@@ -22,6 +22,28 @@ from reportlab.platypus import (
 
 
 
+import re as _re_safe
+
+
+def safe_pdf_filename(raw, fallback="statement", maxlen=120):
+    """
+    Turn an arbitrary string into a filename safe for Content-Disposition
+    and for the HTML download attribute:
+      - no @, no path separators, no quotes, no backslashes
+      - path traversal and control characters stripped
+      - bounded length
+    """
+    s = str(raw or "")
+    s = s.replace("@", "_at_")
+    s = _re_safe.sub(r"[^A-Za-z0-9._-]+", "_", s)
+    s = _re_safe.sub(r"_+", "_", s).strip("._")
+    if not s:
+        s = fallback
+    if len(s) > maxlen:
+        s = s[:maxlen]
+    return s
+
+
 # ==============================================================
 # PDF WATERMARK — draws the Sansfrontieres logo on every page
 # ==============================================================
