@@ -1445,18 +1445,8 @@ def recalculate_unpaid_rates(*, moderator=None, apply=True):
     Recalculate unpaid ModeratorPayment records using the current
     ChatRateTier card.
 
-    Args:
-        moderator: limit to one moderator (None = all unpaid records)
-        apply: if True, write changes to DB; if False, preview only
-
-    Returns:
-        dict with:
-            mode: "PREVIEW" | "APPLY"
-            records: list of {id, moderator_username, week_start, week_end, payable_chats, old_rate, new_rate, old_earned, new_earned, changed}
-            total_before: Decimal
-            total_after: Decimal
-            delta: Decimal
-            changed_count: int
+    Preserves bonus_earned and the historical player_chat_rate_breakdown
+    audit. Recomputes outstanding_amount. Skips bonus-only rows.
     """
     qs = (
         ModeratorPayment.objects
@@ -1480,7 +1470,33 @@ def recalculate_unpaid_rates(*, moderator=None, apply=True):
     result_records = []
 
     for mp in records:
-        # Get the current rate from the global ChatRateTier card
+        bonus = mp.bonus_earned or Decimal("0.00")
+
+        if mp.payable_chats == 0:
+            old_earned = mp.earned_amount or Decimal("0.00")
+            old_outstanding = mp.outstanding_amount or Decimal("0.00")
+            new_earned = bonus.quantize(Decimal("0.01"))
+            new_rate = mp.rate_per_chat or Decimal("0.00")
+            new_outstanding = max(new_earned - (mp.amount_paid or Decimal("0.00")), Decimal("0.00")).quantize(Decimal("0.01"))
+            total_before += old_earned
+            total_after += new_earned
+            result_records.append({
+                "id": mp.id,
+                "moderator_username": mp.moderator.username,
+                "moderator_id": mp.moderator_id,
+                "week_start": mp.payment_week_start,
+                "week_end": mp.payment_week_end,
+                "payable_chats": mp.payable_chats,
+                "old_rate": new_rate,
+                "new_rate": new_rate,
+                "old_earned": old_earned,
+                "new_earned": new_earned,
+                "new_outstanding": new_outstanding,
+                "changed": (old_earned != new_earned) or (old_outstanding != new_outstanding),
+                "_mp": mp,
+            })
+            continue
+
         try:
             tier = get_applicable_rate_tier(
                 chats_responded=mp.payable_chats,
@@ -1490,9 +1506,21 @@ def recalculate_unpaid_rates(*, moderator=None, apply=True):
         except Exception:
             new_rate = mp.rate_per_chat or Decimal("0.00")
 
+        breakdown = mp.player_chat_rate_breakdown or {}
+        historical_rate = None
+        for _, info in breakdown.items():
+            if isinstance(info, dict) and info.get("rate_per_chat") is not None:
+                try:
+                    historical_rate = Decimal(str(info["rate_per_chat"]))
+                    break
+                except Exception:
+                    pass
+        old_rate_for_log = historical_rate if historical_rate is not None else (mp.rate_per_chat or Decimal("0.00"))
+
         old_earned = mp.earned_amount or Decimal("0.00")
-        new_earned = (Decimal(mp.payable_chats) * new_rate).quantize(Decimal("0.01"))
-        new_outstanding = (new_earned - (mp.amount_paid or Decimal("0.00"))).quantize(Decimal("0.01"))
+        new_chat_earnings = (Decimal(mp.payable_chats) * new_rate).quantize(Decimal("0.01"))
+        new_earned = (new_chat_earnings + bonus).quantize(Decimal("0.01"))
+        new_outstanding = max(new_earned - (mp.amount_paid or Decimal("0.00")), Decimal("0.00")).quantize(Decimal("0.01"))
 
         total_before += old_earned
         total_after += new_earned
@@ -1504,13 +1532,14 @@ def recalculate_unpaid_rates(*, moderator=None, apply=True):
             "week_start": mp.payment_week_start,
             "week_end": mp.payment_week_end,
             "payable_chats": mp.payable_chats,
-            "old_rate": mp.rate_per_chat or Decimal("0.00"),
+            "old_rate": old_rate_for_log,
             "new_rate": new_rate,
             "old_earned": old_earned,
             "new_earned": new_earned,
+            "new_chat_earnings": new_chat_earnings,
             "new_outstanding": new_outstanding,
-            "changed": old_earned != new_earned,
-            "_mp": mp,  # hold reference for apply phase
+            "changed": (old_earned != new_earned) or ((mp.outstanding_amount or Decimal("0.00")) != new_outstanding),
+            "_mp": mp,
         })
 
     changed = [r for r in result_records if r["changed"]]
@@ -1533,7 +1562,7 @@ def recalculate_unpaid_rates(*, moderator=None, apply=True):
                     "new_earned": str(r["new_earned"]),
                     "old_rate": str(r["old_rate"]),
                     "new_rate": str(r["new_rate"]),
-                    "reason": "recalculated at current ChatRateTier",
+                    "reason": "recalculated at current ChatRateTier (bonus preserved)",
                     "applied_at": now.isoformat(),
                 })
                 existing_log["entries"] = entries
@@ -1541,7 +1570,10 @@ def recalculate_unpaid_rates(*, moderator=None, apply=True):
                 mp.earned_amount = r["new_earned"]
                 mp.outstanding_amount = r["new_outstanding"]
                 mp.rate_per_chat = r["new_rate"]
-                mp.chat_earnings = r["new_earned"]
+                if "new_chat_earnings" in r:
+                    mp.chat_earnings = r["new_chat_earnings"]
+                else:
+                    mp.chat_earnings = Decimal("0.00")
                 mp.rate_reconciliation = existing_log
 
                 if r["new_outstanding"] <= Decimal("0.00") and (mp.amount_paid or Decimal("0.00")) > Decimal("0.00"):
@@ -1560,7 +1592,6 @@ def recalculate_unpaid_rates(*, moderator=None, apply=True):
                     "updated_at",
                 ])
 
-    # Strip the private _mp reference before returning
     for r in result_records:
         r.pop("_mp", None)
 
@@ -1572,3 +1603,5 @@ def recalculate_unpaid_rates(*, moderator=None, apply=True):
         "delta": total_after - total_before,
         "changed_count": len(changed),
     }
+
+
