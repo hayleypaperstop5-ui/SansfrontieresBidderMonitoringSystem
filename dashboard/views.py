@@ -1111,7 +1111,7 @@ def director_dashboard(request):
             
             # Check for replacement request (assuming a field like `replacement_requested` exists, 
             # or checking the coverage alert)
-            if getattr(session, "replacement_requested", False):
+            if getattr(session, "replacement_requested_at", None) is not None:
                 replacement_class = '<span class="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-amber-100 text-amber-800 border border-amber-300">Replacement Requested</span>'
         else:
             mod_name = "—"
