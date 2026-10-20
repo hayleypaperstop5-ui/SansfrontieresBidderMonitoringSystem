@@ -15,7 +15,7 @@
     <a href="{% url 'payments:payroll_review' %}" class="text-sm text-blue-700 hover:underline">&larr; Back to Payroll Review</a>
     <a href="{% url 'payments:download_payment_statement_pdf' payment.id %}"
        class="text-sm text-blue-700 hover:underline float-right font-semibold"
-       target="_blank">Download PDF Statement &darr;</a>
+       download="payment-statement-{{ payment.id }}.pdf">Download PDF Statement &darr;</a>
   </div>
 
   {% if messages %}

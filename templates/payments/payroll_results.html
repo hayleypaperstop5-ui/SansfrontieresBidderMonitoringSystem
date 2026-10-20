@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -96,6 +96,10 @@
 </head>
 <body>
 <div class="container" id="results">
+    <p style="margin:0 0 16px;font-size:14px;">
+        <strong>Period:</strong>
+        {{ week_start|date:"d M Y" }} - {{ week_end|date:"d M Y" }}
+    </p>
     <h1>Payroll Successfully Processed</h1>
 
     <div class="success">

@@ -77,6 +77,10 @@
           </td>
           <td class="py-3 px-4 text-right">
             <a href="{% url 'payments:settle_payment' p.id %}" class="text-blue-700 hover:underline text-xs">View details</a>
+            &nbsp;·&nbsp;
+            <a href="{% url 'payments:download_payment_statement_pdf' p.id %}"
+               class="text-blue-700 hover:underline text-xs"
+               download="payment-statement-{{ p.id }}.pdf">Download PDF</a>
           </td>
         </tr>
         {% empty %}

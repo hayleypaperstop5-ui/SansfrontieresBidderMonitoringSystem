@@ -1,4 +1,4 @@
-﻿from datetime import date
+from datetime import date
 from decimal import Decimal
 
 from django.contrib import messages
@@ -18,8 +18,23 @@ from .services import settle_moderator_payment
 
 @role_required(*RATE_MANAGEMENT_ROLES)
 def payroll_review(request):
+    from datetime import datetime as _dt
+    from payments.services import suggested_payroll_window
+
+    end_raw = request.GET.get("end")
     try:
-        plan = build_payroll_plan(payment_date=date.today())
+        chosen_end = _dt.strptime(end_raw, "%Y-%m-%d").date() if end_raw else date.today()
+    except ValueError:
+        chosen_end = date.today()
+
+    window_start, window_end = suggested_payroll_window(chosen_end=chosen_end)
+
+    try:
+        plan = build_payroll_plan(
+            payment_date=window_end,
+            window_start=window_start,
+            window_end=window_end,
+        )
     except ValidationError as exc:
         messages.error(
             request,
@@ -31,8 +46,6 @@ def payroll_review(request):
         )
         return redirect("dashboard:home")
 
-    # Detect whether this week's payroll has already been processed so we
-    # can show an accurate banner and prevent a confusing failed POST.
     already_processed = ModeratorPayment.objects.filter(
         payment_week_start=plan["week_start"],
         payment_week_end=plan["week_end"],
@@ -44,6 +57,8 @@ def payroll_review(request):
         {
             "plan": plan,
             "already_processed": already_processed,
+            "window_start": window_start,
+            "window_end": window_end,
         },
     )
 
@@ -53,8 +68,23 @@ def process_payroll(request):
     if request.method != "POST":
         return redirect("payments:payroll_review")
 
+    from datetime import datetime as _dt
+    from payments.services import suggested_payroll_window
+
+    end_raw = request.POST.get("end")
     try:
-        result = process_thursday_payroll(payment_date=date.today())
+        chosen_end = _dt.strptime(end_raw, "%Y-%m-%d").date() if end_raw else date.today()
+    except ValueError:
+        chosen_end = date.today()
+
+    window_start, window_end = suggested_payroll_window(chosen_end=chosen_end)
+
+    try:
+        result = process_thursday_payroll(
+            payment_date=window_end,
+            window_start=window_start,
+            window_end=window_end,
+        )
     except ValidationError as exc:
         messages.error(request, str(exc))
         return redirect("payments:payroll_review")

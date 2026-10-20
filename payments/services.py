@@ -1,4 +1,4 @@
-﻿from django.utils import timezone
+from django.utils import timezone
 from datetime import date
 from decimal import Decimal
 
@@ -546,10 +546,57 @@ def process_qualifying_player_chats(
         }
 
 
+def suggested_payroll_window(chosen_end=None):
+    """
+    Default payroll window:
+      start = min(day after last PAID week_end, earliest unconsumed shift date)
+              -> never overlaps a paid period
+              -> never skips unpaid work sitting before the last paid window
+      end   = chosen_end (default today)
+    """
+    from datetime import date as _date, timedelta
+    from payments.models import ModeratorPayment, PaymentRecord
+
+    chosen_end = chosen_end or _date.today()
+
+    last_paid_end = (
+        ModeratorPayment.objects
+        .filter(status="PAID")
+        .order_by("-payment_week_end")
+        .values_list("payment_week_end", flat=True)
+        .first()
+    )
+
+    earliest_unconsumed = (
+        PaymentRecord.objects
+        .filter(consumed_by__isnull=True, chats_responded__gt=0)
+        .order_by("coverage_session__operating_date")
+        .values_list("coverage_session__operating_date", flat=True)
+        .first()
+    )
+
+    candidates = []
+    if last_paid_end:
+        candidates.append(last_paid_end + timedelta(days=1))
+    if earliest_unconsumed:
+        candidates.append(earliest_unconsumed)
+
+    if candidates:
+        start = min(candidates)
+    else:
+        start = chosen_end - timedelta(days=6)
+
+    if start > chosen_end:
+        start = chosen_end
+    return start, chosen_end
+
+
 def build_payroll_plan(
     payment_date,
     *,
     threshold=None,
+    window_start=None,
+    window_end=None,
 ):
     from datetime import date
     from django.core.exceptions import ValidationError
@@ -561,7 +608,10 @@ def build_payroll_plan(
     if not isinstance(payment_date, date):
         raise ValidationError("A valid payment date is required.")
 
-    week_start, week_end = get_payment_week_dates(payment_date)
+    if window_start and window_end:
+        week_start, week_end = window_start, window_end
+    else:
+        week_start, week_end = get_payment_week_dates(payment_date)
 
     settings = PaymentSettings.objects.order_by("-id").first()
 
@@ -830,7 +880,7 @@ def build_payroll_plan(
         "total_earned": total_earned,
     }
 
-def process_thursday_payroll(payment_date):
+def process_thursday_payroll(payment_date, *, window_start=None, window_end=None):
     from datetime import date
     from django.core.exceptions import ValidationError
     from django.db import models, transaction
@@ -838,7 +888,10 @@ def process_thursday_payroll(payment_date):
     if not isinstance(payment_date, date):
         raise ValidationError("A valid payment date is required.")
 
-    week_start, week_end = get_payment_week_dates(payment_date)
+    if window_start and window_end:
+        week_start, week_end = window_start, window_end
+    else:
+        week_start, week_end = get_payment_week_dates(payment_date)
 
     with transaction.atomic():
         existing_payroll = ModeratorPayment.objects.select_for_update().filter(
@@ -851,7 +904,11 @@ def process_thursday_payroll(payment_date):
                 f"Moderator payroll has already been processed for {week_start} to {week_end}."
             )
 
-        plan = build_payroll_plan(payment_date=payment_date)
+        plan = build_payroll_plan(
+            payment_date=payment_date,
+            window_start=week_start,
+            window_end=week_end,
+        )
 
         locked_records = list(
             PaymentRecord.objects.select_for_update()

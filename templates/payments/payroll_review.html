@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -172,6 +172,30 @@
         </div>
     </div>
 
+    <form method="get" style="background:#f1f5f9;border-radius:12px;padding:16px;margin-bottom:24px;">
+        <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap;">
+            <div>
+                <strong>From:</strong>
+                <span>{{ window_start|date:"d M Y" }}</span>
+                <span style="color:#64748b;font-size:12px;">(auto - day after last paid period ended)</span>
+            </div>
+            <div>
+                <strong>To:</strong>
+                <input type="date" name="end"
+                       value="{{ window_end|date:'Y-m-d' }}"
+                       style="padding:6px;border:1px solid #cbd5e1;border-radius:6px;">
+                <button type="submit"
+                        style="padding:6px 12px;background:#1e293b;color:#fff;border:0;border-radius:6px;cursor:pointer;">
+                    Preview
+                </button>
+            </div>
+        </div>
+        <p style="margin:8px 0 0;color:#64748b;font-size:12px;">
+            Leave as today to include all chats submitted up to today.
+            Set earlier to omit recent days. The start date is fixed at the day after the last paid period.
+        </p>
+    </form>
+
     <div class="notice">
         This review is read-only. No unpaid chats are consumed and no payment
         records are created until <strong>Process Payroll</strong> is submitted.
@@ -286,6 +310,11 @@
                 type="hidden"
                 name="payment_date"
                 value="{{ plan.payment_date|date:'Y-m-d' }}"
+            >
+            <input
+                type="hidden"
+                name="end"
+                value="{{ window_end|date:'Y-m-d' }}"
             >
             <button type="submit" class="button primary">
                 Process Payroll
