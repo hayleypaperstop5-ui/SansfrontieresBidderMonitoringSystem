@@ -61,7 +61,7 @@ def _get_moderator_weekly_earnings(user, weeks=8):
     last_week = weeks_data[-2] if len(weeks_data) >= 2 else None
     current = weeks_data[-1] if weeks_data else None
     non_current = weeks_data[:-1]
-    average = (sum(w["earned"] for w in non_current) / len(non_current)) if non_current else (sum(w["earned"] for w in weeks_data) / len(weeks_data) if weeks_data else 0)
+    average = (sum(w["earned"] for w in weeks_data) / len(weeks_data)) if weeks_data else 0
 
     trend = "stable"
     if len(non_current) >= 2:
