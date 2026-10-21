@@ -1,4 +1,4 @@
-﻿import uuid
+import uuid
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.core.validators import MinValueValidator, MaxValueValidator
@@ -224,6 +224,23 @@ class CoverageSession(models.Model):
 
         super().save(*args, **kwargs)
 
+    @property
+    def old_session_id(self):
+        """
+        If this session is a staged force-replacement (i.e. it was created
+        by notify_incoming_replacement and is the new session), return the
+        id of the OLD session it replaces. Otherwise return None.
+
+        Used by templates to decide whether to show the Acknowledge
+        Takeover button.
+        """
+        try:
+            old = self.replaced_session  # reverse OneToOne accessor
+        except Exception:
+            return None
+        if old is None:
+            return None
+        return old.id
     class Meta:
         ordering = ["-operating_date", "session_type", "-created_at"]
         indexes = [

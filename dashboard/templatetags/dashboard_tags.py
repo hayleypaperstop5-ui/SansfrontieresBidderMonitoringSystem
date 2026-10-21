@@ -14,9 +14,8 @@ register = template.Library()
 
 
 
-@register.inclusion_tag("dashboard/includes/coverage_table.html")
-
-def render_coverage_table():
+@register.inclusion_tag("dashboard/includes/coverage_table.html", takes_context=True)
+def render_coverage_table(context):
 
     # Active coverage sessions (who is currently covering whom)
 
@@ -147,14 +146,14 @@ def render_coverage_table():
             "has_replacement": getattr(session, "replacement_requested_at", None) is not None if session else False,
 
         })
-
-
+    # Determine if the current user has management permissions
+    user = context.get("request").user if context.get("request") else None
+    user_role = getattr(user, "role", None)
+    is_management = user_role in ("MANAGER", "DIRECTOR")
 
     return {
-
         "coverage_rows": coverage_rows,
-
         "moderators": moderators,
-
+        "is_management": is_management,
     }
 

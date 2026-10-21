@@ -1001,8 +1001,8 @@ def finalize_coverage_continuation(
     return new_session
 
 
-def create_report_compliance(*, session, signed_out_at):
-    """Create the 30-minute End-of-Session Report compliance requirement."""
+def create_report_compliance(*, session, signed_out_at, deadline_minutes=30):
+    """Create the End-of-Session Report compliance requirement (default 30 min)."""
     if signed_out_at is None:
         raise ValidationError("Report compliance requires a valid sign-out timestamp.")
 
@@ -1010,7 +1010,7 @@ def create_report_compliance(*, session, signed_out_at):
         coverage_session=session,
         defaults={
             "signed_out_at": signed_out_at,
-            "report_deadline": signed_out_at + timedelta(minutes=30),
+            "report_deadline": signed_out_at + timedelta(minutes=deadline_minutes),
         },
     )
     return compliance
@@ -1973,7 +1973,235 @@ def manager_override_end_coverage(
     return session
 
 
+# ---------------------------------------------------------------------------
+# Staged Force-Replace handover (used only by the "Force Replace" flow)
+# ---------------------------------------------------------------------------
+
+def finalize_staged_replacement(*, session, moment=None):
+    """
+    Commit the handover by flipping the pending new session to ACTIVE.
+
+    The new session is created at T+0 (when Force Replace is initiated) as
+    OPEN, with signed_in_at=None. When the new moderator acknowledges the
+    popup, this function commits the handover by:
+      - marking the new session ACTIVE
+      - setting signed_in_at = moment
+      - notifying management
+
+    Idempotent: safe to call multiple times.
+    """
+    from django.utils import timezone
+
+    if moment is None:
+        moment = timezone.localtime()
+
+    if not session.replacement_session_id:
+        # Nothing to finalize — the new session was not created at T+0.
+        return None
+
+    new_session = session.replacement_session
+
+    if new_session.status == CoverageSession.Status.ACTIVE:
+        # Already committed.
+        return new_session
+
+    new_session.status = CoverageSession.Status.ACTIVE
+    new_session.signed_in_at = moment
+    new_session.save(update_fields=["status", "signed_in_at", "updated_at"])
+
+    new_mod_name = (
+        new_session.moderator.get_full_name()
+        or new_session.moderator.username
+    )
+    old_mod_name = (
+        session.moderator.get_full_name() or session.moderator.username
+    )
+
+    _notify_management_team(
+        title="Handover Complete — New Moderator Active",
+        message=(
+            f"{new_mod_name} has acknowledged and is now ACTIVE on "
+            f"Player {session.player} (Session {new_session.session_code}). "
+            f"Previous moderator: {old_mod_name}."
+        ),
+        alert_level=Notification.AlertLevel.IMPORTANT,
+    )
+
+    return new_session
 
 
+def process_expired_replacement_reports(*, moment=None) -> int:
+    """
+    For staged Force-Replace handovers whose 15-minute report deadline has
+    expired without the old moderator submitting:
+      - mark ReportCompliance OVERDUE
+      - notify management
+    Returns the number of sessions processed.
 
+    NOTE: This function does NOT commit the handover. The handover is
+    committed only when the new moderator acknowledges (see
+    finalize_staged_replacement). If the new moderator never acknowledges,
+    close_expired_coverage_sessions marks the new session MISSED and
+    releases the player.
+    """
+    from django.utils import timezone
+    from datetime import timedelta
+
+    if moment is None:
+        moment = timezone.localtime()
+
+    cutoff = moment - timedelta(minutes=15)
+
+    expired = CoverageSession.objects.filter(
+        status=CoverageSession.Status.AWAITING_REPORT,
+        replacement_moderator__isnull=False,
+        replacement_requested_at__isnull=False,
+        replacement_requested_at__lte=cutoff,
+    ).select_related("player", "moderator", "replacement_moderator")
+
+    count = 0
+    for session in expired:
+        compliance = getattr(session, "report_compliance", None)
+        if compliance and compliance.status == ReportCompliance.Status.PENDING:
+            compliance.status = ReportCompliance.Status.OVERDUE
+            fields = ["status", "updated_at"]
+            if getattr(compliance, "overdue_at", None) is None:
+                compliance.overdue_at = moment
+                fields.append("overdue_at")
+            compliance.save(update_fields=fields)
+
+            old_mod = (
+                session.moderator.get_full_name()
+                or session.moderator.username
+            )
+            _notify_management_team(
+                title="Replacement: Old Moderator Report Overdue",
+                message=(
+                    f"Old moderator {old_mod} did not submit their report "
+                    f"within 15 minutes on Player {session.player}. Their "
+                    f"compliance is now OVERDUE. They can still submit "
+                    f"the report later."
+                ),
+                alert_level=Notification.AlertLevel.CRITICAL,
+            )
+            count += 1
+
+    return count
+
+
+def notify_incoming_replacement(*, session, moment=None):
+    """
+    Create the pending replacement session at T+0 (when Force Replace is
+    initiated) and notify the incoming moderator + management.
+
+    The new session is created as OPEN with signed_in_at=None and a 15-min
+    sign_in_deadline_at. It becomes ACTIVE only when the new moderator
+    acknowledges the popup (see finalize_staged_replacement).
+
+    Idempotent: if a replacement_session already exists, this function
+    re-sends the notification but does not create a duplicate session.
+    """
+    from django.db import transaction
+    from django.utils import timezone
+    from datetime import timedelta
+
+    if moment is None:
+        moment = timezone.localtime()
+
+    if not session.replacement_moderator_id:
+        return None
+
+    new_session = None
+
+    with transaction.atomic():
+        if session.replacement_session_id:
+            new_session = session.replacement_session
+        else:
+            new_session = CoverageSession(
+                player=session.player,
+                moderator=session.replacement_moderator,
+                operating_date=session.operating_date,
+                session_type=session.session_type,
+                signed_in_at=None,
+                sign_in_deadline_at=moment + timedelta(minutes=15),
+                scheduled_close_at=session.scheduled_close_at,
+                status=CoverageSession.Status.OPEN,
+                notes=(
+                    f"Staged replacement for coverage session "
+                    f"{session.session_code} (previous moderator: "
+                    f"{session.moderator.get_full_name() or session.moderator.username})."
+                ),
+            )
+            new_session.full_clean()
+            new_session.save()
+
+            session.replacement_session = new_session
+            session.save(update_fields=["replacement_session", "updated_at"])
+
+            try:
+                from players.models import CredentialDisclosure
+                CredentialDisclosure.objects.create(
+                    moderator=session.replacement_moderator,
+                    player=session.player,
+                    coverage_session=new_session,
+                )
+            except (ImportError, AttributeError):
+                pass
+
+        new_mod_name = (
+            session.replacement_moderator.get_full_name()
+            or session.replacement_moderator.username
+        )
+        old_mod_name = (
+            session.moderator.get_full_name() or session.moderator.username
+        )
+
+        # Notification to the incoming moderator (with popup CTA).
+        Notification.objects.create(
+            recipient=session.replacement_moderator,
+            notification_type=Notification.NotificationType.GENERAL,
+            alert_level=Notification.AlertLevel.CRITICAL,
+            title="New Player Coverage — Acknowledge to Take Over",
+            message=(
+                f"You have been assigned as the replacement Moderator for "
+                f"Player {session.player} (Session {new_session.session_code}). "
+                f"Old moderator: {old_mod_name}. "
+                f"Open the coverage assignment and click Acknowledge to "
+                f"take over. You have 15 minutes to acknowledge — "
+                f"otherwise the session will be marked MISSED and the "
+                f"player released for reassignment."
+            ),
+        )
+
+        if session.replacement_moderator.email:
+            subject = "New Coverage Assignment — Acknowledge to Take Over"
+            msg = (
+                f"Hello {new_mod_name},\n\n"
+                f"You have been assigned as the replacement Moderator for "
+                f"{session.player} (Session {new_session.session_code}).\n\n"
+                f"Open the coverage assignment and click Acknowledge to "
+                f"take over. You have 15 minutes.\n\n"
+                f"Regards,\n\nSansfrontieres Chat Moderation"
+            )
+            transaction.on_commit(
+                lambda: send_mail(
+                    subject, msg, settings.DEFAULT_FROM_EMAIL,
+                    [session.replacement_moderator.email],
+                    fail_silently=False,
+                )
+            )
+
+        # Management notification.
+        _notify_management_team(
+            title="Force Replace Initiated — Awaiting Acknowledgment",
+            message=(
+                f"Force replacement on Player {session.player} initiated. "
+                f"Old moderator {old_mod_name} has 15 minutes to submit "
+                f"their report. New moderator {new_mod_name} has 15 "
+                f"minutes to acknowledge takeover."
+            ),
+            alert_level=Notification.AlertLevel.IMPORTANT,
+        )
+
+    return new_session
 

@@ -44,6 +44,11 @@ urlpatterns = [
         views.assign_replacement_view,
         name="assign_replacement_view",
     ),
+    path(
+        "acknowledge-replacement/",
+        views.acknowledge_replacement_view,
+        name="acknowledge_replacement_view",
+    ),
 
     path(
         "my-reports/",

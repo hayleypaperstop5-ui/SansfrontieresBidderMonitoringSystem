@@ -149,7 +149,18 @@
                             {% elif row.has_replacement %}
                                 <a href="{% url 'coverage:manager_coverage_alerts' %}#active-coverage" class="action-btn btn-replacement" style="text-decoration:none;">Replace</a>
                             {% else %}
-                                <a href="{% url 'coverage:manager_coverage_alerts' %}#active-coverage" class="action-btn btn-force-replace" style="text-decoration:none;" title="Go to Coverage Management to replace">Force Replace</a>
+                                <form method="post" action="{% url 'coverage:assign_replacement_view' %}" style="display:inline-flex; gap:6px; align-items:center;">
+    {% csrf_token %}
+    <input type="hidden" name="action" value="assign_replacement">
+    <input type="hidden" name="session_id" value="{{ row.session_id }}">
+    <select name="replacement_moderator_id" required style="padding:4px 8px; border-radius:6px; font-size:12px; border:1px solid #cbd5e1; background:white; color:#334155;">
+        <option value="">Choose moderator…</option>
+        {% for mod in moderators %}
+        <option value="{{ mod.id }}">{{ mod.get_full_name|default:mod.username }}</option>
+        {% endfor %}
+    </select>
+    <button type="submit" class="action-btn btn-force-replace" style="cursor:pointer;">Force Replace</button>
+</form>
                             {% endif %}
                         {% else %}
                             <span style="color: #94a3b8; font-size: 12px;">—</span>

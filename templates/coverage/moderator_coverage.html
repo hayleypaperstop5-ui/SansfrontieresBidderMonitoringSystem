@@ -1,4 +1,4 @@
-﻿{% load static %}
+{% load static %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -147,6 +147,26 @@
 
 <body>
 
+{% if current_session and current_session.old_session_id %}
+<div style="background:#fef3c7;border:2px solid #f59e0b;border-radius:8px;padding:16px;margin:16px 0;">
+  <h3 style="margin:0 0 8px 0;font-size:16px;font-weight:700;color:#92400e;">
+    &#9888; Staged Takeover Pending
+  </h3>
+  <p style="margin:0 0 12px 0;font-size:14px;color:#78350f;">
+    You have been assigned as the replacement Moderator for
+    <strong>{{ current_session.player }}</strong>.
+    The previous moderator has been signed out.
+    Click <em>Acknowledge Takeover</em> to become ACTIVE and start coverage.
+  </p>
+  <form method="post" action="{% url 'coverage:acknowledge_replacement_view' %}" style="display:inline-block;">
+    {% csrf_token %}
+    <input type="hidden" name="session_id" value="{{ current_session.old_session_id }}">
+    <button type="submit" style="background:#059669;color:#fff;border:none;padding:10px 20px;border-radius:6px;font-size:14px;font-weight:600;cursor:pointer;">
+      Acknowledge Takeover &mdash; I'm Ready
+    </button>
+  </form>
+</div>
+{% endif %}
 <header>
     <h1>Sansfrontieres</h1>
 </header>

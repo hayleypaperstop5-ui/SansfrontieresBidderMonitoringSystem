@@ -268,6 +268,19 @@ def end_of_session_report(request, session_id):
                 session.status = CoverageSession.Status.COMPLETED
                 session.save(update_fields=["status", "updated_at"])
 
+                # Staged Force-Replace: if a replacement was staged on this
+                # session and has not yet been finalized, create the new
+                # session now (and notify the replacement moderator).
+                if (
+                    getattr(session, "replacement_moderator_id", None)
+                    and not getattr(session, "replacement_session_id", None)
+                ):
+                    from coverage.services import finalize_staged_replacement
+                    finalize_staged_replacement(
+                        session=session,
+                        moment=timezone.localtime(),
+                    )
+
             # Morning/day continuation:
             # after a successful report, create the new Day session once
             # the 09:00 hard boundary has been reached.
@@ -892,6 +905,103 @@ def assign_replacement_view(request):
         messages.error(request, "Replacement moderator not found or not eligible.")
         return redirect("coverage:manager_coverage_alerts")
 
+    moderator_name = (
+        replacement_moderator.get_full_name()
+        or replacement_moderator.username
+    )
+    old_moderator_name = (
+        session.moderator.get_full_name()
+        or session.moderator.username
+    )
+
+    # ------------------------------------------------------------------
+    # Branch 1 — Force Replace (no prior coverage replacement request).
+    # Stage the handover: close old session with a 15-min report window
+    # and DO NOT create the new session yet. The new session is created
+    # when the old moderator submits their report (see end_of_session_report)
+    # or when the 15-min deadline expires (see process_expired_replacement_reports).
+    # ------------------------------------------------------------------
+    if session.replacement_requested_at is None:
+        from .models import CoverageSession as _CS
+        from .services import create_report_compliance, _notify_management_team
+        from django.urls import reverse as _reverse
+
+        now = timezone.localtime()
+        try:
+            session.status = _CS.Status.AWAITING_REPORT
+            session.signed_out_at = now
+            session.closure_reason = _CS.ClosureReason.REPLACED
+            session.replacement_moderator = replacement_moderator
+            session.replacement_requested_at = now
+            session.save(update_fields=[
+                "status", "signed_out_at", "closure_reason",
+                "replacement_moderator", "replacement_requested_at", "updated_at",
+            ])
+            create_report_compliance(
+                session=session, signed_out_at=now, deadline_minutes=15,
+            )
+        except Exception as exc:
+            messages.error(request, f"Could not stage force replacement: {exc}")
+            return redirect("coverage:manager_coverage_alerts")
+
+        try:
+            report_url = _reverse("coverage:end_of_session_report", args=[session.id])
+        except Exception:
+            report_url = ""
+
+        from notifications.models import Notification
+        Notification.objects.create(
+            recipient=session.moderator,
+            notification_type=Notification.NotificationType.GENERAL,
+            alert_level=Notification.AlertLevel.CRITICAL,
+            title="Force Replacement — Submit Your Report Now (15 min)",
+            message=(
+                f"Management has initiated a force replacement on Player "
+                f"{session.player}. You have 15 minutes to submit your "
+                f"End-of-Session Report. After that you will be "
+                f"auto-signed-out, but you can still submit the report "
+                f"later.\n\n"
+                f"Submit your report here: {report_url}"
+            ),
+        )
+
+        _notify_management_team(
+            title="Force Replace Initiated — Awaiting Report",
+            message=(
+                f"Force replacement on Player {session.player} initiated by "
+                f"management. Old moderator {old_moderator_name} has 15 "
+                f"minutes to submit their report. New moderator "
+                f"{moderator_name} will be notified once the report is "
+                f"submitted or the 15-minute deadline expires."
+            ),
+            alert_level=Notification.AlertLevel.IMPORTANT,
+        )
+
+        # Create the pending replacement session NOW (at T+0) and
+        # notify the incoming moderator + management. The session
+        # becomes ACTIVE only when the new moderator acknowledges.
+        from .services import notify_incoming_replacement
+        try:
+            notify_incoming_replacement(
+                session=session, moment=now,
+            )
+        except Exception as exc:
+            messages.error(request, f"Could not notify incoming replacement moderator: {exc}")
+            return redirect("coverage:manager_coverage_alerts")
+
+        messages.success(
+            request,
+            f"Force replacement staged. {old_moderator_name} has 15 minutes "
+            f"to submit their report. {moderator_name} will be notified "
+            f"automatically once the report is submitted or the 15-minute "
+            f"deadline expires.",
+        )
+        return redirect("coverage:manager_coverage_alerts")
+
+    # ------------------------------------------------------------------
+    # Branch 2 — Normal Replace (session already had a replacement request).
+    # Preserves existing behaviour of assign_replacement() — instant swap.
+    # ------------------------------------------------------------------
     try:
         new_session = assign_replacement(
             session=session,
@@ -902,10 +1012,6 @@ def assign_replacement_view(request):
         messages.error(request, f"Could not assign replacement: {exc}")
         return redirect("coverage:manager_coverage_alerts")
 
-    moderator_name = (
-        replacement_moderator.get_full_name()
-        or replacement_moderator.username
-    )
     messages.success(
         request,
         f"{moderator_name} has been assigned as the replacement. "
@@ -940,4 +1046,60 @@ def my_reports(request):
             "total_reports": reports.count(),
         },
     )
+
+
+@login_required
+def acknowledge_replacement_view(request):
+    """
+    New moderator acknowledges a Force-Replace takeover.
+
+    POSTs session_id (the OLD session id). Commits the handover by:
+      - flipping the pending new session to ACTIVE
+      - setting signed_in_at = now
+      - notifying management
+    """
+    from .models import CoverageSession
+    from .services import finalize_staged_replacement
+
+    if request.method != "POST":
+        messages.error(request, "POST required.")
+        return redirect("dashboard:home")
+
+    old_session_id = request.POST.get("session_id")
+    if not old_session_id:
+        messages.error(request, "Session id required.")
+        return redirect("dashboard:home")
+
+    old_session = CoverageSession.objects.filter(id=old_session_id).first()
+    if old_session is None:
+        messages.error(request, "Session not found.")
+        return redirect("dashboard:home")
+
+    if old_session.replacement_moderator_id != request.user.id:
+        messages.error(request, "You are not the assigned replacement for this session.")
+        return redirect("dashboard:home")
+
+    if not old_session.replacement_session_id:
+        messages.info(request, "This handover has already been finalized or was cancelled.")
+        return redirect("dashboard:home")
+
+    try:
+        new_session = finalize_staged_replacement(
+            session=old_session,
+            moment=timezone.localtime(),
+        )
+    except Exception as exc:
+        messages.error(request, f"Could not acknowledge takeover: {exc}")
+        return redirect("dashboard:home")
+
+    if new_session is None:
+        messages.info(request, "Handover already finalized.")
+        return redirect("dashboard:home")
+
+    messages.success(
+        request,
+        f"You are now ACTIVE on Player {old_session.player}. "
+        f"The previous moderator has been signed out.",
+    )
+    return redirect("dashboard:home")
 
