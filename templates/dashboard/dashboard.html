@@ -1536,6 +1536,75 @@
                 })();
                 </script>
 
+                <div class="panel" style="margin-top:16px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                        <div>
+                            <h3 style="margin:0;">Your Weekly Earnings (Last 8 Weeks)</h3>
+                            <p style="margin:4px 0 0 0; font-size:12px; color:#64748b;">How your earnings compare across recent payroll weeks.</p>
+                        </div>
+                    </div>
+                    <div style="height:220px; position:relative;">
+                        <canvas id="earnings-chart-canvas"></canvas>
+                    </div>
+                    <div style="display:flex; gap:20px; margin-top:12px; justify-content:center; font-size:12px; color:#64748b; flex-wrap:wrap;">
+                        <span>Last week: <strong id="earn-last" style="color:#0f172a;">—</strong></span>
+                        <span>This week: <strong id="earn-current" style="color:#0f172a;">—</strong></span>
+                        <span>8-week avg: <strong id="earn-avg" style="color:#0f172a;">—</strong></span>
+                        <span>Trend: <strong id="earn-trend" style="color:#0f172a;">—</strong></span>
+                    </div>
+                </div>
+
+                <script>
+                (function () {
+                    var chartData = {{ moderator_weekly_earnings_json|safe }};
+                    if (!chartData || !chartData.weeks) return;
+                    var canvas = document.getElementById('earnings-chart-canvas');
+                    if (!canvas) return;
+
+                    document.getElementById('earn-last').textContent = 'KES ' + chartData.last_week_earned.toFixed(2);
+                    document.getElementById('earn-current').textContent = 'KES ' + chartData.current_earned.toFixed(2);
+                    document.getElementById('earn-avg').textContent = 'KES ' + chartData.average.toFixed(2);
+                    var trendLabel = { up: '\u2191 improving', down: '\u2193 declining', stable: '\u25AC stable' }[chartData.trend] || '\u2014';
+                    document.getElementById('earn-trend').textContent = trendLabel;
+
+                    new Chart(canvas.getContext('2d'), {
+                        type: 'bar',
+                        data: {
+                            labels: chartData.weeks.map(function (w) { return w.label; }),
+                            datasets: [{
+                                label: 'Earned (KES)',
+                                data: chartData.weeks.map(function (w) { return w.earned; }),
+                                backgroundColor: chartData.weeks.map(function (w, i) {
+                                    if (w.is_current) return '#93c5fd';
+                                    if (i === chartData.weeks.length - 2) return '#1e40af';
+                                    return '#3b82f6';
+                                }),
+                                borderRadius: 4
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            scales: {
+                                x: { grid: { display: false } },
+                                y: { beginAtZero: true, ticks: { callback: function (v) { return 'KES ' + v; } } }
+                            },
+                            plugins: {
+                                legend: { display: false },
+                                tooltip: {
+                                    callbacks: {
+                                        label: function (item) {
+                                            var w = chartData.weeks[item.dataIndex];
+                                            return 'KES ' + item.parsed.y.toFixed(2) + ' (' + w.chats + ' chats)';
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    });
+                })();
+                </script>
+
                 <div class="mt-4">
       <a href="{% url 'payments:my_payments' %}"
    style="display:inline-block;padding:12px 24px;background:#059669;color:white;text-decoration:none;border-radius:8px;font-weight:600;font-size:14px;transition:background 0.2s;"

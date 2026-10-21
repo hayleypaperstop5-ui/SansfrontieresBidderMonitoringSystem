@@ -35,6 +35,53 @@ from players.models import Player
 
 
 
+def _get_moderator_weekly_earnings(user, weeks=8):
+    """
+    Return the moderator's earnings per payroll week for the last N weeks.
+    """
+    from payments.models import ModeratorPayment
+    from django.utils import timezone
+
+    runs = list(ModeratorPayment.objects.filter(
+        moderator=user,
+    ).order_by('-payment_week_start')[:weeks])
+
+    weeks_data = []
+    for i, run in enumerate(runs):
+        weeks_data.append({
+            "week_start": run.payment_week_start.strftime("%d %b") if run.payment_week_start else "—",
+            "week_end": run.payment_week_end.strftime("%d %b") if run.payment_week_end else "—",
+            "label": run.payment_week_start.strftime("%d %b") if run.payment_week_start else f"W-{weeks-1-i}",
+            "earned": float(run.earned_amount or 0),
+            "chats": run.payable_chats or 0,
+            "is_current": (i == 0),
+        })
+    weeks_data.reverse()
+
+    last_week = weeks_data[-2] if len(weeks_data) >= 2 else None
+    current = weeks_data[-1] if weeks_data else None
+    non_current = weeks_data[:-1]
+    average = (sum(w["earned"] for w in non_current) / len(non_current)) if non_current else (sum(w["earned"] for w in weeks_data) / len(weeks_data) if weeks_data else 0)
+
+    trend = "stable"
+    if len(non_current) >= 2:
+        prev = non_current[-2]["earned"]
+        last = non_current[-1]["earned"]
+        if last > prev * 1.10:
+            trend = "up"
+        elif last < prev * 0.90:
+            trend = "down"
+
+    return {
+        "weeks": weeks_data,
+        "last_week_earned": last_week["earned"] if last_week else 0,
+        "last_week_label": last_week["label"] if last_week else "—",
+        "current_earned": current["earned"] if current else 0,
+        "current_label": current["label"] if current else "—",
+        "average": round(average, 2),
+        "trend": trend,
+    }
+
 def _get_moderator_weekly_chats(user):
     import json
     from django.utils import timezone
