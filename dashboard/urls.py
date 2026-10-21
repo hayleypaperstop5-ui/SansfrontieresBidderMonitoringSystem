@@ -4,6 +4,8 @@ from . import views
 app_name = "dashboard"
 
 urlpatterns = [
+    path("assign-coverage/<int:player_id>/<int:moderator_id>/", views.assign_coverage_moderator, name="assign_coverage"),
+
     # Main dashboard.
     # The view decides which dashboard to show based on the user's role.
     path("", views.dashboard, name="home"),

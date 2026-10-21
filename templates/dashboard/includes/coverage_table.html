@@ -173,8 +173,7 @@ function assignModerator(playerName, playerId) {
         if (idx >= 0 && idx < mods.length) {
             var selectedMod = mods[idx];
             alert("Success! Assigned " + selectedMod.name + " to " + playerName + ". (Backend logic to be connected)");
-            // In a real app, you would POST this to a Django view here:
-            // window.location.href = "/coverage/assign/" + playerId + "/" + selectedMod.id + "/";
+            window.location.href = "/dashboard/assign-coverage/" + playerId + "/" + selectedMod.id + "/";
         } else {
             alert("Invalid selection.");
         }

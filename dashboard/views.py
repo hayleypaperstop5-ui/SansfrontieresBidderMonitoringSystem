@@ -1294,3 +1294,36 @@ def my_shifts(request):
     return redirect("dashboard:home")
 
 
+
+
+@login_required(login_url="/login/")
+def assign_coverage_moderator(request, player_id, moderator_id):
+    from django.shortcuts import get_object_or_404, redirect
+    from django.contrib import messages
+    from django.utils import timezone
+    from players.models import Player
+    from accounts.models import User
+    from coverage.models import CoverageSession
+    
+    if request.user.role not in ["MANAGER", "DIRECTOR", "ADMIN"]:
+        messages.error(request, "You do not have permission to assign coverage.")
+        return redirect("dashboard:home")
+
+    player = get_object_or_404(Player, pk=player_id)
+    moderator = get_object_or_404(User, pk=moderator_id, role=User.Role.MODERATOR)
+
+    # Check if an active session already exists for this player
+    existing = CoverageSession.objects.filter(player=player, status="ACTIVE").first()
+    if existing:
+        messages.error(request, f"{player} is already covered by {existing.moderator.username}.")
+        return redirect("dashboard:home")
+
+    # Create the new session
+    CoverageSession.objects.create(
+        player=player,
+        moderator=moderator,
+        status="ACTIVE",
+        signed_in_at=timezone.now()
+    )
+    messages.success(request, f"Successfully assigned {moderator.username} to cover {player}.")
+    return redirect("dashboard:home")
