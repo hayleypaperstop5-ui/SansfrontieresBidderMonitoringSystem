@@ -27,3 +27,15 @@ def weekly_moderator_chats(request):
     except Exception:
         # Never let a chart computation crash a page
         return {"weekly_chart_json": None}
+
+def moderator_weekly_chart_json(request):
+    if not getattr(request, "user", None) or not request.user.is_authenticated:
+        return {}
+    if getattr(request.user, "role", None) != "MODERATOR":
+        return {}
+    try:
+        from dashboard.views import _get_moderator_weekly_chats
+        import json
+        return {"moderator_weekly_chart_json": json.dumps(_get_moderator_weekly_chats(request.user))}
+    except Exception:
+        return {"moderator_weekly_chart_json": None}

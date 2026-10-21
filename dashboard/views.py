@@ -33,6 +33,27 @@ from payments.services import (
 )
 from players.models import Player
 
+
+
+def _get_moderator_weekly_chats(user):
+    import json
+    from django.utils import timezone
+    from datetime import timedelta
+    from coverage.models import EndOfSessionReport
+    now = timezone.localtime()
+    monday = (now - timedelta(days=now.weekday())).replace(hour=0, minute=0, second=0, microsecond=0)
+    sunday_end = monday + timedelta(days=7)
+    reports = EndOfSessionReport.objects.filter(moderator=user, submitted_at__gte=monday, submitted_at__lt=sunday_end).values_list('submitted_at', 'chats_responded')
+    daily = [0] * 7
+    for submitted_at, chats in reports:
+        local = timezone.localtime(submitted_at)
+        daily[local.weekday()] += (chats or 0)
+    labels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+    total = sum(daily)
+    days_active = sum(1 for d in daily if d > 0)
+    best_idx = daily.index(max(daily)) if any(daily) else 0
+    return {'labels': labels, 'moderator_name': user.get_full_name() or user.username, 'data': daily, 'total': total, 'days_active': days_active, 'best_day': labels[best_idx] if total > 0 else '-', 'best_day_chats': daily[best_idx] if total > 0 else 0}
+
 def _get_weekly_moderator_chats():
     """
     Aggregate EndOfSessionReport.chats_responded by moderator and day-of-week

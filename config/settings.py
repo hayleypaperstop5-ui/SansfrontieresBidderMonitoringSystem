@@ -95,6 +95,7 @@ TEMPLATES = [
                 "notifications.context_processors.pending_continuation_prompt",
                 "notifications.context_processors.current_year",
                 "dashboard.context_processors.weekly_moderator_chats",
+                "dashboard.context_processors.moderator_weekly_chart_json",
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
             ],
