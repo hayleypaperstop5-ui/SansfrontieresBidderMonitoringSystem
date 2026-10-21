@@ -1,4 +1,4 @@
-﻿{% load static %}
+{% load static %}
 {% load dashboard_tags %}
 <!DOCTYPE html>
 <html lang="en">
@@ -1496,79 +1496,9 @@
 
                 </div>
 
-                <div class="panel">
-                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
-                        <h3 style="margin:0;">Weekly Payroll</h3>
-                        <span style="font-size:11px; color:#94a3b8; text-transform:uppercase; letter-spacing:0.05em;">
-                            {{ moderator_payroll|length }} week{{ moderator_payroll|length|pluralize }}
-                        </span>
-                    </div>
+                
 
-                    {% if moderator_payroll %}
-                        {% with current=moderator_payroll.0 %}
-                        <div style="background:#f8fafc; border-radius:8px; padding:14px 16px; margin-bottom:14px;">
-                            <div style="font-size:11px; color:#64748b; text-transform:uppercase; letter-spacing:0.05em; margin-bottom:10px;">
-                                Current Week
-                                <span style="color:#94a3b8; text-transform:none; letter-spacing:0; font-weight:400; margin-left:4px;">
-                                    {{ current.payment_week_start|date:"d M" }} – {{ current.payment_week_end|date:"d M Y" }}
-                                </span>
-                            </div>
-                            <div style="display:flex; gap:24px; flex-wrap:wrap;">
-                                <div>
-                                    <div style="font-size:22px; font-weight:700; color:#0f172a; line-height:1.1;">{{ current.payable_chats }}</div>
-                                    <div style="font-size:10px; color:#64748b; text-transform:uppercase; letter-spacing:0.05em; margin-top:4px;">Chats</div>
-                                </div>
-                                <div>
-                                    <div style="font-size:22px; font-weight:700; color:#0f172a; line-height:1.1;">KES {{ current.earned_amount|floatformat:2 }}</div>
-                                    <div style="font-size:10px; color:#64748b; text-transform:uppercase; letter-spacing:0.05em; margin-top:4px;">Earned</div>
-                                </div>
-                                <div>
-                                    <div style="font-size:22px; font-weight:700; line-height:1.1; {% if current.outstanding_amount > 0 %}color:#b45309;{% else %}color:#059669;{% endif %}">
-                                        {{ current.get_status_display }}
-                                    </div>
-                                    <div style="font-size:10px; color:#64748b; text-transform:uppercase; letter-spacing:0.05em; margin-top:4px;">Status</div>
-                                </div>
-                            </div>
-                        </div>
-                        {% endwith %}
-
-                        <div style="display:flex; justify-content:space-between; padding:7px 0; border-bottom:1px solid #f1f5f9;">
-                            <span style="font-size:13px; color:#64748b;">Last Paid Week</span>
-                            <strong style="font-size:13px; color:#334155;">
-                                {% if moderator_payroll|length > 1 %}
-                                    {% with prev=moderator_payroll.1 %}
-                                        {{ prev.payment_week_start|date:"d M" }} – {{ prev.payment_week_end|date:"d M" }}
-                                        <span style="color:#94a3b8; font-weight:400;">·</span>
-                                        {{ prev.payable_chats }} chats
-                                        <span style="color:#94a3b8; font-weight:400;">·</span>
-                                        KES {{ prev.earned_amount|floatformat:2 }}
-                                    {% endwith %}
-                                {% else %}—{% endif %}
-                            </strong>
-                        </div>
-
-                        <div style="display:flex; justify-content:space-between; padding:7px 0; border-bottom:1px solid #f1f5f9;">
-                            <span style="font-size:13px; color:#64748b;">Total Paid</span>
-                            <strong style="font-size:13px; color:#059669;">
-                                KES {{ total_paid|default_if_none:0|floatformat:2 }}
-                            </strong>
-                        </div>
-
-                        <div style="display:flex; justify-content:space-between; padding:7px 0;">
-                            <span style="font-size:13px; color:#64748b;">Total Outstanding</span>
-                            <strong style="font-size:13px; {% if outstanding_amount > 0 %}color:#b45309;{% else %}color:#059669;{% endif %};">
-                                KES {{ outstanding_amount|floatformat:2 }}
-                            </strong>
-                        </div>
-                    {% else %}
-                        <div style="padding:10px 0; font-size:13px; color:#64748b; line-height:1.5;">
-                            No payroll run has been initiated yet. Your anticipated pay is based on previous chat rates from your last payment. The final amount will be confirmed when the Director processes payroll (rates may be adjusted).
-                        </div>
-                    {% endif %}
-                </div>
-
-            
-    <div class="mt-4">
+<div class="mt-4">
       <a href="{% url 'payments:my_payments' %}"
    style="display:inline-block;padding:12px 24px;background:#059669;color:white;text-decoration:none;border-radius:8px;font-weight:600;font-size:14px;transition:background 0.2s;"
    onmouseover="this.style.background='#047857'"
