@@ -1,4 +1,4 @@
-﻿{% load static %}
+{% load static %}
 <!DOCTYPE html>
 {% load coverage_tags %}
 <html lang="en">
@@ -340,6 +340,17 @@
     </style>
 </head>
 <body>
+    <!-- Top Bar: Brand + Back Button -->
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:32px; border-bottom:1px solid #e2e8f0; padding-bottom:16px; flex-wrap:wrap; gap:16px;">
+        <!-- Left: Brand -->
+        <div style="display:flex; align-items:center; gap:16px;">
+            <img src="{% static 'img/logo.png' %}" alt="Sansfrontieres" style="height:48px; width:auto;">
+            <h1 style="margin:0; font-size:22px; font-weight:800; color:#0f172a; line-height:1.2;">Sansfrontieres Chat Moderation System</h1>
+        </div>
+        <!-- Right: Back Button -->
+        <a href="{% url 'dashboard:home' %}" class="btn-primary" style="padding: 10px 20px; background: #1e293b; color: white; border-radius: 8px; font-weight: 600; text-decoration: none; display: inline-block; white-space: nowrap;">Back to Dashboard</a>
+    </div>
+
     <div class="container">
         <div class="header">
             <h1>Shift &amp; Coverage Management</h1>
