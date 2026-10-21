@@ -12,23 +12,83 @@ register = template.Library()
 
 
 
+
+
 @register.inclusion_tag("dashboard/includes/coverage_table.html")
 
 def render_coverage_table():
+
+    # Active coverage sessions (who is currently covering whom)
 
     active_sessions = CoverageSession.objects.filter(status="ACTIVE").select_related("player", "moderator")
 
     covered_players = {s.player_id: s for s in active_sessions}
 
+
+
+    # All active players, sorted
+
     all_players = Player.objects.filter(status="ACTIVE").order_by("player_number")
 
-    
 
-    # Fetch active moderators for the "Assign" dropdown
 
-    moderators = User.objects.filter(role=User.Role.MODERATOR, is_active=True).order_by("first_name", "username")
+    # Fetch ONLY fully-eligible moderators:
 
-    
+    # 1. Must be MODERATOR role
+
+    # 2. Must be active (is_active=True)
+
+    # 3. Staff profile must be ACTIVE (not suspended/terminated)
+
+    # 4. Must NOT be currently covering a player (no ACTIVE session)
+
+    # 5. Must NOT have a pending End-of-Session Report (no AWAITING_REPORT session)
+
+    active_mod_ids = (
+
+        CoverageSession.objects
+
+        .filter(status="ACTIVE")
+
+        .values_list("moderator_id", flat=True)
+
+    )
+
+    awaiting_report_mod_ids = (
+
+        CoverageSession.objects
+
+        .filter(status="AWAITING_REPORT")
+
+        .values_list("moderator_id", flat=True)
+
+    )
+
+    excluded_ids = set(active_mod_ids) | set(awaiting_report_mod_ids)
+
+    moderators = (
+
+        User.objects
+
+        .filter(
+
+            role=User.Role.MODERATOR,
+
+            is_active=True,
+
+            staff_profile__status="ACTIVE",
+
+        )
+
+        .exclude(id__in=excluded_ids)
+
+        .order_by("first_name", "last_name", "username")
+
+    )
+
+
+
+    # Build the coverage rows for the table
 
     coverage_rows = []
 
@@ -56,7 +116,7 @@ def render_coverage_table():
 
         else:
 
-            mod_name = "—"
+            mod_name = "\u2014"
 
             status = "Uncovered"
 
