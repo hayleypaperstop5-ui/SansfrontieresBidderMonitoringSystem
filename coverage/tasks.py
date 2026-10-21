@@ -1,4 +1,4 @@
-﻿from config.celery import app
+from config.celery import app
 
 from .alert_services import (
     process_coverage_alerts,
@@ -173,6 +173,10 @@ def send_continuation_prompts_task(self):
             prompt_coverage_continuation(session=session, moment=now)
         except TypeError:
             prompt_coverage_continuation(session=session)
+        except Exception as _per_session_exc:
+            # Session not in prompt window or boundary passed — skip, do not retry.
+            skipped += 1
+            continue
         prompted += 1
     return {"status": "success", "prompted": prompted, "skipped": skipped}
 

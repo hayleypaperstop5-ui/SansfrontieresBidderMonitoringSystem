@@ -1535,7 +1535,7 @@ def close_expired_coverage_sessions(*, moment=None) -> int:
                 management_message = (
                     f"{moderator_name} chose NO to continue covering "
                     f"{session.player}. The current session has ended at "
-                    f"{signed_out_at.strftime('%d %B %Y at %H:%M')}. "
+                    f"{timezone.localtime(signed_out_at).strftime('%d %B %Y at %H:%M')}. "
                     "The Player is available to the normal coverage "
                     "assignment workflow."
                 )
@@ -1551,7 +1551,7 @@ def close_expired_coverage_sessions(*, moment=None) -> int:
                     f"{moderator_name} did not respond to the continuation "
                     f"prompt for {session.player} before the hard boundary. "
                     f"The current session ended automatically at "
-                    f"{signed_out_at.strftime('%d %B %Y at %H:%M')}. "
+                    f"{timezone.localtime(signed_out_at).strftime('%d %B %Y at %H:%M')}. "
                     "The Player is available to the normal coverage "
                     "assignment workflow."
                 )
@@ -1791,7 +1791,7 @@ def close_expired_coverage_sessions(*, moment=None) -> int:
         message = (
             f"{moderator_name}'s coverage session for {session.player} "
             f"reached its hard boundary at "
-            f"{signed_out_at.strftime('%d %B %Y at %H:%M')} without a "
+            f"{timezone.localtime(signed_out_at).strftime('%d %B %Y at %H:%M')} without a "
             "continuation prompt being recorded. The Moderator has been "
             "signed out and an End-of-Session Report is required. The "
             "Player is available to the normal coverage assignment workflow."
