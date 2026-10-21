@@ -1,4 +1,4 @@
-﻿﻿﻿﻿﻿{% load static %}
+﻿﻿﻿﻿{% load static %}
 {% load dashboard_tags %}
 <!DOCTYPE html>
 <html lang="en">
@@ -1367,7 +1367,7 @@
                                 <span>Signed In</span>
                                 <strong>
                                     {% if current_session.signed_in_at %}
-                                        {{ current_session.signed_in_at|date:"H:i" }}
+                                        {{ current_session.signed_in_at|date:"d M Y, H:i" }}
                                     {% else %}
                                         Not yet
                                     {% endif %}
@@ -1378,7 +1378,7 @@
                                 <span>Scheduled Close</span>
                                 <strong>
                                     {% if current_session.scheduled_close_at %}
-                                        {{ current_session.scheduled_close_at|date:"H:i" }}
+                                        {{ current_session.scheduled_close_at|date:"d M Y, H:i" }}
                                     {% else %}
                                         Not scheduled
                                     {% endif %}

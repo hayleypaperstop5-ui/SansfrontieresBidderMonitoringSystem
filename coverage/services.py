@@ -1,4 +1,4 @@
-﻿from datetime import datetime, timedelta
+from datetime import datetime, timedelta
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
@@ -2104,6 +2104,7 @@ def notify_incoming_replacement(*, session, moment=None):
     from django.db import transaction
     from django.utils import timezone
     from datetime import timedelta
+    from coverage.session_times import get_scheduled_close_at
 
     if moment is None:
         moment = timezone.localtime()
@@ -2117,14 +2118,28 @@ def notify_incoming_replacement(*, session, moment=None):
         if session.replacement_session_id:
             new_session = session.replacement_session
         else:
+            # Derive session_type from the activation moment, not from the
+            # old session — a replacement at 09:43 EAT should be a DAY session,
+            # not an inherited NIGHT session ending the next morning.
+            local_hour = moment.hour
+            if 9 <= local_hour < 21:
+                derived_type = CoverageSession.SessionType.DAY
+            else:
+                derived_type = CoverageSession.SessionType.NIGHT
+
+            try:
+                derived_close = get_scheduled_close_at(moment, derived_type)
+            except Exception:
+                derived_close = session.scheduled_close_at
+
             new_session = CoverageSession(
                 player=session.player,
                 moderator=session.replacement_moderator,
-                operating_date=session.operating_date,
-                session_type=session.session_type,
+                operating_date=moment.date(),
+                session_type=derived_type,
                 signed_in_at=None,
                 sign_in_deadline_at=moment + timedelta(minutes=15),
-                scheduled_close_at=session.scheduled_close_at,
+                scheduled_close_at=derived_close,
                 status=CoverageSession.Status.OPEN,
                 notes=(
                     f"Staged replacement for coverage session "
