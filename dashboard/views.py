@@ -1103,6 +1103,30 @@ def director_dashboard(request):
             "replacement_badge": replacement_class,
         })
 
+    # Eligible moderators for the Force Replace dropdown on the director portal.
+    # Excludes moderators currently covering a player or with a pending report.
+    from coverage.models import CoverageSession as _CS
+    _busy_mod_ids = set(
+        _CS.objects.filter(
+            status__in=(
+                _CS.Status.ACTIVE,
+                _CS.Status.OPEN,
+                _CS.Status.AWAITING_REPORT,
+                _CS.Status.HANDOVER,
+                _CS.Status.REPLACEMENT_REQUESTED,
+            )
+        ).values_list("moderator_id", flat=True)
+    )
+    context["eligible_moderators"] = (
+        User.objects.filter(
+            role=User.Role.MODERATOR,
+            is_active=True,
+            staff_profile__status="ACTIVE",
+        )
+        .exclude(id__in=_busy_mod_ids)
+        .select_related("staff_profile")
+        .order_by("first_name", "last_name", "username")
+    )
     context["coverage_rows"] = coverage_rows
     # -------------------------------------
 

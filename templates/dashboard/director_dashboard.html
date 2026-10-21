@@ -289,7 +289,7 @@
                     <tr class="bg-slate-50 border-b border-slate-200">
                         <th class="py-3 px-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Player</th>
                         <th class="py-3 px-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Assigned Moderator</th>
-                        <th class="py-3 px-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Status</th>
+                        <th class="py-3 px-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Status</th>                        <th class="py-3 px-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right" id="director-actions-header">Actions</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-100">
@@ -302,6 +302,39 @@
                                 {{ row.status }}
                             </span>
                             {{ row.replacement_badge|safe }}
+                        </td>                        <td class="py-3 px-4 text-right">
+                            {% if row.status == "Uncovered" %}
+                                <a href="{% url 'coverage:manager_coverage_alerts' %}#assign-coverage"
+                                   class="inline-flex items-center px-3 py-1.5 rounded-md text-xs font-bold text-white transition"
+                                   style="background-color:#3b82f6; text-decoration:none;">
+                                    Assign
+                                </a>
+                            {% elif row.has_replacement %}
+                                <a href="{% url 'coverage:manager_coverage_alerts' %}#active-coverage"
+                                   class="inline-flex items-center px-3 py-1.5 rounded-md text-xs font-bold text-white transition"
+                                   style="background-color:#f59e0b; text-decoration:none;">
+                                    Replace
+                                </a>
+                            {% else %}
+                                <form method="post" action="{% url 'coverage:assign_replacement_view' %}"
+                                      style="display:inline-flex; gap:6px; align-items:center; justify-content:flex-end;">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="action" value="assign_replacement">
+                                    <input type="hidden" name="session_id" value="{{ row.session_id }}">
+                                    <select name="replacement_moderator_id" required
+                                            style="padding:4px 8px; border-radius:6px; font-size:12px; border:1px solid #cbd5e1; background:white; color:#334155;">
+                                        <option value="">Choose moderator…</option>
+                                        {% for mod in eligible_moderators %}
+                                        <option value="{{ mod.id }}">{{ mod.get_full_name|default:mod.username }}</option>
+                                        {% endfor %}
+                                    </select>
+                                    <button type="submit"
+                                            class="inline-flex items-center px-3 py-1.5 rounded-md text-xs font-bold text-white transition"
+                                            style="background-color:#dc2626; border:none; cursor:pointer;">
+                                        Force Replace
+                                    </button>
+                                </form>
+                            {% endif %}
                         </td>
                     </tr>
                     {% empty %}
