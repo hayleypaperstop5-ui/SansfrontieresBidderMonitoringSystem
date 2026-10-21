@@ -145,7 +145,7 @@
                     <td style="text-align: right;">
                         {% if is_management %}
                             {% if row.status == "Uncovered" %}
-                                <button class="action-btn btn-assign" onclick="assignModerator('{{ row.player }}', '{{ row.player_id }}')">Assign</button>
+                                <a href="{% url 'coverage:manager_coverage_alerts' %}#assign-coverage" class="action-btn btn-assign" style="text-decoration:none;">Assign</a>
                             {% elif row.has_replacement %}
                                 <a href="{% url 'coverage:manager_coverage_alerts' %}#active-coverage" class="action-btn btn-replacement" style="text-decoration:none;">Replace</a>
                             {% else %}
@@ -203,12 +203,5 @@ Enter the number (1-" + mods.length + "):"
     return mods[idx];
 }
 
-function assignModerator(playerName, playerId) {
-    var mods = buildModeratorList();
-    var selected = promptForModerator(mods, "Assign a Moderator to", playerName);
-    if (selected) {
-        window.location.href = "/dashboard/assign-coverage/" + playerId + "/" + selected.id + "/";
-    }
-}
 
 </script>
