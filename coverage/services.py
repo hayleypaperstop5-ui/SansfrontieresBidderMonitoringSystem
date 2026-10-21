@@ -1895,40 +1895,6 @@ def get_uncovered_players(*, moment=None):
     ).exclude(
         id__in=covered_player_ids
     ).order_by("player_number")
-
-
-def monitor_coverage_checkpoint(*, moment=None):
-    if moment is None:
-        moment = timezone.localtime()
-
-    session_type = get_session_type(moment)
-    operating_date = get_operating_date(moment, session_type)
-
-    active_players = Player.objects.filter(
-        status=Player.Status.ACTIVE,
-    ).order_by("player_number")
-
-    uncovered_players = list(
-        get_uncovered_players(moment=moment)
-    )
-
-    uncovered_ids = {player.id for player in uncovered_players}
-
-    covered_count = active_players.exclude(
-        id__in=uncovered_ids
-    ).count()
-
-    return {
-        "checkpoint_at": moment,
-        "session_type": session_type,
-        "operating_date": operating_date,
-        "total_active_players": active_players.count(),
-        "covered_players": covered_count,
-        "uncovered_players": len(uncovered_players),
-        "uncovered_player_list": uncovered_players,
-    }
-
-@transaction.atomic
 def manager_override_end_coverage(
     *,
     session: CoverageSession,
