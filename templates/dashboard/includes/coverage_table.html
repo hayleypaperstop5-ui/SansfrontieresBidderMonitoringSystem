@@ -123,7 +123,7 @@
                     <th>Player</th>
                     <th>Assigned Moderator</th>
                     <th>Status</th>
-                    {% if request.user.role in "MANAGER,DIRECTOR,ADMIN" %}<th style="text-align: right;">Actions</th>{% endif %}
+                    {% if is_management %}<th style="text-align: right;">Actions</th>{% endif %}
                 </tr>
             </thead>
             <tbody>
@@ -143,13 +143,13 @@
                         {% endif %}
                     </td>
                     <td style="text-align: right;">
-                        {% if request.user.role in "MANAGER,DIRECTOR,ADMIN" %}
+                        {% if is_management %}
                             {% if row.status == "Uncovered" %}
                                 <button class="action-btn btn-assign" onclick="assignModerator('{{ row.player }}', '{{ row.player_id }}')">Assign</button>
                             {% elif row.has_replacement %}
-                                <button class="action-btn btn-replacement" onclick="replaceModerator('{{ row.player }}', '{{ row.session_id }}')">Replace</button>
+                                <a href="{% url 'coverage:manager_coverage_alerts' %}#active-coverage" class="action-btn btn-replacement" style="text-decoration:none;">Replace</a>
                             {% else %}
-                                <button class="action-btn btn-force-replace" onclick="replaceModerator('{{ row.player }}', '{{ row.session_id }}')" title="Force replacement (overrides current moderator)">Force Replace</button>
+                                <a href="{% url 'coverage:manager_coverage_alerts' %}#active-coverage" class="action-btn btn-force-replace" style="text-decoration:none;" title="Go to Coverage Management to replace">Force Replace</a>
                             {% endif %}
                         {% else %}
                             <span style="color: #94a3b8; font-size: 12px;">—</span>
@@ -167,29 +167,48 @@
 </div>
 
 <script>
-function assignModerator(playerName, playerId) {
-    // Build a dropdown list of moderators
+function buildModeratorList() {
     var mods = [
         {% for mod in moderators %}
             { id: "{{ mod.id }}", name: "{{ mod.get_full_name|default:mod.username|escapejs }}" },
         {% endfor %}
     ];
-    
+    return mods;
+}
+
+function promptForModerator(mods, actionLabel, playerName) {
+    if (mods.length === 0) {
+        alert("No eligible moderators are available right now.");
+        return null;
+    }
     var modList = mods.map(function(m, index) {
         return (index + 1) + ". " + m.name;
-    }).join("\n");
-    
-    var choice = prompt("Assign a Moderator to " + playerName + "\n\nAvailable Moderators:\n" + modList + "\n\nEnter the number (1-" + mods.length + "):");
-    
-    if (choice) {
-        var idx = parseInt(choice) - 1;
-        if (idx >= 0 && idx < mods.length) {
-            var selectedMod = mods[idx];
-            alert("Success! Assigned " + selectedMod.name + " to " + playerName + ". (Backend logic to be connected)");
-            window.location.href = "/dashboard/assign-coverage/" + playerId + "/" + selectedMod.id + "/";
-        } else {
-            alert("Invalid selection.");
-        }
+    }).join("
+");
+    var choice = prompt(
+        actionLabel + " for " + playerName + "
+
+Available Moderators:
+" + modList +
+        "
+
+Enter the number (1-" + mods.length + "):"
+    );
+    if (!choice) return null;
+    var idx = parseInt(choice) - 1;
+    if (isNaN(idx) || idx < 0 || idx >= mods.length) {
+        alert("Invalid selection.");
+        return null;
+    }
+    return mods[idx];
+}
+
+function assignModerator(playerName, playerId) {
+    var mods = buildModeratorList();
+    var selected = promptForModerator(mods, "Assign a Moderator to", playerName);
+    if (selected) {
+        window.location.href = "/dashboard/assign-coverage/" + playerId + "/" + selected.id + "/";
     }
 }
+
 </script>
