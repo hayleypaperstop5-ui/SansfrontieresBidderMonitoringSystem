@@ -101,6 +101,15 @@
         color: #64748b;
         cursor: default;
     }
+
+    .btn-force-replace {
+        background-color: #dc2626;
+        color: white;
+    }
+    .btn-force-replace:hover {
+        background-color: #b91c1c;
+    }
+
 </style>
 
 <div class="premium-coverage-card">
@@ -114,7 +123,7 @@
                     <th>Player</th>
                     <th>Assigned Moderator</th>
                     <th>Status</th>
-                    <th style="text-align: right;">Actions</th>
+                    {% if request.user.role in "MANAGER,DIRECTOR,ADMIN" %}<th style="text-align: right;">Actions</th>{% endif %}
                 </tr>
             </thead>
             <tbody>
@@ -134,12 +143,16 @@
                         {% endif %}
                     </td>
                     <td style="text-align: right;">
-                        {% if row.status == "Uncovered" %}
-                            <button class="action-btn btn-assign" onclick="assignModerator('{{ row.player }}', '{{ row.player_id }}')">Assign</button>
-                        {% elif row.has_replacement %}
-                            <button class="action-btn btn-replacement" onclick="assignModerator('{{ row.player }}', '{{ row.player_id }}')">Replace</button>
+                        {% if request.user.role in "MANAGER,DIRECTOR,ADMIN" %}
+                            {% if row.status == "Uncovered" %}
+                                <button class="action-btn btn-assign" onclick="assignModerator('{{ row.player }}', '{{ row.player_id }}')">Assign</button>
+                            {% elif row.has_replacement %}
+                                <button class="action-btn btn-replacement" onclick="replaceModerator('{{ row.player }}', '{{ row.session_id }}')">Replace</button>
+                            {% else %}
+                                <button class="action-btn btn-force-replace" onclick="replaceModerator('{{ row.player }}', '{{ row.session_id }}')" title="Force replacement (overrides current moderator)">Force Replace</button>
+                            {% endif %}
                         {% else %}
-                            <span class="action-btn btn-no-action">No Action</span>
+                            <span style="color: #94a3b8; font-size: 12px;">—</span>
                         {% endif %}
                     </td>
                 </tr>
