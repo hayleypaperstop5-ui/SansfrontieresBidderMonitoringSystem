@@ -1,4 +1,4 @@
-﻿﻿﻿﻿{% load static %}
+﻿﻿{% load static %}
 {% load dashboard_tags %}
 <!DOCTYPE html>
 <html lang="en">
@@ -1497,58 +1497,64 @@
                 </div>
 
                 <div class="panel">
-
-                    <h3>Weekly Payroll</h3>
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                        <h3 style="margin:0;">Weekly Payroll</h3>
+                        <span style="font-size:11px; color:#94a3b8; text-transform:uppercase; letter-spacing:0.05em;">{{ moderator_payroll|length }} week{{ moderator_payroll|length|pluralize }} on record</span>
+                    </div>
 
                     {% if moderator_payroll %}
-                        {% for payroll in moderator_payroll %}
-
-                            <div class="panel-row">
-                                <span>Payroll Week</span>
-                                <strong>
-                                    {{ payroll.payment_week_start|date:"d M Y" }}
-                                    –
-                                    {{ payroll.payment_week_end|date:"d M Y" }}
-                                </strong>
+                        {% with current=moderator_payroll.0 %}
+                        <div style="background:#f8fafc; border-radius:8px; padding:14px 16px; margin-bottom:14px;">
+                            <div style="font-size:11px; color:#64748b; text-transform:uppercase; letter-spacing:0.05em; margin-bottom:8px;">
+                                Current Week
+                                <span style="color:#94a3b8; text-transform:none; letter-spacing:0; font-weight:400;">
+                                    {{ current.payment_week_start|date:"d M" }} – {{ current.payment_week_end|date:"d M Y" }}
+                                </span>
                             </div>
-
-                            <div class="panel-row">
-                                <span>Payable Chats</span>
-                                <strong>{{ payroll.payable_chats }}</strong>
+                            <div style="display:flex; gap:20px; flex-wrap:wrap;">
+                                <div>
+                                    <div style="font-size:20px; font-weight:700; color:#0f172a;">{{ current.payable_chats }}</div>
+                                    <div style="font-size:11px; color:#64748b; text-transform:uppercase; letter-spacing:0.05em;">Chats</div>
+                                </div>
+                                <div>
+                                    <div style="font-size:20px; font-weight:700; color:#0f172a;">KES {{ current.earned_amount|floatformat:2 }}</div>
+                                    <div style="font-size:11px; color:#64748b; text-transform:uppercase; letter-spacing:0.05em;">Earned</div>
+                                </div>
+                                <div>
+                                    <div style="font-size:20px; font-weight:700; {% if current.outstanding_amount > 0 %}color:#b45309;{% else %}color:#059669;{% endif %}">
+                                        {{ current.get_status_display }}
+                                    </div>
+                                    <div style="font-size:11px; color:#64748b; text-transform:uppercase; letter-spacing:0.05em;">Status</div>
+                                </div>
                             </div>
+                        </div>
+                        {% endwith %}
 
-                            <div class="panel-row">
-                                <span>Earned</span>
-                                <strong>KES {{ payroll.earned_amount|floatformat:2 }}</strong>
-                            </div>
-
-                            <div class="panel-row">
-                                <span>Paid</span>
-                                <strong>KES {{ payroll.amount_paid|floatformat:2 }}</strong>
-                            </div>
-
-                            <div class="panel-row">
-                                <span>Outstanding</span>
-                                <strong>KES {{ payroll.outstanding_amount|floatformat:2 }}</strong>
-                            </div>
-
-                            <div class="panel-row">
-                                <span>Status</span>
-                                <strong>{{ payroll.get_status_display }}</strong>
-                            </div>
-
-                            {% if not forloop.last %}
-                                <hr>
-                            {% endif %}
-
-                        {% endfor %}
+                        {# Compact summary rows #}
+                        <div style="display:flex; justify-content:space-between; padding:6px 0; border-bottom:1px solid #f1f5f9;">
+                            <span style="font-size:13px; color:#64748b;">Last Paid</span>
+                            <strong style="font-size:13px; color:#334155;">
+                                {% for p in moderator_payroll %}{% if p.amount_paid > 0 and forloop.first %}{% endif %}{% endfor %}
+                                {% for p in moderator_payroll %}
+                                    {% if p.get_status_display == "Paid" %}
+                                        {{ p.payable_chats }} chats · KES {{ p.earned_amount|floatformat:2 }}
+                                        {# Stop after first paid #}
+                                        {% if forloop.first %}{% endif %}
+                                    {% endif %}
+                                {% endfor %}
+                            </strong>
+                        </div>
+                        <div style="display:flex; justify-content:space-between; padding:6px 0;">
+                            <span style="font-size:13px; color:#64748b;">Total Outstanding</span>
+                            <strong style="font-size:13px; {% if outstanding_amount > 0 %}color:#b45309;{% else %}color:#059669;{% endif %};">
+                                KES {{ outstanding_amount|floatformat:2 }}
+                            </strong>
+                        </div>
                     {% else %}
-                        <div class="panel-row">
-                            <span>Weekly Payroll</span>
-                            <strong>No payroll run has been initiated yet. Your anticipated pay is based on previous chat rates from your last payment. The final amount will be confirmed when the Director processes payroll (rates may be adjusted).</strong>
+                        <div style="padding:12px 0; font-size:13px; color:#64748b;">
+                            No payroll run has been initiated yet. Your anticipated pay is based on previous chat rates from your last payment. The final amount will be confirmed when the Director processes payroll (rates may be adjusted).
                         </div>
                     {% endif %}
-
                 </div>
 
             
@@ -1989,6 +1995,90 @@
                         </h1>
 
 {% render_coverage_table %}
+{# ====== Daily Moderator Performance Chart (added) ====== #}
+{% if weekly_chart_json %}
+<div class="bg-white rounded-2xl shadow-sm border border-slate-200 mb-8"
+     style="margin-bottom: 32px; background: white; border-radius: 16px; border: 1px solid #e2e8f0; padding: 24px;">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; flex-wrap:wrap; gap:8px;">
+        <div>
+            <h2 style="font-size: 18px; font-weight: 700; color: #1e293b; margin: 0;">Daily Moderator Performance</h2>
+            <p style="font-size: 14px; color: #64748b; margin: 4px 0 0 0;">Chats submitted per day this week (Monday &rarr; Sunday). Multiple reports on the same day are summed.</p>
+        </div>
+    </div>
+    <div style="height: 340px; position: relative;">
+        <canvas id="daily-mod-chart-canvas"></canvas>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script>
+(function () {
+    var chartData = {{ weekly_chart_json|safe }};
+    if (!chartData || !chartData.moderators || chartData.moderators.length === 0) {
+        var canvas0 = document.getElementById('daily-mod-chart-canvas');
+        if (canvas0) {
+            var wrap = canvas0.closest('div.bg-white');
+            if (wrap) wrap.style.display = 'none';
+        }
+        return;
+    }
+    var labels = chartData.labels;
+    var mods = chartData.moderators;
+    var data = chartData.data;
+    var colors = [
+        '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6',
+        '#06b6d4', '#ec4899', '#14b8a6', '#f97316', '#6366f1',
+        '#84cc16', '#eab308', '#0891b2', '#a855f7', '#22c55e'
+    ];
+    var datasets = mods.map(function (name, idx) {
+        return {
+            label: name,
+            data: data[name],
+            backgroundColor: colors[idx % colors.length],
+            borderColor: colors[idx % colors.length],
+            borderWidth: 1,
+            stack: 'chats'
+        };
+    });
+    var canvas = document.getElementById('daily-mod-chart-canvas');
+    if (!canvas) return;
+    new Chart(canvas.getContext('2d'), {
+        type: 'bar',
+        data: { labels: labels, datasets: datasets },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { mode: 'index', intersect: false },
+            scales: {
+                x: { stacked: true, grid: { display: false } },
+                y: {
+                    stacked: true,
+                    beginAtZero: true,
+                    ticks: { precision: 0 },
+                    title: { display: true, text: 'Chats submitted' }
+                }
+            },
+            plugins: {
+                legend: { position: 'bottom', labels: { boxWidth: 12, padding: 12 } },
+                tooltip: {
+                    callbacks: {
+                        label: function (item) {
+                            return item.dataset.label + ': ' + item.parsed.y + ' chats';
+                        },
+                        footer: function (items) {
+                            var total = items.reduce(function (s, i) { return s + i.parsed.y; }, 0);
+                            return 'Total: ' + total + ' chats';
+                        }
+                    }
+                }
+            }
+        }
+    });
+})();
+</script>
+{% endif %}
+{# ====== /Daily Moderator Performance Chart ====== #}
+
 
 
 

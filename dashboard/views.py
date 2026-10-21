@@ -33,6 +33,56 @@ from payments.services import (
 )
 from players.models import Player
 
+def _get_weekly_moderator_chats():
+    """
+    Aggregate EndOfSessionReport.chats_responded by moderator and day-of-week
+    for the current week (Mon -> Sun), in the user's local timezone.
+    Multiple reports on the same day for the same moderator are SUMMED.
+    """
+    from django.utils import timezone
+    from datetime import timedelta
+    from coverage.models import EndOfSessionReport
+
+    now = timezone.localtime()
+    monday = (now - timedelta(days=now.weekday())).replace(
+        hour=0, minute=0, second=0, microsecond=0
+    )
+    sunday_end = monday + timedelta(days=7)
+
+    reports = EndOfSessionReport.objects.filter(
+        submitted_at__gte=monday,
+        submitted_at__lt=sunday_end,
+    ).select_related("moderator").values_list(
+        "moderator__first_name",
+        "moderator__last_name",
+        "moderator__username",
+        "submitted_at",
+        "chats_responded",
+    )
+
+    daily = {}
+    for first, last, username, submitted_at, chats in reports:
+        name = f"{first} {last}".strip() or username
+        if not name:
+            continue
+        local_submitted = timezone.localtime(submitted_at)
+        weekday = local_submitted.weekday()
+        if name not in daily:
+            daily[name] = [0] * 7
+        daily[name][weekday] += (chats or 0)
+
+    sorted_mods = sorted(
+        (n for n in daily.keys() if sum(daily[n]) > 0),
+        key=lambda n: sum(daily[n]),
+        reverse=True,
+    )
+
+    return {
+        "labels": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+        "moderators": sorted_mods,
+        "data": {m: daily[m] for m in sorted_mods},
+    }
+
 @login_required(login_url="/login/")
 def dashboard(request):
     """

@@ -346,6 +346,90 @@
             </table>
         </div>
     </div>
+{# ====== Daily Moderator Performance Chart (added) ====== #}
+{% if weekly_chart_json %}
+<div class="bg-white rounded-2xl shadow-sm border border-slate-200 mb-8"
+     style="margin-bottom: 32px; background: white; border-radius: 16px; border: 1px solid #e2e8f0; padding: 24px;">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; flex-wrap:wrap; gap:8px;">
+        <div>
+            <h2 style="font-size: 18px; font-weight: 700; color: #1e293b; margin: 0;">Daily Moderator Performance</h2>
+            <p style="font-size: 14px; color: #64748b; margin: 4px 0 0 0;">Chats submitted per day this week (Monday &rarr; Sunday). Multiple reports on the same day are summed.</p>
+        </div>
+    </div>
+    <div style="height: 340px; position: relative;">
+        <canvas id="daily-mod-chart-canvas"></canvas>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script>
+(function () {
+    var chartData = {{ weekly_chart_json|safe }};
+    if (!chartData || !chartData.moderators || chartData.moderators.length === 0) {
+        var canvas0 = document.getElementById('daily-mod-chart-canvas');
+        if (canvas0) {
+            var wrap = canvas0.closest('div.bg-white');
+            if (wrap) wrap.style.display = 'none';
+        }
+        return;
+    }
+    var labels = chartData.labels;
+    var mods = chartData.moderators;
+    var data = chartData.data;
+    var colors = [
+        '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6',
+        '#06b6d4', '#ec4899', '#14b8a6', '#f97316', '#6366f1',
+        '#84cc16', '#eab308', '#0891b2', '#a855f7', '#22c55e'
+    ];
+    var datasets = mods.map(function (name, idx) {
+        return {
+            label: name,
+            data: data[name],
+            backgroundColor: colors[idx % colors.length],
+            borderColor: colors[idx % colors.length],
+            borderWidth: 1,
+            stack: 'chats'
+        };
+    });
+    var canvas = document.getElementById('daily-mod-chart-canvas');
+    if (!canvas) return;
+    new Chart(canvas.getContext('2d'), {
+        type: 'bar',
+        data: { labels: labels, datasets: datasets },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { mode: 'index', intersect: false },
+            scales: {
+                x: { stacked: true, grid: { display: false } },
+                y: {
+                    stacked: true,
+                    beginAtZero: true,
+                    ticks: { precision: 0 },
+                    title: { display: true, text: 'Chats submitted' }
+                }
+            },
+            plugins: {
+                legend: { position: 'bottom', labels: { boxWidth: 12, padding: 12 } },
+                tooltip: {
+                    callbacks: {
+                        label: function (item) {
+                            return item.dataset.label + ': ' + item.parsed.y + ' chats';
+                        },
+                        footer: function (items) {
+                            var total = items.reduce(function (s, i) { return s + i.parsed.y; }, 0);
+                            return 'Total: ' + total + ' chats';
+                        }
+                    }
+                }
+            }
+        }
+    });
+})();
+</script>
+{% endif %}
+{# ====== /Daily Moderator Performance Chart ====== #}
+
 
           <div class="mb-6">
           <h3 class="text-sm font-bold uppercase tracking-wider text-slate-400">
