@@ -4,6 +4,8 @@ from coverage.models import CoverageSession
 
 from players.models import Player
 
+from accounts.models import User
+
 
 
 register = template.Library()
@@ -19,6 +21,12 @@ def render_coverage_table():
     covered_players = {s.player_id: s for s in active_sessions}
 
     all_players = Player.objects.filter(status="ACTIVE").order_by("player_number")
+
+    
+
+    # Fetch active moderators for the "Assign" dropdown
+
+    moderators = User.objects.filter(role=User.Role.MODERATOR, is_active=True).order_by("first_name", "username")
 
     
 
@@ -40,6 +48,8 @@ def render_coverage_table():
 
             replacement_class = ""
 
+            session_id = session.id
+
             if getattr(session, "replacement_requested_at", None) is not None:
 
                 replacement_class = '<span class="ml-3 inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-amber-100 text-amber-800 border border-amber-300">Replacement Requested</span>'
@@ -54,11 +64,15 @@ def render_coverage_table():
 
             replacement_class = ""
 
+            session_id = None
+
 
 
         coverage_rows.append({
 
             "player": str(player),
+
+            "player_id": player.id,
 
             "moderator": mod_name,
 
@@ -68,9 +82,19 @@ def render_coverage_table():
 
             "replacement_badge": replacement_class,
 
+            "session_id": session_id,
+
+            "has_replacement": getattr(session, "replacement_requested_at", None) is not None if session else False,
+
         })
 
 
 
-    return {"coverage_rows": coverage_rows}
+    return {
+
+        "coverage_rows": coverage_rows,
+
+        "moderators": moderators,
+
+    }
 

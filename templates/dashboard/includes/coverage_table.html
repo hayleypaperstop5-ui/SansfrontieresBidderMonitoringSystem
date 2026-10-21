@@ -40,6 +40,7 @@
         border-bottom: 1px solid #f1f5f9;
         font-size: 14px;
         color: #334155;
+        vertical-align: middle;
     }
     .premium-table tr:hover {
         background-color: #f8fafc;
@@ -73,6 +74,33 @@
         color: #b45309;
         border-color: #fde68a;
     }
+    .action-btn {
+        padding: 6px 12px;
+        border-radius: 6px;
+        font-size: 12px;
+        font-weight: 600;
+        cursor: pointer;
+        border: none;
+        transition: background 0.2s;
+        text-decoration: none;
+        display: inline-block;
+        text-align: center;
+    }
+    .btn-assign {
+        background-color: #3b82f6;
+        color: white;
+    }
+    .btn-assign:hover { background-color: #2563eb; }
+    .btn-replacement {
+        background-color: #f59e0b;
+        color: white;
+    }
+    .btn-replacement:hover { background-color: #d97706; }
+    .btn-no-action {
+        background-color: #f1f5f9;
+        color: #64748b;
+        cursor: default;
+    }
 </style>
 
 <div class="premium-coverage-card">
@@ -86,6 +114,7 @@
                     <th>Player</th>
                     <th>Assigned Moderator</th>
                     <th>Status</th>
+                    <th style="text-align: right;">Actions</th>
                 </tr>
             </thead>
             <tbody>
@@ -100,17 +129,55 @@
                             <span class="premium-badge badge-uncovered">Uncovered</span>
                         {% endif %}
                         
-                        {% if row.replacement_badge %}
+                        {% if row.has_replacement %}
                             <span class="premium-badge badge-replacement">Replacement Requested</span>
+                        {% endif %}
+                    </td>
+                    <td style="text-align: right;">
+                        {% if row.status == "Uncovered" %}
+                            <button class="action-btn btn-assign" onclick="assignModerator('{{ row.player }}', '{{ row.player_id }}')">Assign</button>
+                        {% elif row.has_replacement %}
+                            <button class="action-btn btn-replacement" onclick="assignModerator('{{ row.player }}', '{{ row.player_id }}')">Replace</button>
+                        {% else %}
+                            <span class="action-btn btn-no-action">No Action</span>
                         {% endif %}
                     </td>
                 </tr>
                 {% empty %}
                 <tr>
-                    <td colspan="3" style="text-align: center; color: #64748b;">No active players found.</td>
+                    <td colspan="4" style="text-align: center; color: #64748b;">No active players found.</td>
                 </tr>
                 {% endfor %}
             </tbody>
         </table>
     </div>
 </div>
+
+<script>
+function assignModerator(playerName, playerId) {
+    // Build a dropdown list of moderators
+    var mods = [
+        {% for mod in moderators %}
+            { id: "{{ mod.id }}", name: "{{ mod.get_full_name|default:mod.username|escapejs }}" },
+        {% endfor %}
+    ];
+    
+    var modList = mods.map(function(m, index) {
+        return (index + 1) + ". " + m.name;
+    }).join("\n");
+    
+    var choice = prompt("Assign a Moderator to " + playerName + "\n\nAvailable Moderators:\n" + modList + "\n\nEnter the number (1-" + mods.length + "):");
+    
+    if (choice) {
+        var idx = parseInt(choice) - 1;
+        if (idx >= 0 && idx < mods.length) {
+            var selectedMod = mods[idx];
+            alert("Success! Assigned " + selectedMod.name + " to " + playerName + ". (Backend logic to be connected)");
+            // In a real app, you would POST this to a Django view here:
+            // window.location.href = "/coverage/assign/" + playerId + "/" + selectedMod.id + "/";
+        } else {
+            alert("Invalid selection.");
+        }
+    }
+}
+</script>
