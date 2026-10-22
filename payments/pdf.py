@@ -243,6 +243,42 @@ def build_payment_statement_pdf(payment, rows, breakdown_display, carried_displa
          f"KES {_fmt(payment.bonus_earned)}", f"KES {_fmt(payment.earned_amount)}"],
     ]
     earnings_table = Table(earnings_data, colWidths=[40*mm, 40*mm, 40*mm, 45*mm])
+
+    # --- BONUS BREAKDOWN ---
+    try:
+        from bonuses.models import BonusAward
+        bonus_qs = BonusAward.objects.filter(
+            moderator=payment.moderator,
+            bonus_date__gte=payment.payment_week_start,
+            bonus_date__lte=payment.payment_week_end,
+        ).order_by("bonus_date", "id").select_related("player")
+
+        if bonus_qs.exists():
+            bonus_data = [["Date", "Player", "Chats Counted", "Amount"]]
+            for b in bonus_qs:
+                bonus_data.append([
+                    b.bonus_date.strftime("%d %b %Y"),
+                    str(b.player) if b.player else "—",
+                    str(b.chats_counted) if b.chats_counted else "—",
+                    f"KES {_fmt(b.bonus_amount)}",
+                ])
+            bonus_data.append(["", "", "Total Bonuses:", f"KES {_fmt(payment.bonus_earned)}"])
+            bonus_table = Table(bonus_data, colWidths=[30*mm, 55*mm, 30*mm, 35*mm], hAlign="LEFT")
+            bonus_table.setStyle(TableStyle([
+                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#e2e8f0")),
+                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                ("FONTSIZE", (0, 0), (-1, -1), 8),
+                ("ALIGN", (2, 0), (-1, -1), "RIGHT"),
+                ("GRID", (0, 0), (-1, -1), 0.25, colors.HexColor("#cbd5e1")),
+                ("BACKGROUND", (0, -1), (-1, -1), colors.HexColor("#f1f5f9")),
+                ("FONTNAME", (0, -1), (-1, -1), "Helvetica-Bold"),
+            ]))
+            story.append(Spacer(1, 8*mm))
+            story.append(Paragraph("Bonus Breakdown", h2))
+            story.append(bonus_table)
+    except Exception:
+        # If anything goes wrong, fall back to just the summary (no breakdown)
+        pass
     earnings_table.setStyle(TableStyle([
         ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#e2e8f0")),
         ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
