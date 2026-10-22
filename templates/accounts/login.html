@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+{% load static %}
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -166,13 +167,9 @@
     <div class="login-card">
 
         <div class="brand-header">
-            <div class="brand-logo">
-                <svg width="72" height="72" viewBox="0 0 72 72" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <circle cx="36" cy="36" r="34" stroke="#7c3aed" stroke-width="3" fill="#f5f3ff"/>
-                    <circle cx="36" cy="36" r="28" stroke="#7c3aed" stroke-width="1" stroke-opacity="0.3" fill="none"/>
-                    <text x="36" y="45" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="22" font-weight="800" fill="#7c3aed" letter-spacing="1">SF</text>
-                </svg>
+            <div class="brand-logo"            </svg>
             </div>
+            <img src="{% static 'img/emblem.png' %}" alt="Sansfrontieres Chat Moderation" style="width:100px; height:100px; object-fit:contain;">
             <h1 class="brand-name">Sansfrontieres Chat Moderation System</h1>
             <p class="brand-subtitle">Sign in to your account</p>
         </div>
