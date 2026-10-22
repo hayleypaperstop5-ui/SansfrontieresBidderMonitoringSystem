@@ -320,7 +320,7 @@
 {% else %}
   <form method="post" action="{% url 'payments:payroll_process' %}">
             {% csrf_token %}
-            <input type="hidden" name="from" value="{{ request.GET.from|default:window_start|date:'Y-m-d' }}">
+            <input type="hidden" name="from" value="{% if request.GET.from %}{{ request.GET.from }}{% else %}{{ window_start|date:'Y-m-d' }}{% endif %}">
             <input type="hidden" name="end" value="{{ window_end|date:'Y-m-d' }}">
             <input
                 type="hidden"
