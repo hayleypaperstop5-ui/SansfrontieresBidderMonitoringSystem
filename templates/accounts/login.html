@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -16,8 +16,8 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            font-family: Arial, sans-serif;
-            background: #f4f6f8;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: linear-gradient(135deg, #f4f6f8 0%, #eef1f5 100%);
         }
 
         .login-container {
@@ -29,59 +29,133 @@
         .login-card {
             background: white;
             padding: 40px;
-            border-radius: 10px;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+            border-radius: 14px;
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.08), 0 2px 6px rgba(0, 0, 0, 0.04);
         }
 
-        .logo {
+        .brand-header {
             text-align: center;
-            margin-bottom: 10px;
-            font-size: 26px;
-            font-weight: bold;
+            margin-bottom: 32px;
         }
 
-        .subtitle {
-            text-align: center;
-            margin-bottom: 30px;
-            color: #666;
+        .brand-logo {
+            display: inline-block;
+            margin-bottom: 14px;
+        }
+
+        .brand-name {
+            font-size: 18px;
+            font-weight: 700;
+            color: #0f172a;
+            margin: 0;
+            line-height: 1.3;
+            letter-spacing: -0.01em;
+        }
+
+        .brand-subtitle {
+            font-size: 13px;
+            color: #64748b;
+            margin: 6px 0 0 0;
         }
 
         label {
             display: block;
             margin-bottom: 7px;
             font-weight: 600;
+            font-size: 13px;
+            color: #334155;
         }
 
-        input {
+        input[type="text"],
+        input[type="password"] {
             width: 100%;
-            padding: 12px;
-            margin-bottom: 20px;
-            border: 1px solid #ccc;
-            border-radius: 6px;
+            padding: 12px 14px;
+            margin-bottom: 18px;
+            border: 1px solid #cbd5e1;
+            border-radius: 8px;
             font-size: 15px;
+            transition: border-color 0.15s, box-shadow 0.15s;
         }
 
-        button {
-            width: 100%;
-            padding: 12px;
-            border: none;
-            border-radius: 6px;
-            background: #222;
-            color: white;
-            font-size: 16px;
+        input[type="text"]:focus,
+        input[type="password"]:focus,
+        input[type="text"]:focus-visible,
+        input[type="password"]:focus-visible {
+            outline: none;
+            border-color: #7c3aed;
+            box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.15);
+        }
+
+        .show-password-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin: -8px 0 20px 0;
+            font-size: 13px;
+            color: #64748b;
             cursor: pointer;
+            user-select: none;
         }
 
-        button:hover {
-            opacity: 0.9;
+        .show-password-row input[type="checkbox"] {
+            width: 16px;
+            height: 16px;
+            margin: 0;
+            cursor: pointer;
+            accent-color: #7c3aed;
+        }
+
+        .btn-signin {
+            width: 100%;
+            padding: 13px;
+            border: none;
+            border-radius: 8px;
+            background: #7c3aed;
+            color: white;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+
+        .btn-signin:hover {
+            background: #6d28d9;
+        }
+
+        .btn-signin:active {
+            background: #5b21b6;
+        }
+
+        .btn-forgot {
+            display: block;
+            text-align: center;
+            padding: 12px;
+            margin-top: 14px;
+            background: #7c3aed;
+            color: white;
+            text-decoration: none;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 14px;
+            transition: background 0.15s;
+        }
+
+        .btn-forgot:hover {
+            background: #6d28d9;
+        }
+
+        .btn-forgot:active {
+            background: #5b21b6;
         }
 
         .message {
-            padding: 10px;
+            padding: 12px 14px;
             margin-bottom: 20px;
-            border-radius: 6px;
-            background: #f8d7da;
-            color: #842029;
+            border-radius: 8px;
+            background: #fef2f2;
+            color: #991b1b;
+            font-size: 14px;
+            border: 1px solid #fecaca;
         }
     </style>
 </head>
@@ -91,12 +165,16 @@
 <div class="login-container">
     <div class="login-card">
 
-        <div class="logo">
-            SANSFRONTIERES
-        </div>
-
-        <div class="subtitle">
-            Chat Moderation Management System
+        <div class="brand-header">
+            <div class="brand-logo">
+                <svg width="72" height="72" viewBox="0 0 72 72" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <circle cx="36" cy="36" r="34" stroke="#7c3aed" stroke-width="3" fill="#f5f3ff"/>
+                    <circle cx="36" cy="36" r="28" stroke="#7c3aed" stroke-width="1" stroke-opacity="0.3" fill="none"/>
+                    <text x="36" y="45" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="22" font-weight="800" fill="#7c3aed" letter-spacing="1">SF</text>
+                </svg>
+            </div>
+            <h1 class="brand-name">Sansfrontieres Chat Moderation System</h1>
+            <p class="brand-subtitle">Sign in to your account</p>
         </div>
 
         {% if messages %}
@@ -110,10 +188,7 @@
         <form method="post">
             {% csrf_token %}
 
-            <label for="username">
-                Username
-            </label>
-
+            <label for="username">Username</label>
             <input
                 type="text"
                 id="username"
@@ -122,10 +197,7 @@
                 required
             >
 
-            <label for="password">
-                Password
-            </label>
-
+            <label for="password">Password</label>
             <input
                 type="password"
                 id="password"
@@ -134,20 +206,34 @@
                 required
             >
 
-            <button type="submit">
+            <label class="show-password-row" for="show-password-toggle">
+                <input type="checkbox" id="show-password-toggle">
+                <span>Show password</span>
+            </label>
+
+            <button type="submit" class="btn-signin">
                 Sign In
             </button>
 
-            <div style="text-align: center; margin-top: 16px;">
-                <a href="{% url 'accounts:password_reset' %}">
-                    Forgot Password?
-                </a>
-            </div>
+            <a href="{% url 'accounts:password_reset' %}" class="btn-forgot">
+                Forgot Password?
+            </a>
         </form>
 
     </div>
 </div>
 
+<script>
+(function () {
+    var toggle = document.getElementById('show-password-toggle');
+    var passwordField = document.getElementById('password');
+    if (toggle && passwordField) {
+        toggle.addEventListener('change', function () {
+            passwordField.type = toggle.checked ? 'text' : 'password';
+        });
+    }
+})();
+</script>
+
 </body>
 </html>
-
