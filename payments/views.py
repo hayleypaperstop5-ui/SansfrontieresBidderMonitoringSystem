@@ -31,7 +31,7 @@ def payroll_review(request):
 
     # --- Manual From date override ---
     auto_window_start = window_start
-    from_raw = request.GET.get("from")
+    from_raw = request.POST.get("from") or request.GET.get("from")
     manual_from = None
     from_error = None
     if from_raw:
@@ -104,7 +104,7 @@ def process_payroll(request):
 
     # --- Manual From date override ---
     auto_window_start = window_start
-    from_raw = request.GET.get("from")
+    from_raw = request.POST.get("from") or request.GET.get("from")
     manual_from = None
     from_error = None
     if from_raw:
