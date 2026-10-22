@@ -46,6 +46,7 @@ urlpatterns = [
     path("staff/<int:staff_id>/resend-invitation/", views.staff_resend_invitation, name="staff_resend_invitation"),
     path("staff/<int:staff_id>/revoke-invitation/", views.staff_revoke_invitation, name="staff_revoke_invitation"),
     path("staff/<int:staff_id>/edit/", views.staff_edit, name="staff_edit"),
+    path("staff/<int:staff_id>/", views.staff_detail, name="staff_detail"),
     path("staff/<int:staff_id>/activate/", views.staff_activate, name="staff_activate"),
     path("staff/<int:staff_id>/suspend/", views.staff_suspend, name="staff_suspend"),
     path("staff/<int:staff_id>/terminate/", views.staff_terminate, name="staff_terminate"),

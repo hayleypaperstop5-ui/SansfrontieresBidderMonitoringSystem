@@ -844,8 +844,72 @@ def role_toggle(request, role_id):
     )
 
 
+@login_required
+@role_required(User.Role.MANAGER, User.Role.DIRECTOR, User.Role.ADMIN)
+def staff_detail(request, staff_id):
+    """
+    Read-only staff profile with performance summary.
+    Accessible to managers, directors, and admins.
+    """
+    from django.shortcuts import get_object_or_404
+    from django.db.models import Sum
+    from django.utils import timezone
+    from datetime import timedelta
+    from coverage.models import CoverageSession, CoverageAlert, EndOfSessionReport
+    from payments.models import ModeratorPayment
 
+    staff_user = get_object_or_404(
+        User.objects.select_related("staff_profile"),
+        id=staff_id,
+    )
 
+    staff_profile = getattr(staff_user, "staff_profile", None)
 
+    thirty_days_ago = timezone.localtime() - timedelta(days=30)
 
+    sessions_qs = CoverageSession.objects.filter(
+        moderator=staff_user,
+        created_at__gte=thirty_days_ago,
+    )
+    sessions_count = sessions_qs.count()
+    active_sessions_count = sessions_qs.filter(
+        status__in=("ACTIVE", "OPEN")
+    ).count()
 
+    reports_qs = EndOfSessionReport.objects.filter(
+        moderator=staff_user,
+        submitted_at__gte=thirty_days_ago,
+    )
+    reports_count = reports_qs.count()
+    chats_total = reports_qs.aggregate(total=Sum("chats_responded"))["total"] or 0
+
+    payments_qs = ModeratorPayment.objects.filter(
+        moderator=staff_user,
+    ).order_by("-payment_week_start")
+    total_earned = payments_qs.aggregate(total=Sum("earned_amount"))["total"] or 0
+    total_paid = payments_qs.aggregate(total=Sum("amount_paid"))["total"] or 0
+
+    recent_sessions = list(
+        sessions_qs.select_related("player").order_by("-created_at")[:5]
+    )
+    recent_payments = list(payments_qs[:5])
+
+    open_alerts_count = CoverageAlert.objects.filter(status="OPEN").count()
+
+    return render(
+        request,
+        "accounts/staff_detail.html",
+        {
+            "staff_user": staff_user,
+            "staff_profile": staff_profile,
+            "sessions_count": sessions_count,
+            "active_sessions_count": active_sessions_count,
+            "reports_count": reports_count,
+            "chats_total": chats_total,
+            "total_earned": total_earned,
+            "total_paid": total_paid,
+            "recent_sessions": recent_sessions,
+            "recent_payments": recent_payments,
+            "open_alerts_count": open_alerts_count,
+        },
+    )

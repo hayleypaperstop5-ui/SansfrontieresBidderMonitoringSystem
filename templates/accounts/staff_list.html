@@ -1,4 +1,4 @@
-﻿{% load static %}
+{% load static %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -521,7 +521,7 @@
 
                                     <div>
                                         <div class="member-name">
-                                            {{ profile.user.get_full_name|default:profile.user.username }}
+                                            <a href="{% url 'accounts:staff_detail' profile.user.id %}" class="staff-name-link" style="color: inherit; text-decoration: none; transition: color 0.15s;">{{ profile.user.get_full_name|default:profile.user.username }}</a>
                                         </div>
 
                                         <div class="username">
@@ -567,7 +567,7 @@
                                         href="https://wa.me/{{ profile.whatsapp_number }}?text=Hello%20{{ profile.user.get_full_name|default:profile.user.username|urlencode }}%2C%20this%20is%20Sansfrontieres%20Management."
                                         target="_blank"
                                         rel="noopener noreferrer"
-                                        aria-label="Chat with {{ profile.user.get_full_name|default:profile.user.username }} on WhatsApp"
+                                        aria-label="Chat with <a href="{% url 'accounts:staff_detail' profile.user.id %}" class="staff-name-link" style="color: inherit; text-decoration: none; transition: color 0.15s;">{{ profile.user.get_full_name|default:profile.user.username }}</a> on WhatsApp"
                                     >
                                         WhatsApp
                                     </a>

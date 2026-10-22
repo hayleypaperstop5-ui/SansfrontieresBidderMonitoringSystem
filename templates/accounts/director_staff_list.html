@@ -1,4 +1,4 @@
-﻿{% load static %}
+{% load static %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -409,7 +409,7 @@
 
                                 <td>
                                     <div class="name">
-                                        {{ staff.user.get_full_name|default:staff.user.username }}
+                                        <a href="{% url 'accounts:staff_detail' staff.user.id %}" class="staff-name-link" style="color: inherit; text-decoration: none; transition: color 0.15s;">{{ staff.user.get_full_name|default:staff.user.username }}</a>
                                     </div>
                                     <div class="username">
                                         @{{ staff.user.username }}
