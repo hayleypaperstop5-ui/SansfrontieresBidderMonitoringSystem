@@ -368,6 +368,8 @@
                 grid-template-columns: 1fr;
             }
         }
+            .staff-name-link { cursor: pointer; }
+        .staff-name-link:hover { color: #1e40af !important; text-decoration: underline !important; }
     </style>
 </head>
 
@@ -567,7 +569,7 @@
                                         href="https://wa.me/{{ profile.whatsapp_number }}?text=Hello%20{{ profile.user.get_full_name|default:profile.user.username|urlencode }}%2C%20this%20is%20Sansfrontieres%20Management."
                                         target="_blank"
                                         rel="noopener noreferrer"
-                                        aria-label="Chat with <a href="{% url 'accounts:staff_detail' profile.user.id %}" class="staff-name-link" style="color: inherit; text-decoration: none; transition: color 0.15s;">{{ profile.user.get_full_name|default:profile.user.username }}</a> on WhatsApp"
+                                        aria-label="Chat with {{ profile.user.get_full_name|default:profile.user.username }} on WhatsApp"
                                     >
                                         WhatsApp
                                     </a>
