@@ -96,3 +96,12 @@ Thumbs.db
 fix_*.py
 run_phase1.py
 diagnostic_report.py
+.venv_broken/
+*.backup*
+*.bak
+*.dump
+*.sql
+*.zip
+fix_*.py
+run_phase1.py
+diagnostic_report.py
