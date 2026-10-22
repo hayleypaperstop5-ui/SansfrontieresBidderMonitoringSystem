@@ -183,8 +183,11 @@
         <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap;">
             <div>
                 <strong>From:</strong>
-                <span>{{ window_start|date:"d M Y" }}</span>
-                <span style="color:#64748b;font-size:12px;">(auto - day after last paid period ended)</span>
+                <input type="date" name="from"
+                       value="{{ window_start|date:'Y-m-d' }}"
+                       min="{{ auto_window_start|date:'Y-m-d' }}"
+                       style="padding:6px;border:1px solid #cbd5e1;border-radius:6px;">
+                <span style="color:#64748b;font-size:12px;">(auto: {{ auto_window_start|date:"d M Y" }})</span>
             </div>
             <div>
                 <strong>To:</strong>
@@ -197,7 +200,11 @@
                 </button>
             </div>
         </div>
-        <p style="margin:8px 0 0;color:#64748b;font-size:12px;">
+        {% if from_error %}
+        <p style="margin:8px 0 0;color:#991b1b;font-size:13px;background:#fef2f2;padding:8px 12px;border-radius:6px;">
+            {{ from_error }}
+        </p>
+        {% endif %}        <p style="margin:8px 0 0;color:#64748b;font-size:12px;">
             Leave as today to include all chats submitted up to today.
             Set earlier to omit recent days. The start date is fixed at the day after the last paid period.
         </p>

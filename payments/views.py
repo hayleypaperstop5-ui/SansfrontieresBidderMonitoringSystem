@@ -29,6 +29,26 @@ def payroll_review(request):
 
     window_start, window_end = suggested_payroll_window(chosen_end=chosen_end)
 
+    # --- Manual From date override ---
+    auto_window_start = window_start
+    from_raw = request.GET.get("from")
+    manual_from = None
+    from_error = None
+    if from_raw:
+        try:
+            manual_from = _dt.strptime(from_raw, "%Y-%m-%d").date()
+            if manual_from >= auto_window_start:
+                window_start = manual_from
+            else:
+                from_error = (
+                    f"From date cannot be earlier than "
+                    f"{auto_window_start.strftime('%d %b %Y')} "
+                    f"(day after last paid period)."
+                )
+                manual_from = None
+        except ValueError:
+            from_error = "Invalid date format."
+
     try:
         plan = build_payroll_plan(
             payment_date=window_end,
@@ -59,6 +79,9 @@ def payroll_review(request):
             "already_processed": already_processed,
             "window_start": window_start,
             "window_end": window_end,
+            "auto_window_start": auto_window_start,
+            "manual_from": manual_from,
+            "from_error": from_error,
         },
     )
 
@@ -78,6 +101,26 @@ def process_payroll(request):
         chosen_end = date.today()
 
     window_start, window_end = suggested_payroll_window(chosen_end=chosen_end)
+
+    # --- Manual From date override ---
+    auto_window_start = window_start
+    from_raw = request.GET.get("from")
+    manual_from = None
+    from_error = None
+    if from_raw:
+        try:
+            manual_from = _dt.strptime(from_raw, "%Y-%m-%d").date()
+            if manual_from >= auto_window_start:
+                window_start = manual_from
+            else:
+                from_error = (
+                    f"From date cannot be earlier than "
+                    f"{auto_window_start.strftime('%d %b %Y')} "
+                    f"(day after last paid period)."
+                )
+                manual_from = None
+        except ValueError:
+            from_error = "Invalid date format."
 
     try:
         result = process_thursday_payroll(
