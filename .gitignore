@@ -71,3 +71,19 @@ payment-statement-*.pdf
 .automation_backups/
 .session_backups/
 *.html.disabled
+# Database files
+*.sqlite3
+*.sqlite3.backup_*
+# Database backups
+*.sql
+postgres_backup_*.sql
+# Media backups
+media_backup_*.zip
+# Virtual environment
+venv/
+# Python cache
+*.pyc
+# Staticfiles (generated)
+# OS files
+.DS_Store
+Thumbs.db

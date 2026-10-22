@@ -1,6 +1,7 @@
-﻿from django.conf.urls.static import static
+from django.conf.urls.static import static
 from django.conf import settings
 from django.contrib import admin
+from django.views.generic import RedirectView
 from django.urls import include, path
 
 urlpatterns = [
@@ -14,6 +15,7 @@ urlpatterns = [
     path("coverage/", include("coverage.urls")),
     path("payments/", include("payments.urls")),
     path("bonuses/", include("bonuses.urls")),
+    path("", RedirectView.as_view(url="/login/", permanent=False)),
 ]
 
 # Serve static files in development

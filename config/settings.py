@@ -30,12 +30,16 @@ ALLOWED_HOSTS = [
     host.strip()
     for host in os.getenv(
         "ALLOWED_HOSTS",
-        "127.0.0.1,localhost",
+        "127.0.0.1,localhost,.trycloudflare.com",
     ).split(",")
     if host.strip()
 ]
 
-# WhatsApp contact number used by Manager messaging.
+
+# CSRF trusted origins for Cloudflare tunnel testing
+CSRF_TRUSTED_ORIGINS = [
+    "https://*.trycloudflare.com",
+]# WhatsApp contact number used by Manager messaging.
 # Stored in .env so the demo number can later be replaced
 # with the official WhatsApp number without changing application code.
 WHATSAPP_CONTACT_NUMBER = os.getenv("WHATSAPP_CONTACT_NUMBER", "").strip()
@@ -67,6 +71,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -302,3 +307,5 @@ CELERY_BEAT_SCHEDULE.setdefault(
 STATICFILES_DIRS = [
     BASE_DIR / "static",
 ]
+# WhiteNoise storage for compressed static files
+STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
